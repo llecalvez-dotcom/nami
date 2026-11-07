@@ -153,7 +153,7 @@ export function LivePapersList({ papers, statuses = {} }: { papers: LivePapersSt
       ) : null}
       {result.mode === "live" && result.sources.length > 0 ? (
         <p className="text-xs text-muted-foreground">
-          Sources: {result.sources.map((s) => `${hostOf(s.url) ?? s.url}${s.official ? "" : " (non-official)"}`).join(", ")}
+          Sources: {[...new Set(result.sources.map((s) => `${hostOf(s.url) ?? s.url}${s.official ? "" : " (non-official)"}`))].join(", ")}
         </p>
       ) : null}
     </div>

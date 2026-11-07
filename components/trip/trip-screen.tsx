@@ -23,6 +23,7 @@ import { countryName } from "@/lib/countries";
 import { destinationImage } from "@/lib/destination-images";
 import type { PassportFields } from "@/lib/contracts";
 import { tripStatus, visaSteps } from "@/lib/trip-progress";
+import { isBali } from "@/lib/planner";
 import { createSampleTrip, needsPassportReconfirm, type Trip } from "@/lib/trip-state";
 import { saveTrip, useTrips } from "@/lib/trip-store";
 
@@ -96,6 +97,8 @@ export function TripScreen({ id }: { id: string }) {
 
   const update = (next: Trip) => saveTrip(next);
   const { request } = trip;
+  // Only Bali is filled in by the agent: elsewhere the passport is not asked for.
+  const fillable = request.destination !== null && request.country_iso2 !== null && isBali({ destination: request.destination, country_iso2: request.country_iso2 });
 
   return (
     <div className="flex flex-1 flex-col pb-28 md:pb-16">
@@ -170,7 +173,7 @@ export function TripScreen({ id }: { id: string }) {
                   only after that. Stop agent works meanwhile.
                 </p>
               ) : null}
-              {trip.formalities.length > 0 || demo || reconfirm ? (
+              {(trip.formalities.length > 0 && fillable) || demo || reconfirm ? (
                 <div ref={passportCard} tabIndex={-1} className="scroll-mt-24">
                   <PassportCard
                     demo={demo}
