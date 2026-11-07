@@ -52,6 +52,7 @@ export const PaperStartSchema = z.object({
   passport: PassportFieldsSchema,
   paper_id: z.literal(PILOT_PAPER_ID),
   local_session_id: LOCAL_SESSION_ID,
+  document_id: z.string().min(1).max(100).optional(),
   file_paths: z.array(z.string().trim().min(1).max(500)).max(10).default([]),
 });
 export type PaperStart = z.infer<typeof PaperStartSchema>;

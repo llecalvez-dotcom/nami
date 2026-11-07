@@ -1,5 +1,6 @@
 import { API_LIMITS, guard, readJsonLimited } from "@/lib/api-guard";
 import { createSession } from "@/lib/h-agent";
+import { documentFilePaths } from "@/lib/documents";
 import {
   buildPilotTask,
   fail,
@@ -33,12 +34,22 @@ async function start(request: Request): Promise<Response> {
   }
   const input = PaperStartSchema.safeParse(body);
   if (!input.success) {
+    if (input.error.issues.some((issue) => issue.path[0] === "document_id")) {
+      return fail("The passport document is no longer available. Search for your passport again.", 400);
+    }
     return fail(`Invalid request: ${input.error.issues.map((i) => i.path.join(".") || "body").join(", ")}.`, 400);
   }
 
+  const documentPaths = input.data.document_id === undefined ? [] : await documentFilePaths([input.data.document_id]);
+  if (documentPaths === null) {
+    return fail("The passport document is no longer available. Search for your passport again.", 400);
+  }
+  const filePaths = input.data.document_id === undefined
+    ? input.data.file_paths
+    : [...new Set([...input.data.file_paths, ...documentPaths])];
   try {
     const session = await createSession({
-      task: buildPilotTask(input.data),
+      task: buildPilotTask({ ...input.data, file_paths: filePaths }),
       tools: PAPER_TOOLS,
       localBrowserSessionId: input.data.local_session_id,
       maxTimeS: PAPER_MAX_TIME_S,

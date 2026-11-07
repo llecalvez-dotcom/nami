@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "@/app/api/papers/start/route";
 import { resetGuards } from "@/lib/api-guard";
 import { getBaliPaper } from "@/lib/bali-papers";
+import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { findDocuments } from "@/lib/documents";
 
 const PASSPORT = {
   surname: "MARTIN",
@@ -52,6 +56,93 @@ afterEach(() => {
 });
 
 const sentBody = () => JSON.parse((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+
+describe("passport document handoff", () => {
+  let root: string;
+  let documentId: string;
+  const filename = "passport-fictitious.jpg";
+
+  beforeEach(async () => {
+    root = await realpath(await mkdtemp(join(tmpdir(), "nami-agent-passport-")));
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("NAMI_DOCUMENTS_DIR", root);
+    await writeFile(join(root, filename), "fictitious image bytes");
+    const [document] = await findDocuments();
+    documentId = document.id;
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  it("resolves the opaque id, appends its path once and never returns or logs private values", async () => {
+    const log = vi.spyOn(console, "log");
+    const error = vi.spyOn(console, "error");
+    const response = await start({ ...BODY, document_id: documentId });
+    expect(response.status).toBe(201);
+    const task: string = sentBody().messages[0].message;
+    expect(task).toContain(`private/passeport.jpg, private/photo.jpg, ${join(root, filename)}`);
+    const text = await response.text();
+    expect(text).not.toContain(root);
+    expect(text).not.toContain(filename);
+    expect(text).not.toContain(PASSPORT.passport_number);
+    expect(log).not.toHaveBeenCalled();
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it("deduplicates the resolved path against existing file_paths", async () => {
+    const path = join(root, filename);
+    expect((await start({ ...BODY, file_paths: [path, path], document_id: documentId })).status).toBe(201);
+    const task: string = sentBody().messages[0].message;
+    expect(task.split(path)).toHaveLength(2);
+  });
+
+  it.each(["unknown", "../passport.jpg", "", "x".repeat(101)])("rejects an invalid id without calling H: %s", async (document_id) => {
+    const response = await start({ ...BODY, document_id });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "The passport document is no longer available. Search for your passport again.",
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects an expired id after another search without calling H", async () => {
+    await findDocuments();
+    const response = await start({ ...BODY, document_id: documentId });
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toContain("Search for your passport again.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each(["unconfigured", "production"])("rejects the document when search is disabled: %s", async (setting) => {
+    if (setting === "production") vi.stubEnv("NODE_ENV", "production");
+    else vi.stubEnv("NAMI_DOCUMENTS_DIR", "");
+    const response = await start({ ...BODY, document_id: documentId });
+    expect(response.status).toBe(400);
+    expect((await response.json()).error).toContain("Search for your passport again.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("keeps the legacy flow working without document_id when search is disabled", async () => {
+    vi.stubEnv("NAMI_DOCUMENTS_DIR", "");
+    const response = await start(BODY);
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({ session_id: "s-1", status: "pending" });
+    expect(sentBody().messages[0].message).toContain("private/passeport.jpg, private/photo.jpg");
+    expect(sentBody().messages[0].message).not.toContain(root);
+  });
+
+  it("does not leak the resolved path if H rejects session creation", async () => {
+    const log = vi.spyOn(console, "error");
+    fetch.mockImplementation(async () => new Response(join(root, filename) + PASSPORT.passport_number, { status: 422 }));
+    const response = await start({ ...BODY, document_id: documentId });
+    expect(response.status).toBe(502);
+    const text = await response.text() + JSON.stringify(log.mock.calls);
+    expect(text).not.toContain(root);
+    expect(text).not.toContain(filename);
+    expect(text).not.toContain(PASSPORT.passport_number);
+  });
+});
 
 describe("POST /api/papers/start (route 5)", () => {
   it("creates the H session on the local browser and returns its id", async () => {

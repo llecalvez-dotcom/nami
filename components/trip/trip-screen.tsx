@@ -19,6 +19,7 @@ import { SAMPLE_TRIP_ID } from "@/data/sample";
 import { countryName } from "@/lib/countries";
 import { destinationImage } from "@/lib/destination-images";
 import { requestTripParse } from "@/lib/trip-parse-client";
+import { missingPassportMessage } from "@/lib/passport-reminder";
 import type { PassportFields } from "@/lib/contracts";
 import { tripStatus, visaSteps } from "@/lib/trip-progress";
 import {
@@ -36,7 +37,7 @@ import {
 } from "@/lib/trip-state";
 import { getTrip, saveTrip, useTrips } from "@/lib/trip-store";
 
-async function startVisaSession(trip: Trip, passport: PassportFields): Promise<string> {
+async function startVisaSession(trip: Trip, passport: PassportFields, documentId: string | null): Promise<string> {
   const settings = readAgentSettings();
   const response = await fetch("/api/papers/start", {
     method: "POST",
@@ -47,6 +48,7 @@ async function startVisaSession(trip: Trip, passport: PassportFields): Promise<s
       paper_id: "evoa",
       local_session_id: settings.local_session_id.trim(),
       file_paths: filePaths(settings.files),
+      ...(documentId ? { document_id: documentId } : {}),
     }),
   });
   const body = (await response.json().catch(() => null)) as { session_id?: string; error?: string } | null;
@@ -71,6 +73,8 @@ export function TripScreen({ id }: { id: string }) {
   const found = trips?.find((t) => t.id === id) ?? null;
   const { destination, country_iso2, arrival_at } = found?.request ?? {};
   const [passport, setPassport] = useState<PassportFields | null>(null);
+  const [documentId, setDocumentId] = useState<string | null>(null);
+  const [passportSearchRequest, setPassportSearchRequest] = useState(0);
   const passportCard = useRef<HTMLDivElement>(null);
   const [starting, setStarting] = useState(false);
   const secrets = useMemo(() => [passport?.passport_number, passport?.birth_date], [passport]);
@@ -109,6 +113,16 @@ export function TripScreen({ id }: { id: string }) {
   const createVisa = async (itemId: string) => {
     if (starting) return;
     if (!passport) {
+      let documentsAvailable = false;
+      try {
+        const response = await fetch("/api/documents/find", { cache: "no-store" });
+        if (response.ok) {
+          const result = await response.json() as { enabled?: boolean };
+          documentsAvailable = result.enabled === true;
+        }
+      } catch {
+        // Upload and manual entry remain available if search discovery fails.
+      }
       let readerAvailable = false;
       try {
         const response = await fetch("/api/documents/extract");
@@ -119,18 +133,20 @@ export function TripScreen({ id }: { id: string }) {
       } catch {
         // Manual entry remains available if reader discovery fails.
       }
-      const reminder = readerAvailable
-        ? "Upload a photo or enter your passport details in the passport card, then confirm the fields before I create your visa."
-        : "Enter your passport details in the passport card, then confirm the fields before I create your visa.";
+      const reminder = missingPassportMessage(readerAvailable, documentsAvailable);
       const current = latest();
       const lastMessage = [...current.conversation].reverse().find((item) => item.kind === "agent");
       if (lastMessage?.text !== reminder) update(pushAgentMessage(current, reminder));
-      requestAnimationFrame(() => {
-        const card = passportCard.current;
-        card?.scrollIntoView({ behavior: "smooth", block: "center" });
-        const field = card?.querySelector<HTMLInputElement>('input:not([type="checkbox"]):not([type="file"])');
-        (field ?? card)?.focus({ preventScroll: true });
-      });
+      if (documentsAvailable) {
+        setPassportSearchRequest((request) => request + 1);
+      } else {
+        requestAnimationFrame(() => {
+          const card = passportCard.current;
+          card?.scrollIntoView({ behavior: "smooth", block: "center" });
+          const field = card?.querySelector<HTMLInputElement>('input:not([type="checkbox"]):not([type="file"])');
+          (field ?? card)?.focus({ preventScroll: true });
+        });
+      }
       return;
     }
     if (!readAgentSettings().local_session_id.trim()) {
@@ -139,8 +155,8 @@ export function TripScreen({ id }: { id: string }) {
     }
     setStarting(true);
     try {
-      const sessionId = await startVisaSession(trip, passport);
-      update(startVisaRun(latest(), itemId, sessionId, new Date()));
+      const sessionId = await startVisaSession(trip, passport, documentId);
+      update(startVisaRun(latest(), itemId, sessionId, new Date(), documentId !== null));
     } catch (error) {
       update(pushAgentMessage(latest(), (error as Error).message));
     } finally {
@@ -271,6 +287,8 @@ export function TripScreen({ id }: { id: string }) {
                     returnDate={trip.request.return_date}
                     arrivalAt={trip.request.arrival_at}
                     onConfirm={setPassport}
+                    onDocumentConfirmed={setDocumentId}
+                    searchRequest={passportSearchRequest}
                   />
                 </div>
               ) : null}

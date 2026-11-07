@@ -48,4 +48,17 @@ npm test                     # tests unitaires (vitest)
 npm run build && npm start   # version de démo, sur le portable
 ```
 
+### Démo avec l'agent H (portable de démo)
+
+```bash
+npm run demo                 # ou scripts/lancer-demo.sh --port 9333
+```
+
+Le script lance, dans l'ordre :
+1. le Chrome dédié de l'agent (profil `~/chrome-for-agents`, port 9333 par défaut), réglé pour ne jamais se mettre en veille quand sa fenêtre est cachée, sans la bulle de traduction ;
+2. `holo local browser` sur ce port, avec un identifiant de session fixe (gardé dans `~/.config/nami/local-browser-session-id`), relancé s'il s'arrête ;
+3. Nami (`npm run dev`), sauf s'il tourne déjà.
+
+Il affiche l'identifiant à coller dans « Local browser session » (`http://localhost:3000/?demo=1`) et n'affiche jamais la clé H (prise dans `HAI_API_KEY` ou `.env.local`). Prérequis : `pip install "hai-agents[cli,browser]"`. Ctrl+C arrête le pont et Nami ; le Chrome de l'agent reste ouvert.
+
 L'état des voyages vit dans le `localStorage` du navigateur. Le voyage « Bali » de l'accueil est une donnée d'exemple (marquée « Sample data ») ; le bouton « Reset » le remet à zéro.
