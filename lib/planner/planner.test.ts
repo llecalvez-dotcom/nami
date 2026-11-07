@@ -61,7 +61,7 @@ describe("nextQuestion", () => {
     }
     expect(asked).toEqual([
       "Do you travel with a French passport?",
-      "When do you land in Bali?",
+      "You leave on Monday 9 November: from France you land in Bali the next day, Tuesday 10 November, around 6 pm. Is that right? If you know your landing time, just tell me.",
       "What is the purpose of your trip?",
     ]);
     expect(suggestModules(TripRequestSchema.parse(request))).toEqual([

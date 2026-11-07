@@ -18,7 +18,6 @@ import type { AgentRun, Formality, ModuleKind, ModuleState, ModuleSuggestion, Tr
 import { TripRequestSchema } from "@/lib/contracts";
 import { isOfficialUrl } from "@/lib/official-sites";
 import {
-  defaultBaliArrival,
   formalityWindows,
   isBali,
   nextQuestion,
@@ -137,9 +136,10 @@ function questionOptions(field: QuestionField, request: TripRequestDraft): { lab
       return [{ label: "Yes, from France", value: "FR" }];
     case "arrival_at": {
       const { destination, country_iso2, departure_date } = request;
-      // From France, the flight to Bali lands the day after departure (17 to 20 h with the 7 h time difference).
+      // From France, the flight to Bali lands the day after departure (17 to 20 h with the 7 h time difference):
+      // Nami proposes the evening of that day, the traveller confirms it or gives the landing time.
       if (!destination || !country_iso2 || !departure_date || !isBali({ destination, country_iso2 })) return [];
-      return [{ label: "I don't know yet", value: defaultBaliArrival(addDays(departure_date, 1)) }];
+      return [{ label: "Yes, that's right", value: `${addDays(departure_date, 1)}T18:00+08:00` }];
     }
     case "purpose":
       return [
