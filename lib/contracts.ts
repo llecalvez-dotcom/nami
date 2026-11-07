@@ -151,6 +151,7 @@ export const DocumentExtractionSchema = z.object({
     expiry_date: PassportFieldsSchema.shape.expiry_date.nullable(),
   }),
   confidence_per_field: z.partialRecord(PassportFieldKeySchema, z.number().min(0).max(1)),
+  mrz_verified: z.array(PassportFieldKeySchema).optional(),
   warnings: z.array(z.string()),
 });
 export type DocumentExtraction = z.infer<typeof DocumentExtractionSchema>;

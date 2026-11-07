@@ -1,4 +1,6 @@
-import { z } from "zod";
+import { nationalityCode, normalizeMrz, parseMrz } from "@/lib/mrz";
+import { expiryWarning, type TripDates } from "@/lib/passport-dates";
+export { expiryWarning, returnReference, TripDatesSchema, type TripDates } from "@/lib/passport-dates";
 import {
   DocumentExtractionSchema,
   PassportFieldKeySchema,
@@ -11,7 +13,6 @@ export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const ACCEPTED_IMAGE_TYPES = ["image/jpeg", "image/png"] as const;
 export const PASSPORT_FIELD_KEYS = PassportFieldKeySchema.options;
 const READ_TIMEOUT_MS = 30_000;
-const STAY_DAYS_WHEN_NO_RETURN = 30;
 
 export type PassportImage = { base64: string; mimeType: (typeof ACCEPTED_IMAGE_TYPES)[number] };
 export type ReaderName = "off" | "h" | "anthropic";
@@ -30,12 +31,14 @@ const MODEL_OUTPUT_JSON_SCHEMA = {
   type: "object",
   properties: {
     ...Object.fromEntries(PASSPORT_FIELD_KEYS.map((key) => [key, { type: ["string", "null"] }])),
+    mrz_line1: { type: ["string", "null"] },
+    mrz_line2: { type: ["string", "null"] },
     confidence: {
       type: "object",
       properties: Object.fromEntries(PASSPORT_FIELD_KEYS.map((key) => [key, { type: "number", minimum: 0, maximum: 1 }])),
     },
   },
-  required: [...PASSPORT_FIELD_KEYS, "confidence"],
+  required: [...PASSPORT_FIELD_KEYS, "confidence", "mrz_line1", "mrz_line2"],
 };
 
 const PROMPT = `Read the identity page of this passport (printed fields and the MRZ lines at the bottom).
@@ -45,10 +48,11 @@ Return one JSON object with:
 - nationality: ISO 3166-1 alpha-2 code of the nationality (French -> "FR")
 - birth_date, issue_date, expiry_date: YYYY-MM-DD
 - passport_number: exactly as printed, no spaces
+- mrz_line1, mrz_line2: the two raw MRZ lines exactly as printed, including < characters, or null if unreadable
+- Read the printed fields independently of the MRZ. Never correct one using the other.
 - confidence: for each field, a number between 0 and 1 for how sure you are
 A field you cannot read stays null with confidence 0. Never guess a value.`;
 
-const ISO3_TO_ISO2: Record<string, string> = { FRA: "FR", BEL: "BE", CHE: "CH", DEU: "DE", ESP: "ES", ITA: "IT", GBR: "GB", USA: "US" };
 
 function dataUri(image: PassportImage): string {
   return `data:${image.mimeType};base64,${image.base64}`;
@@ -151,7 +155,7 @@ function parseModelJson(text: string): Record<string, unknown> {
 function cleanValue(key: PassportFieldKey, value: unknown): string | null {
   if (typeof value !== "string" || !value.trim()) return null;
   let text = value.trim();
-  if (key === "nationality") text = ISO3_TO_ISO2[text.toUpperCase()] ?? text.toUpperCase();
+  if (key === "nationality") text = nationalityCode(text);
   if (key === "passport_number") text = text.replace(/\s+/g, "").toUpperCase();
   if (key === "surname") text = text.toUpperCase();
   const field = PassportFieldsSchema.shape[key].safeParse(text);
@@ -167,38 +171,6 @@ const FIELD_LABELS: Record<PassportFieldKey, string> = {
   issue_date: "Date of issue",
   expiry_date: "Expiry date",
 };
-
-function addMonths(isoDate: string, months: number): string {
-  const d = new Date(`${isoDate}T00:00:00Z`);
-  d.setUTCMonth(d.getUTCMonth() + months);
-  return d.toISOString().slice(0, 10);
-}
-
-function addDays(isoDate: string, days: number): string {
-  const d = new Date(`${isoDate}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-export const TripDatesSchema = z.object({
-  return_date: z.iso.date().nullish(),
-  arrival_at: z.string().regex(/^\d{4}-\d{2}-\d{2}/).nullish(),
-});
-export type TripDates = z.infer<typeof TripDatesSchema>;
-
-// Same rule as contracts: return_date when known, otherwise arrival + 30 days (length of the e-VOA stay).
-export function returnReference({ return_date, arrival_at }: TripDates): string | null {
-  if (return_date) return return_date;
-  if (arrival_at) return addDays(arrival_at.slice(0, 10), STAY_DAYS_WHEN_NO_RETURN);
-  return null;
-}
-
-export function expiryWarning(expiryDate: string, trip: TripDates): string | null {
-  const reference = returnReference(trip);
-  if (!reference || expiryDate >= addMonths(reference, 6)) return null;
-  const basis = trip.return_date ? `your return on ${reference}` : `${reference} (arrival + 30 days)`;
-  return `Your passport expires on ${expiryDate}, less than 6 months after ${basis}. Indonesia requires 6 months of validity: renew it before you travel.`;
-}
 
 export function toExtraction(modelText: string, trip: TripDates): DocumentExtraction {
   const raw = parseModelJson(modelText);
@@ -220,7 +192,26 @@ export function toExtraction(modelText: string, trip: TripDates): DocumentExtrac
     const warning = expiryWarning(fields.expiry_date, trip);
     if (warning) warnings.unshift(warning);
   }
-  return DocumentExtractionSchema.parse({ fields, confidence_per_field, warnings });
+  const mrz = parseMrz(raw.mrz_line1, raw.mrz_line2);
+  const mrz_verified: PassportFieldKey[] = [];
+  if (!mrz) {
+    warnings.push("The MRZ could not be checked: review the printed fields.");
+  } else {
+    for (const key of Object.keys(mrz.fields) as (keyof typeof mrz.fields)[]) {
+      const printed = fields[key];
+      const value = mrz.fields[key];
+      const checked = key in mrz.checks ? mrz.checks[key as keyof typeof mrz.checks] : true;
+      if (printed && value && normalizeMrz(printed) === normalizeMrz(value) && checked) {
+        mrz_verified.push(key);
+        if (key in mrz.checks) confidence_per_field[key] = 1;
+      } else {
+        confidence_per_field[key] = Math.min(confidence_per_field[key], 0.3);
+        warnings.push(`${FIELD_LABELS[key]}: the printed value and the MRZ disagree or its check digit is invalid: check it.`);
+      }
+    }
+    if (!mrz.checks.composite) warnings.push("The MRZ composite check digit is invalid: review the printed fields.");
+  }
+  return DocumentExtractionSchema.parse({ fields, confidence_per_field, warnings, mrz_verified });
 }
 
 export async function extractPassport(image: PassportImage, trip: TripDates, reader: PassportReader): Promise<DocumentExtraction> {

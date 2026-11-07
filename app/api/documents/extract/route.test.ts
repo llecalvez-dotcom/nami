@@ -49,7 +49,7 @@ describe("POST /api/documents/extract (route 12)", () => {
     const body = await response.json();
     expect(Object.keys(body.fields)).toHaveLength(7);
     expect(body.fields.passport_number).toBe("24AB12345");
-    expect(body.warnings).toEqual([]);
+    expect(body.warnings).toEqual(["The MRZ could not be checked: review the printed fields."]);
   });
 
   it("flags a missing field", async () => {
