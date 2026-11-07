@@ -1,10 +1,11 @@
 import { API_LIMITS, guard, readJsonLimited } from "@/lib/api-guard";
-import { createSession } from "@/lib/h-agent";
+import { createSession, getAvailableSessionSlots } from "@/lib/h-agent";
 import { documentFilePaths } from "@/lib/documents";
 import { bindSessionDocument } from "@/lib/agent-passport-upload";
 import {
   buildPilotTask,
   fail,
+  H_SLOTS_BUSY,
   hErrorResponse,
   PAPER_MAX_STEPS,
   PAPER_MAX_TIME_S,
@@ -49,12 +50,16 @@ async function start(request: Request): Promise<Response> {
     ? input.data.file_paths
     : [...new Set([...input.data.file_paths, ...documentPaths])];
   try {
+    if (await getAvailableSessionSlots() <= 0) return fail(H_SLOTS_BUSY, 429);
+  } catch {}
+  try {
     const session = await createSession({
       task: buildPilotTask({ ...input.data, file_paths: filePaths }),
       tools: PAPER_TOOLS,
       localBrowserSessionId: input.data.local_session_id,
       maxTimeS: PAPER_MAX_TIME_S,
       maxSteps: PAPER_MAX_STEPS,
+      idempotencyKey: input.data.idempotency_key,
     });
     if (input.data.document_id) bindSessionDocument(session.id, documentPaths[0]);
     return Response.json({ session_id: session.id, status: session.status }, { status: 201 });

@@ -20,6 +20,7 @@ import { countryName } from "@/lib/countries";
 import { destinationImage } from "@/lib/destination-images";
 import { requestTripParse } from "@/lib/trip-parse-client";
 import { missingPassportMessage } from "@/lib/passport-reminder";
+import { createVisaStartAttempt } from "@/lib/paper-start-client";
 import type { PassportFields } from "@/lib/contracts";
 import { tripStatus, visaSteps } from "@/lib/trip-progress";
 import {
@@ -39,21 +40,15 @@ import { getTrip, saveTrip, useTrips } from "@/lib/trip-store";
 
 async function startVisaSession(trip: Trip, passport: PassportFields, documentId: string | null): Promise<string> {
   const settings = readAgentSettings();
-  const response = await fetch("/api/papers/start", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      request: trip.request,
-      passport,
-      paper_id: "evoa",
-      local_session_id: settings.local_session_id.trim(),
-      file_paths: filePaths(settings.files),
-      ...(documentId ? { document_id: documentId } : {}),
-    }),
+  const attempt = createVisaStartAttempt({
+    request: trip.request,
+    passport,
+    paper_id: "evoa",
+    local_session_id: settings.local_session_id.trim(),
+    file_paths: filePaths(settings.files),
+    ...(documentId ? { document_id: documentId } : {}),
   });
-  const body = (await response.json().catch(() => null)) as { session_id?: string; error?: string } | null;
-  if (!response.ok || !body?.session_id) throw new Error(body?.error ?? `The agent could not start (${response.status}).`);
-  return body.session_id;
+  return attempt();
 }
 
 function Fact({ label, value }: { label: string; value: string | null }) {
