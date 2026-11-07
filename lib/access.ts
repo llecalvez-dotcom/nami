@@ -16,3 +16,12 @@ export function constantTimeEqual(left: string, right: string): boolean {
   }
   return difference === 0;
 }
+
+export function safeNext(next: string | null, origin: string): string {
+  try {
+    const target = new URL(next ?? "/", origin);
+    return target.origin === origin ? target.pathname + target.search + target.hash : "/";
+  } catch {
+    return "/";
+  }
+}

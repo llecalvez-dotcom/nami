@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { safeNext } from "@/lib/access";
 
 export default function AccessPage() {
   const router = useRouter();
@@ -23,7 +24,7 @@ export default function AccessPage() {
       });
       if (!response.ok) throw new Error("Invalid access code.");
       const next = new URLSearchParams(window.location.search).get("next");
-      router.replace(next && next.startsWith("/") && !next.startsWith("//") ? next : "/");
+      router.replace(safeNext(next, window.location.origin));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to verify access code.");
     } finally {
