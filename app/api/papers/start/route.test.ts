@@ -305,6 +305,24 @@ describe("POST /api/papers/start (route 5)", () => {
     },
   );
 
+  it("uses NAMI_LOCAL_SESSION_ID when the panel sends no local session, and lets the body win", async () => {
+    vi.stubEnv("NAMI_LOCAL_SESSION_ID", "server-session-7");
+    expect((await start({ ...BODY, local_session_id: undefined })).status).toBe(201);
+    expect(sentBody().agent.environments[0].session_id).toBe("server-session-7");
+    resetGuards();
+    resetBrowserPreflight();
+    fetch.mockClear();
+    expect((await start(BODY)).status).toBe(201);
+    expect(sentBody().agent.environments[0].session_id).toBe("local-42");
+  });
+
+  it("refuses a malformed NAMI_LOCAL_SESSION_ID without calling H", async () => {
+    vi.stubEnv("NAMI_LOCAL_SESSION_ID", "bad id with spaces");
+    const response = await start({ ...BODY, local_session_id: undefined });
+    expect(response.status).toBe(400);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("logs nothing and never sends the task back", async () => {
     const log = vi.spyOn(console, "log");
     const error = vi.spyOn(console, "error");

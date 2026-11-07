@@ -2,7 +2,8 @@ import { namiUrl } from "./settings.js";
 
 const frame = document.getElementById("nami");
 const origin = await namiUrl();
-frame.src = origin;
+// Nami opens on its side panel screen (/panel); messages are still checked against its origin.
+frame.src = `${origin}/panel`;
 
 const sameSite = (tabUrl, host) => {
   try {
