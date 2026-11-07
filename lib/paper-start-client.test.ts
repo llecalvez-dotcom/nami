@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createVisaStartAttempt, resetVisaStartAttempts } from "@/lib/paper-start-client";
+import { createVisaStartAttempt, H_SLOTS_BUSY, resetVisaStartAttempts } from "@/lib/paper-start-client";
 
 describe("visa start attempts", () => {
   it("keeps the UUID and exact body across retries, but assigns a new UUID to a new attempt", async () => {
@@ -84,12 +84,25 @@ describe("visa start attempts", () => {
     let n = 0;
     const uuid = () => `00000000-0000-4000-8000-00000000000${++n}`;
     const fetch = vi.fn<typeof globalThis.fetch>()
-      .mockResolvedValueOnce(Response.json({ error: "All H agent slots are busy." }, { status: 429 }))
+      .mockResolvedValueOnce(Response.json({ error: H_SLOTS_BUSY }, { status: 429 }))
       .mockResolvedValueOnce(Response.json({ session_id: "s-1" }, { status: 201 }));
     await expect(createVisaStartAttempt({ paper_id: "evoa" }, { fetch, uuid, scope: "trip-1" })()).rejects.toThrow();
     await createVisaStartAttempt({ paper_id: "evoa" }, { fetch, uuid, scope: "trip-1" })();
     const bodies = fetch.mock.calls.map((call) => JSON.parse((call[1] as RequestInit).body as string));
     expect(bodies[1].idempotency_key).not.toBe(bodies[0].idempotency_key);
     expect(bodies[1]).not.toHaveProperty("resume");
+  });
+
+  it("keeps the key after a rate-limit 429 that is not the busy-slots answer", async () => {
+    resetVisaStartAttempts();
+    let n = 0;
+    const uuid = () => `00000000-0000-4000-8000-00000000000${++n}`;
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ error: "Too many requests." }, { status: 429 }))
+      .mockResolvedValueOnce(Response.json({ session_id: "s-1" }, { status: 201 }));
+    await expect(createVisaStartAttempt({ paper_id: "evoa" }, { fetch, uuid, scope: "trip-1" })()).rejects.toThrow();
+    await createVisaStartAttempt({ paper_id: "evoa" }, { fetch, uuid, scope: "trip-1" })();
+    const bodies = fetch.mock.calls.map((call) => JSON.parse((call[1] as RequestInit).body as string));
+    expect(bodies[1]).toMatchObject({ idempotency_key: bodies[0].idempotency_key, resume: true });
   });
 });

@@ -6,7 +6,8 @@ import { HAgentError, type ToolSpec } from "@/lib/h-agent";
 
 export const PAPER_MAX_TIME_S = 900;
 export const PAPER_MAX_STEPS = 80;
-export const H_SLOTS_BUSY = "All H agent slots are busy. Stop another agent or wait, then try again.";
+import { H_SLOTS_BUSY } from "@/lib/paper-start-client";
+export { H_SLOTS_BUSY };
 
 // The only Bali paper the agent fills in (part A of ticket 05).
 export const PILOT_PAPER_ID = "evoa";
