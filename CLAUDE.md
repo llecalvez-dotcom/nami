@@ -27,13 +27,13 @@ Note de projet de Nathan : `~/Code/perso/obsidian-vault/projets/_actifs/2026-11-
 - Aucun tiret cadratin ni demi-cadratin dans les textes de l'interface.
 
 ## Current Project State
-(vérifié le samedi 7 novembre à 14 h 07)
+(vérifié le samedi 7 novembre à 14 h 35)
 
 | Aspect | Status |
 |--------|--------|
-| Code | 🔄 Fusionnés : squelette (01), compréhension de la demande par le modèle H (02), voix Gladia (04). PR #6 en brouillon (03 : papiers en direct Linkup, lecture du passeport, affichage) : backend relu et testé (121 tests), affichage en cours chez Devin cloud. Ticket 05 (agent H sur le visa e-VOA) écrit, pas encore lancé. Ticket 06 (tout brancher + mode démo préparé) pas écrit. |
-| Config | ✅ Clés dans les secrets de Devin cloud ; `.env*` et `private/` ignorés ; accord écrit du titulaire du passeport. ❌ CLI de H (`hai-agents[cli,browser]`) et Chrome dédié pas encore installés sur le portable de Clément. |
-| Tests | ✅ `main` : 69 tests, lint et compilation OK ; F0 (compréhension) et F5 (voix) réussis en réel. ❓ Aucun résultat sur GitHub pour F1 manuel, F6, F8 (Clément), L1 et F7 (Ali, rapport L1 en cours dans la PR #6). |
+| Code | 🔄 Fusionnés : squelette (01), compréhension par le modèle H (02), papiers en direct Linkup + lecture du passeport + affichage (03, PR #6), voix Gladia (04). Ticket 05 élargi (PR #9) : partie A e-VOA de Bali, partie B tout papier officiel en beta ; pas encore lancé sur Devin. Ticket 06 (tout brancher + mode démo préparé) pas écrit. |
+| Config | ✅ Clés dans les secrets de Devin cloud (`HAI_API_KEY` remplacée à 14 h 25, vérifiée par Devin : `/api/trip/parse` en 200) ; `.env*` et `private/` ignorés ; accord écrit du titulaire du passeport. ❌ CLI de H (`hai-agents[cli,browser]`) et Chrome dédié pas encore installés sur le portable de Clément. ❓ Les `.env.local` locaux ont-ils la nouvelle clé H ? |
+| Tests | ✅ `main` : 131 tests, lint et compilation OK ; F0 (compréhension), F5 (voix) et L1 (Linkup, 5 pays sur 5) réussis en réel. ❓ F7 (vrai passeport, Ali), F6 et F8 (Clément) sans résultat sur GitHub. |
 
 ## Next Immediate Action
-Quand la PR #6 sort du brouillon : la récupérer (`git fetch origin pull/6/head:pr6 && git checkout pr6`), lancer `npm test`, `npm run lint`, `npm run build`, simuler la fusion avec `main`, relire l'affichage (cartes des papiers, carte passeport, « Try another country », masquage `?demo=1`) et le rapport L1, puis donner le verdict à Nathan ; Ali fait ensuite ses tests réels L1 et F7 et fusionne. En parallèle, relancer Clément : Devin cloud tout de suite sur `docs/tickets/05-agent-visa.md`, partie A (e-VOA de Bali, sans repérage manuel préalable), puis partie B (tout papier officiel en beta, décision de Nathan du 7 novembre à 14 h 30).
+Relancer Clément : Devin cloud sur `docs/tickets/05-agent-visa.md` partie A (e-VOA de Bali, sans repérage manuel), et installer le CLI de H et le Chrome dédié sur son portable pendant que Devin code. Relire la PR 05 dès qu'elle arrive (tests, lint, compilation, fusion simulée). En parallèle : Ali fait le test F7 (`docs/tests/f7-passeport.md`), Claude écrit le ticket 06 et prépare le pitch avec Nathan.
