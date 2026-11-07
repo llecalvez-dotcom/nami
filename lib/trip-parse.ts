@@ -57,11 +57,18 @@ export class ModelOutputError extends Error {}
 
 function statesTimeOfDay(transcript: string): boolean {
   const text = transcript.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  return /\b(?:[01]?\d|2[0-3])[:h][0-5]\d\b/.test(text)
+  const hours = "(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|un|une|deux|trois|quatre|cinq|sept|huit|neuf|dix|onze|douze|midi|minuit)";
+  const spokenTime = new RegExp(
+    `(?:\\b(?:at|around|vers)|(?:^|\\s)à)\\s+(?:(?:half|quarter)\\s+(?:past|to)\\s+)?${hours}\\b`,
+    "i",
+  );
+  return /\b(?:[01]?\d|2[0-3])[:h][0-5]\d(?:\s*[ap]\.?\s*m\.?)?\b/.test(text)
     || /\b(?:[01]?\d|2[0-3])\s*h\b/.test(text)
     || /\b(?:0?[1-9]|1[0-2])\s*[ap]\.?\s*m\.?\b/.test(text)
     || /\b(?:at|around|vers)\s+(?:[01]?\d|2[0-3])\b/.test(text)
     || /(?:^|\s)à\s+(?:[01]?\d|2[0-3])\b/i.test(transcript)
+    || spokenTime.test(transcript)
+    || new RegExp(`\\b${hours}\\s+(?:o['’]clock|heures?)\\b`).test(text)
     || /\b(?:morning|afternoon|evening|night|tonight|noon|midnight|matin|apres-midi|soir|nuit|midi|minuit)\b/.test(text);
 }
 

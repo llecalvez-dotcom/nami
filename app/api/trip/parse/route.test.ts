@@ -95,7 +95,7 @@ describe("POST /api/trip/parse", () => {
     expect(complete.mock.calls[0][0].system).not.toContain("use 00:00");
   });
 
-  it.each(["Monday, staying 10 days with 2 friends", "A 7-day trip to Bali on Monday"])(
+  it.each(["Monday, staying 10 days with 2 friends", "A 7-day trip to Bali on Monday", "staying ten days"])(
     "rejects an invented time even when the question suggests one: %s",
     async (transcript) => {
       complete.mockResolvedValue(JSON.stringify({ ...nulls, arrival_at: "2026-11-09T14:30+08:00" }));
@@ -123,6 +123,21 @@ describe("POST /api/trip/parse", () => {
     ["j'arrive a 7 h", "07:00"],
     ["j'arrive dans l'apres-midi", "14:00"],
     ["landing at 7 p.m.", "19:00"],
+    ["landing Tuesday 7:30pm", "19:30"],
+    ["landing Tuesday 7:30am", "07:30"],
+    ["I land at eight", "08:00"],
+    ["around half past seven", "07:30"],
+    ["at nine in the evening", "21:00"],
+    ["à huit heures", "08:00"],
+    ["eight o'clock", "08:00"],
+    ["eight o’clock", "08:00"],
+    ["huit heures", "08:00"],
+    ["vers midi", "12:00"],
+    ["à minuit", "00:00"],
+    ...["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"]
+      .map((hour, index) => [`at ${hour}`, `${String(index + 1).padStart(2, "0")}:00`]),
+    ...["un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf", "dix", "onze", "douze"]
+      .map((hour, index) => [`vers ${hour}`, `${String(index + 1).padStart(2, "0")}:00`]),
   ])("preserves a model landing time when stated: %s", async (phrase, time) => {
     const arrival_at = `2026-11-09T${time}+08:00`;
     complete.mockResolvedValue(JSON.stringify({ ...nulls, arrival_at }));
