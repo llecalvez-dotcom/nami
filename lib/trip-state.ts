@@ -9,8 +9,18 @@ import {
   SAMPLE_SUGGESTIONS,
   SAMPLE_TRIP_ID,
 } from "@/data/sample";
+import { BALI_PAPERS } from "@/lib/bali-papers";
 import type { AgentRun, Formality, ModuleKind, ModuleState, ModuleSuggestion, TripRequestDraft } from "@/lib/contracts";
-import { TripRequestDraftSchema } from "@/lib/contracts";
+import { TripRequestSchema } from "@/lib/contracts";
+import { isOfficialUrl } from "@/lib/official-sites";
+import {
+  defaultBaliArrival,
+  formalityWindows,
+  isBali,
+  nextQuestion,
+  suggestModules,
+  type QuestionField,
+} from "@/lib/planner";
 
 export type ProposalAction = "papers" | "create_visa" | "flights";
 
@@ -21,10 +31,10 @@ export type ConversationItem =
       id: string;
       kind: "question";
       from: "nami" | "agent_h";
-      field: "arrival_at" | "email";
+      field: QuestionField | "email";
       question: string;
       options: { label: string; value: string }[];
-      input: "email" | null;
+      input: "email" | "text" | null;
       answer: string | null;
     }
   | {
@@ -64,8 +74,100 @@ function suggestion(module: ModuleKind): ModuleSuggestion {
 }
 
 function setModule(modules: ModuleSuggestion[], module: ModuleKind, state: ModuleState): ModuleSuggestion[] {
+  const existing = modules.find((m) => m.module === module);
   const rest = modules.filter((m) => m.module !== module);
-  return [...rest, { ...suggestion(module), state }];
+  return [...rest, { ...(existing ?? suggestion(module)), state }];
+}
+
+const FLIGHTS_PROPOSAL: NewConversationItem = {
+  kind: "proposal",
+  action: "flights",
+  text: suggestion("flights").message,
+  accept_label: "Find my flight",
+  decline_label: "Not now",
+  decision: null,
+};
+
+function addDays(isoDate: string, days: number): string {
+  const date = new Date(`${isoDate}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function questionOptions(field: QuestionField, request: TripRequestDraft): { label: string; value: string }[] {
+  switch (field) {
+    case "nationality":
+      return [{ label: "Yes, French passport", value: "FR" }];
+    case "origin_country":
+      return [{ label: "Yes, from France", value: "FR" }];
+    case "arrival_at": {
+      const { destination, country_iso2, departure_date } = request;
+      // From France, the flight to Bali lands the day after departure (17 to 20 h with the 7 h time difference).
+      if (!destination || !country_iso2 || !departure_date || !isBali({ destination, country_iso2 })) return [];
+      return [{ label: "I don't know yet", value: defaultBaliArrival(addDays(departure_date, 1)) }];
+    }
+    case "purpose":
+      return [
+        { label: "Holiday", value: "tourism" },
+        { label: "Business", value: "business" },
+        { label: "Family", value: "family" },
+      ];
+    case "travellers":
+      return [
+        { label: "Just me", value: "1" },
+        { label: "Two", value: "2" },
+      ];
+    default:
+      return [];
+  }
+}
+
+function advance(trip: Trip): Trip {
+  const question = nextQuestion(trip.request);
+  if (question) {
+    return push(trip, {
+      kind: "question",
+      from: "nami",
+      field: question.field,
+      question: question.question,
+      options: questionOptions(question.field, trip.request),
+      input: "text",
+      answer: null,
+    });
+  }
+
+  const suggestions = suggestModules(TripRequestSchema.parse(trip.request));
+  const papers = suggestions.find((s) => s.module === "papers")!;
+  if (papers.state === "suggested") {
+    return push(
+      { ...trip, modules: suggestions.filter((s) => s.module !== "flights") },
+      {
+        kind: "proposal",
+        action: "papers",
+        text: papers.message,
+        accept_label: "Prepare my entry papers",
+        decline_label: "Not now",
+        decision: null,
+      },
+    );
+  }
+  return push({ ...trip, modules: suggestions }, { kind: "agent", text: papers.message }, FLIGHTS_PROPOSAL);
+}
+
+function baliFormalities(request: TripRequestDraft): Formality[] {
+  const windows = request.arrival_at ? formalityWindows({ arrival_at: request.arrival_at }, BALI_PAPERS) : [];
+  return BALI_PAPERS.map((paper) => ({
+    id: paper.id,
+    name: paper.name,
+    required: true,
+    official_url: paper.official_url,
+    official_cost: paper.official_cost,
+    opens_at: windows.find((w) => w.id === paper.id)?.opens_at ?? null,
+    closes_at: windows.find((w) => w.id === paper.id)?.closes_at ?? null,
+    sources: paper.source_urls.map((url) => ({ url, official: isOfficialUrl(url) })),
+    status: "suggested",
+    checked_at: null,
+  }));
 }
 
 function nextId(trip: Trip): string {
@@ -114,26 +216,27 @@ export function createSampleTrip(now: Date): Trip {
   );
 }
 
-export function createTripFromText(id: string, text: string, now: Date): Trip {
+export function createTripFromRequest(id: string, request: TripRequestDraft, now: Date): Trip {
   const trip: Trip = {
     id,
     created_at: now.toISOString(),
     sample: false,
-    request: TripRequestDraftSchema.parse({ raw_text: text }),
+    request,
     conversation: [],
     modules: [suggestion("hotel")],
     formalities: [],
     agent_run: null,
     agent_steps: [],
   };
-  return push(
-    trip,
-    { kind: "user", text },
-    {
-      kind: "agent",
-      text: "Your request is saved. I can't read trip requests yet: that part is being built. Open the sample Bali trip to walk through the flow.",
-    },
-  );
+  return advance(push(trip, { kind: "user", text: request.raw_text }));
+}
+
+export function answerQuestionWithText(trip: Trip, itemId: string, text: string, request: TripRequestDraft): Trip {
+  const item = trip.conversation.find((i) => i.id === itemId);
+  if (!item || item.kind !== "question" || item.from !== "nami" || item.answer !== null) return trip;
+  const answered = { ...updateItem(trip, itemId, { answer: text }), request };
+  const stillMissing = item.field !== "email" && request[item.field] === null;
+  return advance(stillMissing ? push(answered, { kind: "agent", text: "Sorry, I didn't catch that." }) : answered);
 }
 
 export function answerQuestion(trip: Trip, itemId: string, value: string, label: string): Trip {
@@ -141,18 +244,9 @@ export function answerQuestion(trip: Trip, itemId: string, value: string, label:
   if (!item || item.kind !== "question" || item.answer !== null) return trip;
   const answered = updateItem(trip, itemId, { answer: label });
 
-  if (item.field === "arrival_at") {
-    return push(
-      { ...answered, request: { ...answered.request, arrival_at: value }, modules: setModule(answered.modules, "papers", "suggested") },
-      {
-        kind: "proposal",
-        action: "papers",
-        text: suggestion("papers").message,
-        accept_label: "Prepare my entry papers",
-        decline_label: "Not now",
-        decision: null,
-      },
-    );
+  if (item.field !== "email") {
+    const fieldValue = item.field === "travellers" ? Number(value) : value;
+    return advance({ ...answered, request: { ...answered.request, [item.field]: fieldValue } });
   }
 
   if (!answered.agent_run || !isAgentActive(answered.agent_run)) return answered;
@@ -173,14 +267,7 @@ export function answerQuestion(trip: Trip, itemId: string, value: string, label:
       kind: "agent",
       text: "Visa (e-VOA) pre-filled in Chrome. Check every field, then finish it yourself: payment of IDR 500,000 on the official site.",
     },
-    {
-      kind: "proposal",
-      action: "flights",
-      text: suggestion("flights").message,
-      accept_label: "Find my flight",
-      decline_label: "Not now",
-      decision: null,
-    },
+    FLIGHTS_PROPOSAL,
   );
 }
 
@@ -195,6 +282,20 @@ export function decideProposal(trip: Trip, itemId: string, accepted: boolean, no
         return push(
           { ...decided, modules: setModule(decided.modules, "papers", "declined") },
           { kind: "agent", text: "Okay. Your trip is saved; ask me for your papers anytime." },
+        );
+      }
+      if (!trip.sample) {
+        return push(
+          {
+            ...decided,
+            modules: setModule(setModule(decided.modules, "papers", "accepted"), "flights", "suggested"),
+            formalities: baliFormalities(decided.request),
+          },
+          {
+            kind: "agent",
+            text: "Here are your 3 entry papers, read by hand on the official sites on 7 Nov 2026. Filling them in for you on the official site is not wired yet.",
+          },
+          FLIGHTS_PROPOSAL,
         );
       }
       return push(

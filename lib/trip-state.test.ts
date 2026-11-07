@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { buildFlightsTask, buildPaperTask } from "@/lib/agent-task";
 import { getBaliPaper } from "@/lib/bali-papers";
-import { answerQuestion, createSampleTrip, decideProposal, stopAgent, type Trip } from "@/lib/trip-state";
+import { TripRequestDraftSchema } from "@/lib/contracts";
+import {
+  answerQuestion,
+  answerQuestionWithText,
+  createSampleTrip,
+  createTripFromRequest,
+  decideProposal,
+  stopAgent,
+  type Trip,
+} from "@/lib/trip-state";
 
 const now = new Date("2026-11-08T12:52:00Z");
 
@@ -45,6 +54,73 @@ describe("sample flow", () => {
     const id = open(trip, "question").id;
     const once = answerQuestion(trip, id, "2026-11-10T14:30+08:00", "Tue 10 Nov, 14:30");
     expect(answerQuestion(once, id, "2026-11-10T00:00+08:00", "I don't know yet")).toBe(once);
+  });
+});
+
+describe("parsed request flow", () => {
+  const bali = TripRequestDraftSchema.parse({
+    raw_text: "Je pars à Bali lundi",
+    origin_country: "FR",
+    destination: "Bali",
+    country_iso2: "ID",
+    departure_date: "2026-11-09",
+    travellers: 1,
+  });
+
+  it("asks one question at a time, then proposes the papers with their windows", () => {
+    let trip = createTripFromRequest("t1", bali, now);
+    expect(trip.conversation.map((i) => i.kind)).toEqual(["user", "question"]);
+    expect(open(trip, "question")).toMatchObject({ field: "nationality", answer: null });
+
+    trip = answerQuestion(trip, open(trip, "question").id, "FR", "Yes, French passport");
+    const landing = open(trip, "question");
+    expect(landing).toMatchObject({ field: "arrival_at", question: "When do you land in Bali?" });
+    expect(landing.kind === "question" && landing.options).toEqual([
+      { label: "I don't know yet", value: "2026-11-10T00:00+08:00" },
+    ]);
+
+    trip = answerQuestionWithText(trip, landing.id, "Tuesday 14:30", { ...trip.request, arrival_at: "2026-11-10T14:30+08:00" });
+    trip = answerQuestion(trip, open(trip, "question").id, "tourism", "Holiday");
+    expect(trip.request.purpose).toBe("tourism");
+
+    const proposal = open(trip, "proposal");
+    expect(proposal).toMatchObject({ action: "papers", accept_label: "Prepare my entry papers" });
+    expect(trip.modules.find((m) => m.module === "papers")?.state).toBe("suggested");
+
+    trip = decideProposal(trip, proposal.id, true, now);
+    expect(trip.formalities.find((f) => f.id === "arrival_card")).toMatchObject({
+      opens_at: "2026-11-07T14:30+08:00",
+      closes_at: "2026-11-10T14:30+08:00",
+    });
+    expect(trip.agent_run).toBeNull();
+    expect(open(trip, "proposal")).toMatchObject({ action: "flights" });
+  });
+
+  it("asks again when the answer did not fill the field", () => {
+    let trip = createTripFromRequest("t2", bali, now);
+    trip = answerQuestionWithText(trip, open(trip, "question").id, "hmm", trip.request);
+    expect(trip.conversation.at(-2)).toMatchObject({ kind: "agent", text: "Sorry, I didn't catch that." });
+    expect(open(trip, "question")).toMatchObject({ field: "nationality", answer: null });
+  });
+
+  it("says nothing is needed for Barcelona and offers the flight", () => {
+    const trip = createTripFromRequest(
+      "t3",
+      {
+        ...bali,
+        raw_text: "Barcelona on 3 March",
+        destination: "Barcelona",
+        country_iso2: "ES",
+        departure_date: "2027-03-03",
+        nationality: "FR",
+        arrival_at: "2027-03-03T10:00+01:00",
+        purpose: "tourism",
+      },
+      now,
+    );
+    expect(trip.modules.find((m) => m.module === "papers")?.state).toBe("none_needed");
+    expect(trip.conversation.at(-2)).toMatchObject({ kind: "agent" });
+    expect(open(trip, "proposal")).toMatchObject({ action: "flights" });
   });
 });
 

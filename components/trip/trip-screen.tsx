@@ -7,7 +7,15 @@ import { SampleBadge } from "@/components/status-badge";
 import { Conversation } from "@/components/trip/conversation";
 import { Dossier } from "@/components/trip/dossier";
 import { SAMPLE_TRIP_ID } from "@/data/sample";
-import { answerQuestion, createSampleTrip, decideProposal, stopAgent, type Trip } from "@/lib/trip-state";
+import { requestTripParse } from "@/lib/trip-parse-client";
+import {
+  answerQuestion,
+  answerQuestionWithText,
+  createSampleTrip,
+  decideProposal,
+  stopAgent,
+  type Trip,
+} from "@/lib/trip-state";
 import { saveTrip, useTrips } from "@/lib/trip-store";
 
 export function TripScreen({ id }: { id: string }) {
@@ -30,6 +38,16 @@ export function TripScreen({ id }: { id: string }) {
   }
 
   const update = (next: Trip) => saveTrip(next);
+
+  const answerWithText = async (itemId: string, text: string) => {
+    const item = trip.conversation.find((i) => i.id === itemId);
+    const { request } = await requestTripParse({
+      transcript: text,
+      current_request: trip.request,
+      question: item?.kind === "question" ? item.question : undefined,
+    });
+    update(answerQuestionWithText(trip, itemId, text, request));
+  };
 
   return (
     <div className="flex flex-1 flex-col">
@@ -68,6 +86,7 @@ export function TripScreen({ id }: { id: string }) {
           <Conversation
             items={trip.conversation}
             onAnswer={(itemId, value, label) => update(answerQuestion(trip, itemId, value, label))}
+            onAnswerText={answerWithText}
             onDecide={(itemId, accepted) => update(decideProposal(trip, itemId, accepted, new Date()))}
           />
         </section>

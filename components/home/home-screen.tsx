@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { SampleBadge } from "@/components/status-badge";
 import { SAMPLE_DRAFT, SAMPLE_TRIP_ID } from "@/data/sample";
 import { formatDate } from "@/lib/format";
-import { createTripFromText, type Trip } from "@/lib/trip-state";
+import { createTripFromRequest, type Trip } from "@/lib/trip-state";
+import { requestTripParse } from "@/lib/trip-parse-client";
 import { saveTrip, useTrips } from "@/lib/trip-store";
 
 function tripTitle(trip: Pick<Trip, "request">): string {
@@ -25,6 +26,8 @@ export function HomeScreen() {
   const router = useRouter();
   const trips = useTrips();
   const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const savedTrips = trips ?? [];
   const hasSample = savedTrips.some((t) => t.id === SAMPLE_TRIP_ID);
@@ -32,13 +35,21 @@ export function HomeScreen() {
     ? savedTrips
     : [...savedTrips, { id: SAMPLE_TRIP_ID, sample: true, request: SAMPLE_DRAFT }];
 
-  function submit(event: React.FormEvent) {
+  async function submit(event: React.FormEvent) {
     event.preventDefault();
     const value = text.trim();
-    if (!value) return;
-    const trip = createTripFromText(crypto.randomUUID(), value, new Date());
-    saveTrip(trip);
-    router.push(`/trip/${trip.id}`);
+    if (!value || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const { request } = await requestTripParse({ transcript: value });
+      const trip = createTripFromRequest(crypto.randomUUID(), request, new Date());
+      saveTrip(trip);
+      router.push(`/trip/${trip.id}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Something went wrong. Try again.");
+      setBusy(false);
+    }
   }
 
   return (
@@ -71,13 +82,19 @@ export function HomeScreen() {
           placeholder="Tell me about your trip"
           className="h-14 min-w-0 flex-1 bg-transparent px-2 text-lg outline-none placeholder:text-muted-foreground/70"
         />
-        <Button type="submit" size="lg" className="h-12 rounded-xl px-4" disabled={!text.trim()}>
-          Go <ArrowRight />
+        <Button type="submit" size="lg" className="h-12 rounded-xl px-4" disabled={!text.trim() || busy}>
+          {busy ? "Reading…" : "Go"} <ArrowRight />
         </Button>
       </form>
-      <p className="mt-3 pl-1 text-sm text-muted-foreground">
-        e.g. “I&apos;m flying to Bali on Monday for a friend&apos;s wedding, staying ten days.”
-      </p>
+      {error ? (
+        <p role="alert" className="mt-3 pl-1 text-sm text-[#8a5a24]">
+          I couldn&apos;t read your request: {error}
+        </p>
+      ) : (
+        <p className="mt-3 pl-1 text-sm text-muted-foreground">
+          e.g. “I&apos;m flying to Bali on Monday for a friend&apos;s wedding, staying ten days.”
+        </p>
+      )}
 
       <section className="mt-20">
         <h2 className="text-sm font-medium tracking-[0.18em] text-muted-foreground uppercase">Your trips</h2>
