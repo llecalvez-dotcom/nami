@@ -3,9 +3,13 @@
 import { useState } from "react";
 import { Check, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MicButton, VoiceStatusLine } from "@/components/voice/mic-button";
+import { useConversationSpeech, useListenAfterSpeech } from "@/components/voice/speech";
+import { useVoiceInput, type VoiceInput } from "@/components/voice/use-voice-input";
 import { VoiceAnswer } from "@/components/voice/voice-answer";
 import { cn } from "@/lib/utils";
 import type { ConversationItem } from "@/lib/trip-state";
+import { matchOption, shortAnswer } from "@/lib/voice/short-answers";
 
 type Handlers = {
   onAnswer: (itemId: string, value: string, label: string) => void;
@@ -32,7 +36,14 @@ function AgentLabel({ from }: { from: "nami" | "agent_h" }) {
 
 const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
-function TextAnswer({ onSubmit }: { onSubmit: (value: string) => Promise<void> }) {
+// The card's microphone, opened by itself once Nami has read the card aloud.
+function useCardVoice(itemId: string, onTranscript: (text: string) => void): VoiceInput {
+  const voice = useVoiceInput(onTranscript);
+  useListenAfterSpeech(itemId, voice.start);
+  return voice;
+}
+
+function TextAnswer({ onSubmit, mic }: { onSubmit: (value: string) => Promise<void>; mic?: React.ReactNode }) {
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +65,7 @@ function TextAnswer({ onSubmit }: { onSubmit: (value: string) => Promise<void> }
       }}
     >
       <div className="flex gap-2">
+        {mic}
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -74,11 +86,8 @@ function TextAnswer({ onSubmit }: { onSubmit: (value: string) => Promise<void> }
   );
 }
 
-function QuestionCard({
-  item,
-  onAnswer,
-  onAnswerText,
-}: { item: Extract<ConversationItem, { kind: "question" }> } & Pick<Handlers, "onAnswer" | "onAnswerText">) {
+function QuestionCard(props: { item: Extract<ConversationItem, { kind: "question" }> } & Pick<Handlers, "onAnswer" | "onAnswerText">) {
+  const { item, onAnswer } = props;
   return (
     <div
       className={cn(
@@ -94,7 +103,7 @@ function QuestionCard({
         </p>
       ) : item.input === "email" ? (
         <VoiceAnswer
-          question={item.question}
+          itemId={item.id}
           type="email"
           isValid={isEmail}
           placeholder="you@example.com"
@@ -102,24 +111,7 @@ function QuestionCard({
           onValidate={(value) => onAnswer(item.id, value, value)}
         />
       ) : (
-        <>
-          {item.options.length > 0 ? (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {item.options.map((option) => (
-                <Button
-                  key={option.value}
-                  variant="outline"
-                  size="lg"
-                  className="h-10 rounded-full border-border px-4 hover:border-primary hover:bg-accent hover:text-accent-foreground"
-                  onClick={() => onAnswer(item.id, option.value, option.label)}
-                >
-                  {option.label}
-                </Button>
-              ))}
-            </div>
-          ) : null}
-          {item.input === "text" ? <TextAnswer onSubmit={(text) => onAnswerText(item.id, text)} /> : null}
-        </>
+        <OpenQuestion {...props} />
       )}
     </div>
   );
@@ -136,19 +128,19 @@ function AgentQuestionCard({
   return (
     <div
       className={cn(
-        "rounded-2xl border bg-card p-5",
-        item.answer === null && "border-primary/30 shadow-[0_8px_24px_-16px_rgba(33,77,69,0.45)]",
+        "rounded-[18px] bg-card p-6 shadow-soft",
+        item.answer === null && "ring-2 ring-primary/25",
       )}
     >
       <AgentLabel from="agent_h" />
-      <p className="font-heading text-2xl leading-tight">{item.question}</p>
+      <p className="text-xl leading-snug font-semibold tracking-tight">{item.question}</p>
       {item.answer !== null ? (
-        <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-sm">
+        <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-accent px-3.5 py-1.5 text-sm font-medium text-accent-foreground">
           <Check className="size-3.5 text-primary" /> {item.answer}
         </p>
       ) : (
         <VoiceAnswer
-          question={item.question}
+          itemId={item.id}
           type={email ? "email" : "text"}
           isValid={email ? isEmail : undefined}
           placeholder={email ? "you@example.com" : "Your answer"}
@@ -157,6 +149,61 @@ function AgentQuestionCard({
         />
       )}
     </div>
+  );
+}
+
+// A spoken answer that names one button picks it; anything else goes out as a free answer.
+function OpenQuestion({
+  item,
+  onAnswer,
+  onAnswerText,
+}: { item: Extract<ConversationItem, { kind: "question" }> } & Pick<Handlers, "onAnswer" | "onAnswerText">) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const voice = useCardVoice(item.id, async (text) => {
+    const option = matchOption(text, item.options);
+    if (option) return onAnswer(item.id, option.value, option.label);
+    setBusy(true);
+    setError(null);
+    try {
+      await onAnswerText(item.id, text);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
+      setBusy(false);
+    }
+  });
+  const mic = <MicButton voice={voice} className="size-11 rounded-full" />;
+  return (
+    <>
+      {item.options.length > 0 || item.input !== "text" ? (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {item.input !== "text" ? mic : null}
+          {item.options.map((option) => (
+            <Button
+              key={option.value}
+              variant="outline"
+              size="lg"
+              className="h-10 rounded-full border-border px-4 hover:border-primary hover:bg-accent hover:text-accent-foreground"
+              onClick={() => onAnswer(item.id, option.value, option.label)}
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+      ) : null}
+      {item.input === "text" ? <TextAnswer mic={mic} onSubmit={(text) => onAnswerText(item.id, text)} /> : null}
+      <VoiceStatusLine voice={voice} className="mt-2" />
+      {busy ? (
+        <p role="status" className="mt-2 text-sm text-muted-foreground">
+          Reading your answer…
+        </p>
+      ) : null}
+      {error ? (
+        <p role="alert" className="mt-2 text-sm text-attention-foreground">
+          {error}
+        </p>
+      ) : null}
+    </>
   );
 }
 
@@ -171,14 +218,7 @@ function ProposalCard({ item, onDecide }: { item: Extract<ConversationItem, { ki
       <AgentLabel from="nami" />
       <p className="text-xl leading-snug font-semibold tracking-tight">{item.text}</p>
       {item.decision === null ? (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="lg" className="h-11 rounded-full px-6 shadow-glow" onClick={() => onDecide(item.id, true)}>
-            {item.accept_label}
-          </Button>
-          <Button variant="ghost" size="lg" className="h-11 rounded-full px-5 text-muted-foreground" onClick={() => onDecide(item.id, false)}>
-            {item.decline_label}
-          </Button>
-        </div>
+        <ProposalChoice item={item} onDecide={onDecide} />
       ) : (
         <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-accent px-3.5 py-1.5 text-sm font-medium text-accent-foreground">
           {item.decision === "accepted" ? <Check className="size-3.5 text-primary" /> : <X className="size-3.5" />}
@@ -189,7 +229,36 @@ function ProposalCard({ item, onDecide }: { item: Extract<ConversationItem, { ki
   );
 }
 
+function ProposalChoice({ item, onDecide }: { item: Extract<ConversationItem, { kind: "proposal" }> } & Pick<Handlers, "onDecide">) {
+  const [unclear, setUnclear] = useState<string | null>(null);
+  const voice = useCardVoice(item.id, (text) => {
+    const answer = shortAnswer("proposal", text);
+    if (answer) return onDecide(item.id, answer === "accept");
+    setUnclear(text);
+  });
+  return (
+    <>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <MicButton voice={voice} className="size-11 rounded-full" />
+        <Button size="lg" className="h-11 rounded-full px-6 shadow-glow" onClick={() => onDecide(item.id, true)}>
+          {item.accept_label}
+        </Button>
+        <Button variant="ghost" size="lg" className="h-11 rounded-full px-5 text-muted-foreground" onClick={() => onDecide(item.id, false)}>
+          {item.decline_label}
+        </Button>
+      </div>
+      <VoiceStatusLine voice={voice} className="mt-2" />
+      {unclear && voice.status === "idle" ? (
+        <p role="status" className="mt-2 text-sm text-muted-foreground">
+          I heard “{unclear}”. Say yes or no, or click.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
 export function Conversation({ items, ...handlers }: { items: ConversationItem[] } & Handlers) {
+  useConversationSpeech(items);
   return (
     <ol className="flex flex-col gap-4">
       {items.map((item) => (
