@@ -43,9 +43,10 @@ describe("pickOption", () => {
     expect(fetch).toHaveBeenLastCalledWith("http://127.0.0.1:9222/json");
   });
 
-  it("uses the port of the demo script first", () => {
-    expect(cdpUrls({ NAMI_AGENT_CHROME_PORT: "9444" })).toEqual(["http://127.0.0.1:9444", "http://127.0.0.1:9333", "http://127.0.0.1:9222"]);
-    expect(cdpUrls({})).toEqual(["http://127.0.0.1:9333", "http://127.0.0.1:9222"]);
+  it("uses only the shared configured port, defaulting to 9222", () => {
+    expect(cdpUrls({ NAMI_AGENT_CHROME_PORT: "9444" })).toEqual(["http://127.0.0.1:9444"]);
+    expect(cdpUrls({})).toEqual(["http://127.0.0.1:9222"]);
+    expect(cdpUrls({ NAMI_AGENT_CHROME_PORT: "99999" })).toEqual([]);
   });
 
   it("escapes the values injected in the page", () => {

@@ -5,6 +5,13 @@ export type CdpConnection = {
 
 const TIMEOUT_MS = 5_000;
 
+export function agentChromePort(env: Record<string, string | undefined> = process.env): number | null {
+  const raw = env.NAMI_AGENT_CHROME_PORT || "9222";
+  if (!/^\d+$/.test(raw)) return null;
+  const port = Number(raw);
+  return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
+}
+
 export async function connectChrome(port: number): Promise<CdpConnection> {
   if (typeof WebSocket === "undefined") throw new Error("CDP unavailable");
   const response = await fetch(`http://127.0.0.1:${port}/json/version`, {

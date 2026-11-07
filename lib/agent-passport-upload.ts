@@ -1,6 +1,6 @@
 import { getBaliPaper } from "@/lib/bali-papers";
 import { documentsEnabled, validateDocumentPath } from "@/lib/documents";
-import { connectChrome, type CdpConnection } from "@/lib/chrome-cdp";
+import { agentChromePort, connectChrome, type CdpConnection } from "@/lib/chrome-cdp";
 import { toolCallKey } from "@/lib/agent-changes";
 import type { ToolRequest } from "@/lib/h-agent";
 
@@ -52,10 +52,8 @@ async function uploadPassport(confirmedPath: string, connect: (port: number) => 
   try {
     const path = await validateDocumentPath(confirmedPath);
     if (!path) return ASK_USER;
-    const rawPort = process.env.NAMI_AGENT_CHROME_PORT || "9222";
-    if (!/^\d+$/.test(rawPort)) return ASK_USER;
-    const port = Number(rawPort);
-    if (!Number.isInteger(port) || port < 1 || port > 65535) return ASK_USER;
+    const port = agentChromePort();
+    if (port === null) return ASK_USER;
     client = await connect(port);
     const domain = getBaliPaper("evoa").domain;
     const targets = await client.send("Target.getTargets") as {
