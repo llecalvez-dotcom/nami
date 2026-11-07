@@ -49,3 +49,54 @@ export function isOfficialUrl(url: string): boolean {
   if (hostname === null) return false;
   return Object.values(OFFICIAL_HOSTS).some((hosts) => hosts.includes(hostname)) || isGovernmentHost(hostname);
 }
+
+export const DIPLOMATIE_DOMAIN = "diplomatie.gouv.fr";
+
+const CC_TLD: Record<string, string> = { GB: "uk" };
+
+// Linkup's includeDomains also matches subdomains, so "go.id" covers imigrasi.go.id.
+export function governmentDomainsFor(countryIso2: string): string[] {
+  const tld = CC_TLD[countryIso2] ?? countryIso2.toLowerCase();
+  const secondLevel = [...GOVERNMENT_SECOND_LEVEL].map((label) => `${label}.${tld}`);
+  return [...new Set([DIPLOMATIE_DOMAIN, ...(OFFICIAL_HOSTS[countryIso2] ?? []), ...secondLevel])];
+}
+
+export function hostOf(url: string): string | null {
+  return hostnameOf(url);
+}
+
+export function homepageOf(url: string): string | null {
+  const hostname = hostnameOf(url);
+  return hostname === null ? null : `https://${hostname}/`;
+}
+
+export type CheckedLink = {
+  url: string;
+  // Only official links are rendered as clickable.
+  official: boolean;
+  // The HEAD request failed: the URL was replaced by the home page of its domain.
+  replaced: boolean;
+};
+
+const HEAD_TIMEOUT_MS = 4_000;
+
+async function answers(url: string, method: "HEAD" | "GET", fetchImpl: typeof fetch, timeoutMs: number): Promise<number> {
+  const response = await fetchImpl(url, { method, redirect: "follow", signal: AbortSignal.timeout(timeoutMs) });
+  await response.body?.cancel().catch(() => {});
+  return response.status;
+}
+
+export async function checkOfficialLink(
+  url: string,
+  { fetch: fetchImpl = fetch, timeoutMs = HEAD_TIMEOUT_MS }: { fetch?: typeof fetch; timeoutMs?: number } = {},
+): Promise<CheckedLink> {
+  if (!isOfficialUrl(url)) return { url, official: false, replaced: false };
+  try {
+    let status = await answers(url, "HEAD", fetchImpl, timeoutMs);
+    if (status === 405 || status === 501) status = await answers(url, "GET", fetchImpl, timeoutMs);
+    if (status < 400) return { url, official: true, replaced: false };
+  } catch {
+    // Unreachable: fall through to the home page.
+  }
+  return { url: homepageOf(url)!, official: true, replaced: true };
+}
