@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { audioFileName, requestMicrophone } from "@/components/voice/microphone";
+import { stopSpeaking } from "@/components/voice/speech";
+import { createSilenceDetector, rms } from "@/lib/voice/silence";
 
 export const MAX_RECORDING_SECONDS = 20;
 
@@ -26,12 +28,39 @@ async function transcribe(blob: Blob): Promise<string> {
   return body.text;
 }
 
+// Stops the recording after a silence that follows speech, measured on the microphone level by Web Audio.
+function watchSilence(stream: MediaStream, onSilence: () => void): () => void {
+  const Context = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!Context) return () => {};
+  try {
+    const audio = new Context();
+    void audio.resume().catch(() => {});
+    const analyser = audio.createAnalyser();
+    analyser.fftSize = 2048;
+    audio.createMediaStreamSource(stream).connect(analyser);
+    const samples = new Float32Array(analyser.fftSize);
+    const silent = createSilenceDetector();
+    const timer = setInterval(() => {
+      analyser.getFloatTimeDomainData(samples);
+      if (silent(rms(samples), performance.now())) onSilence();
+    }, 100);
+    return () => {
+      clearInterval(timer);
+      void audio.close().catch(() => {});
+    };
+  } catch {
+    return () => {};
+  }
+}
+
 export function useVoiceInput(onTranscript: (text: string) => void): VoiceInput {
   const [status, setStatus] = useState<VoiceStatus>("idle");
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const unwatchRef = useRef<(() => void) | null>(null);
+  const startingRef = useRef(false);
   const mountedRef = useRef(true);
   const onTranscriptRef = useRef(onTranscript);
 
@@ -42,13 +71,19 @@ export function useVoiceInput(onTranscript: (text: string) => void): VoiceInput 
   const stop = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = null;
+    unwatchRef.current?.();
+    unwatchRef.current = null;
     if (recorderRef.current?.state === "recording") recorderRef.current.stop();
   }, []);
 
   const start = useCallback(async () => {
-    if (recorderRef.current) return;
+    if (recorderRef.current || startingRef.current) return;
+    startingRef.current = true;
+    stopSpeaking();
     setError(null);
-    const mic = await requestMicrophone(navigator.mediaDevices);
+    const mic = await requestMicrophone(navigator.mediaDevices).finally(() => {
+      startingRef.current = false;
+    });
     if (!mic.ok) {
       setError(mic.message);
       return;
@@ -80,6 +115,7 @@ export function useVoiceInput(onTranscript: (text: string) => void): VoiceInput 
     };
 
     recorder.start();
+    unwatchRef.current = watchSilence(mic.stream, stop);
     setSeconds(0);
     setStatus("recording");
     const startedAt = Date.now();

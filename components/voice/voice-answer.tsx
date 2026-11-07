@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { MicButton, VoiceStatusLine } from "@/components/voice/mic-button";
+import { useListenAfterSpeech } from "@/components/voice/speech";
 import { useVoiceInput } from "@/components/voice/use-voice-input";
+import { spokenEmail } from "@/lib/voice/short-answers";
 
 type Props = {
-  question: string;
+  itemId: string;
   onValidate: (value: string) => void;
   isValid?: (value: string) => boolean;
   type?: "text" | "email";
@@ -14,24 +16,12 @@ type Props = {
   label: string;
 };
 
-export function VoiceAnswer({ question, onValidate, isValid = (v) => v.trim().length > 0, type = "text", placeholder, label }: Props) {
+// The transcript stays in the field and is sent on "Validate" only: a dictated e-mail must be read first.
+export function VoiceAnswer({ itemId, onValidate, isValid = (v) => v.trim().length > 0, type = "text", placeholder, label }: Props) {
   const [value, setValue] = useState("");
-  const voice = useVoiceInput(setValue);
-  const { start } = voice;
+  const voice = useVoiceInput((text) => setValue(type === "email" ? spokenEmail(text) : text));
+  useListenAfterSpeech(itemId, voice.start);
   const valid = isValid(value);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    const utterance = new SpeechSynthesisUtterance(question);
-    utterance.lang = "en-US";
-    utterance.onend = () => void start();
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-    return () => {
-      utterance.onend = null;
-      window.speechSynthesis.cancel();
-    };
-  }, [question, start]);
 
   return (
     <div className="mt-4">

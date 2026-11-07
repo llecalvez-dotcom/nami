@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Compass, Globe2, Heart, Menu, Plane, Plus, X } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { MuteToggle } from "@/components/voice/mute-toggle";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
@@ -82,6 +83,7 @@ export function AppNav({ children }: { children?: React.ReactNode }) {
         <Logo className="ml-0.5 sm:absolute sm:left-1/2 sm:ml-0 sm:-translate-x-1/2" />
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
           {children}
+          <MuteToggle />
           <ThemeToggle />
         </div>
       </div>
