@@ -1,8 +1,10 @@
 # ✅ Checklist globale Nami
 
-État vérifié sur `main` le samedi 7 novembre à 15 h 15 (dernières fusions : PR #13 design et World map, PR #11 fiche du coffre chiffré, PR #16 feuille de route). `main` : 172 tests OK. PR ouverte : #14 (agent H sur l'e-VOA : corrections faites, à jour avec `main`, 222 tests, lint et compilation OK, test réel à faire). À mettre à jour à chaque PR fusionnée ou test passé.
+État vérifié sur `main` le samedi 7 novembre à 15 h 45 (dernières fusions : PR #13 design et World map, PR #11 fiche du coffre chiffré, PR #16 feuille de route). `main` : 172 tests OK. PR ouverte : #14 (agent H sur l'e-VOA : corrections faites, à jour avec `main`, 222 tests, lint et compilation OK, test réel à faire). À mettre à jour à chaque PR fusionnée ou test passé.
 
 **Légende** : ✅ fait et testé en réel · 🟡 codé et testé automatiquement, pas encore testé en réel · 🔵 en cours · ⬜ à faire · ❓ fait peut-être, mais rien sur GitHub
+
+**Recadrage (15 h 40)** : le computer use passe au centre, voir `docs/specs/2026-11-07-recadrage-computer-use.md`. Option A (navigateur piloté) ou C (ordinateur entier pour les documents) selon le test T9.
 
 **Échéances** : vidéo de secours samedi 22 h · gel du code dimanche 11 h · rendu dimanche 14 h.
 
@@ -25,6 +27,10 @@
 | F14 | Page World map : globe 3D, pays de résidence, envies, visas en cours, pop-up d'avancement au clic | ✅ (PR #13) | Léon | sans ticket |
 | F13 | « Fill it for me (beta) » sur les papiers officiels d'un autre pays (après Bali) | ⬜ | Clément | 05, partie B |
 | F15 | Accès à l'app par code (`/access`) | ✅ (PR #12, testé par Devin dans le navigateur) | Ali | PR #12 |
+| F16 | Conversation à la voix : Nami lit tout à voix haute, réponses à la voix partout, fin de parole et envoi automatiques | ⬜ | Nathan | 06 |
+| F17 | Validation page par page : l'agent attend un « oui » avant chaque « Suivant » (`confirm_page`) | ⬜ | Nathan | 06 |
+| F18 | Extension Chrome : Nami dans le panneau latéral, l'agent dans l'onglet | ⬜ | Léon | 08 |
+| F19 | Retrouver le passeport : dans un dossier local (A) ou par l'agent dans le Finder (C) | ⬜ | Ali (A), Clément ou Ali (C) | 09, 10 |
 
 ## 2. Back (routes serveur et logique)
 
@@ -45,13 +51,15 @@
 
 | # | Ce qu'on vérifie | État | Qui | Résultat attendu dans |
 |---|---|---|---|---|
-| T1 | F0 : le modèle H comprend 5 demandes variées | ✅ | Nathan | |
-| T2 | F5 : la voix est comprise dans le bruit de la salle | ✅ | Nathan | |
+| T1 | F0 : le modèle H comprend 5 demandes variées | ❓ marqué réussi plus tôt, mais pas refait par un humain | Nathan | |
+| T2 | F5 : la voix est comprise dans le bruit de la salle | ❓ jamais fait avec un micro dans la salle ; à refaire au test du ticket 06 | Nathan | `docs/tests/f5-conversation-voix.md` |
 | T3 | ~~F1 manuel~~ : supprimé. Le premier passage réel de l'agent sur l'e-VOA sert de repérage | sans objet | Clément | `docs/tests/f1-evoa.md` |
 | T4 | F6 : l'agent H pilote le Chrome du portable par l'API | ⬜ (au premier passage réel de la PR #14) | Clément | `docs/tests/f1-evoa.md` |
 | T5 | F8 : l'agent H sait déposer un fichier | ⬜ (au premier passage réel de la PR #14) | Clément | `docs/tests/f1-evoa.md` |
 | T6 | F1 agent : l'agent remplit le visa jusqu'au paiement, 3 fois sur 3, une fois arrêté par « Stop agent » | ⬜ (PR #14) | Clément | `docs/tests/f1-evoa.md` |
 | T6b | Autre pays en beta (Kenya ou Tanzanie) : l'agent s'arrête avant le paiement ou passe la main, 1 passage | ⬜ (après T6) | Clément | `docs/tests/f1-autres-pays.md` |
+| T9 | L'agent H pilote l'ordinateur entier : trouve le passeport dans le Finder, le dépose dans une page (30 min, faux passeport) | ⬜ décide entre A et C | Ali | `docs/tests/t9-bureau.md` |
+| T10 | Parcours complet à la voix, sans clavier, dans la salle | ⬜ (après le ticket 06) | Nathan | `docs/tests/f5-conversation-voix.md` |
 | T7 | L1 : Linkup trouve les papiers justes (Bali + 5 pays) | ✅ 5 pays sur 5 pour le papier principal, Bali identique à la table | Ali | `docs/tests/l1-linkup.md` |
 | T8 | F7 : lecture du vrai passeport, 7 champs justes (avec `PASSPORT_READER=h` en local) | ❓ | Ali | `docs/tests/f7-passeport.md` |
 
@@ -74,7 +82,8 @@
 |---|---|---|---|
 | O1 | Note de cadrage, cockpit, tickets 01 à 04 | ✅ | Claude |
 | O2 | Ticket 05 (parties A et B, garde-fous) + mode opératoire + cette checklist | ✅ (PR #7, #9, #15) | Nathan, Claude |
-| O3 | Ticket 06 : tout brancher + mode démo préparé. À y mettre : `PASSPORT_READER=h`, `NAMI_ACCESS_CODE` si l'app est en ligne, redémarrer le serveur juste avant la démo (quotas remis à zéro), internet pour les photos | ⬜ | Claude (écriture), Nathan (exécution) |
+| O3 | Mode démo préparé (ticket à écrire après le verdict de T9). À y mettre : `PASSPORT_READER=h`, Nami en local sans `NAMI_ACCESS_CODE` (panneau latéral), redémarrer le serveur juste avant la démo (quotas), internet pour les photos | ⬜ | Claude (écriture), Nathan (exécution) |
+| O9 | Recadrage computer use, protocole T9, tickets 06, 08, 09, 10 | ✅ | Claude |
 | O4 | Texte du pitch de 3 minutes | ⬜ | Claude, Nathan |
 | O5 | Vidéo de secours (samedi 22 h, quel que soit l'état) | ⬜ | Nathan |
 | O6 | Questions Discord : critères des prix Devin et Gladia, modalités du rendu | ⬜ | Nathan |
@@ -83,23 +92,22 @@
 
 ## 6. Ce que chacun fait maintenant, dans l'ordre
 
-**Seule PR ouverte** : #14 (agent), prête pour le test réel : Clément la teste sur son portable, puis la fusionne.
-
 **Clément (agent H)**
-1. PR #14 : arrêt hors domaine fait, à jour avec `main`, relue par Claude.
-2. Installer le CLI de H sur son portable (`pip install "hai-agents[cli,browser]"`), lancer le Chrome dédié et `holo local browser` (note, section 4.6).
-3. Test réel de la PR #14 sur son portable : 3 passages, arrêt sur l'écran de paiement, une fois « Stop agent » en cours de route ; étapes, blocages, durée et coût dans `docs/tests/f1-evoa.md` (couvre T4, T5 et T6). Puis fusion. Si l'agent s'arrête avec « it left the official site (….imigrasi.go.id) » alors que le site l'y a envoyé normalement, élargir le domaine de l'e-VOA à `imigrasi.go.id` dans `lib/bali-papers.ts`.
-4. Ensuite seulement : partie B (tout pays en beta), un passage réel sur le Kenya ou la Tanzanie.
+1. Finir le CLI de H, puis test réel de la PR #14 sur son portable : 3 passages, arrêt devant le paiement, une fois « Stop agent » en cours de route ; résultat dans `docs/tests/f1-evoa.md` (T4, T5, T6). Puis fusion. C'est le premier vrai essai du pilotage local : tout le recadrage en dépend.
+2. Si l'agent s'arrête avec « it left the official site (….imigrasi.go.id) » alors que le site l'y a envoyé normalement : élargir le domaine de l'e-VOA à `imigrasi.go.id` dans `lib/bali-papers.ts`.
+3. Si T9 réussit : ticket 10 (avec Ali).
 
 **Ali (papiers, passeport, sécurité)**
-1. Test T8 : en local avec `PASSPORT_READER=h`, cocher le consentement, déposer la photo de son vrai passeport, compter les champs justes sur 7, résultat dans `docs/tests/f7-passeport.md` (sans aucune donnée du passeport dans le fichier).
-2. Ensuite : libre, voir avec Nathan.
+1. Fusionner la PR #18 (contrôle MRZ, relue par Claude).
+2. Test T9 (30 min) : `docs/tests/t9-bureau.md`, faux passeport seulement. Verdict écrit : A ou C.
+3. Devin sur `docs/tickets/09-recherche-documents.md`.
 
 **Léon (design)**
-1. ~~PR #13~~ : fusionnée.
+1. Devin sur `docs/tickets/08-extension-panneau.md`.
 2. Texte de la conversation : elle annonce « 3 entry papers » alors que le dossier en direct de Bali peut afficher 4 cartes.
 
-**Nathan (démo, pitch)**
-1. ~~Fusions #13, #11, #16 et S4c~~ : faits.
-2. Avec Claude : ticket 06, puis texte du pitch et plan de la vidéo de secours (22 h).
-3. Questions Discord (O6).
+**Nathan (voix, démo, pitch)**
+1. Devin sur `docs/tickets/06-validation-et-voix.md` dès que la PR #14 est fusionnée.
+2. Test T10 à la voix dans la salle quand le ticket 06 arrive.
+3. Avec Claude : mode démo, pitch, plan de la vidéo de secours (22 h).
+4. Questions Discord (O6).
