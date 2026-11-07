@@ -31,6 +31,25 @@ describe("pickOption", () => {
     expect(select.dispatchEvent.mock.calls.map(([event]) => event.type)).toEqual(["input", "change"]);
   });
 
+  it("triggers change and Select2's selection event when jQuery is available", () => {
+    const select = { name: "selectCountry", disabled: false, value: "", options: [{ text: "FRANCE", value: "FR" }],
+      getAttribute: () => null, closest: () => null, dispatchEvent: vi.fn() };
+    const events: unknown[] = [];
+    const jquery = (target: typeof select) => ({
+      val: (value: string) => {
+        target.value = value;
+        return { trigger: (event: unknown) => events.push(event) };
+      },
+      trigger: (event: unknown) => events.push(event),
+    });
+    vi.stubGlobal("document", { querySelectorAll: () => [select] });
+    vi.stubGlobal("window", { jQuery: jquery });
+    eval(pickExpression("selectCountry", "FRANCE"));
+    expect(select.value).toBe("FR");
+    expect(events[0]).toBe("change");
+    expect(events[1]).toMatchObject({ type: "select2:select", params: { data: { id: "FR" } } });
+  });
+
   it("gives screenshot-only guidance in both tool descriptions", () => {
     for (const tool of [PICK_OPTION_TOOL, UPLOAD_FILE_TOOL]) {
       expect(tool.description).toMatch(/do not reload or refresh the page or navigate away/i);
@@ -41,6 +60,19 @@ describe("pickOption", () => {
 
   const fakeSelect = (name: string, options: { text: string; value: string }[]) => ({
     name, id: "", disabled: false, value: "", options, getAttribute: () => null, closest: () => null, dispatchEvent: vi.fn(),
+  });
+
+  it("prefers an exact label over a longer label containing the field name", () => {
+    const portMode = { ...fakeSelect("port_mode", [{ text: "Airport", value: "airport" }, { text: "Seaport", value: "seaport" }]), labels: [{ innerText: "Port of Entry Mode" }] };
+    const airport = { ...fakeSelect("airport_id", [{ text: "NGURAH RAI AIRPORT", value: "airport-id" }]), labels: [{ innerText: "Port of Entry" }] };
+    vi.stubGlobal("document", { querySelectorAll: () => [portMode, airport] });
+    vi.stubGlobal("window", {});
+    expect(eval(pickExpression("Port of Entry", "Ngurah Rai"))).toContain("Picked NGURAH RAI AIRPORT in airport_id.");
+    expect(portMode.value).toBe("");
+    expect(airport.value).toBe("airport-id");
+    expect(eval(pickExpression("Port of Entry", "Denpasar"))).toBe(
+      "No list has an option matching Denpasar. Options of airport_id: NGURAH RAI AIRPORT. Call pick_option again with the closest one.",
+    );
   });
 
   it("lists the options of the targeted list when none matches, at most 30", () => {
