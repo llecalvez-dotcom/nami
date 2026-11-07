@@ -26,7 +26,7 @@ function changes(patch: Partial<AgentChanges>): AgentChanges {
   return { ...toAgentChanges(null, 0), no_change: false, status: "running", ...patch };
 }
 
-function liveTrip(): Trip {
+function liveTrip(passportFileReady = false): Trip {
   const request = TripRequestDraftSchema.parse({
     raw_text: "Je pars à Bali lundi",
     nationality: "FR",
@@ -44,7 +44,7 @@ function liveTrip(): Trip {
   if (!visa) throw new Error("no create_visa proposal");
   // A real trip never fakes the agent: accepting without a session changes nothing.
   expect(decideProposal(trip, visa.id, true, now)).toBe(trip);
-  return startVisaRun(trip, visa.id, "s-1", now);
+  return startVisaRun(trip, visa.id, "s-1", now, passportFileReady);
 }
 
 describe("real Bali trip", () => {
@@ -52,6 +52,14 @@ describe("real Bali trip", () => {
     const trip = liveTrip();
     expect(trip.agent_run).toMatchObject({ session_id: "s-1", state: "pending", next_index: 0, handled_tool_ids: [] });
     expect(trip.conversation.find((i) => i.kind === "proposal" && i.action === "create_visa")).toMatchObject({ decision: "accepted" });
+    expect(trip.agent_steps).toEqual(["Session created on your local Chrome"]);
+  });
+
+  it("shows a path-free passport file activity line only when starting with a document", () => {
+    expect(liveTrip(true).agent_steps).toEqual([
+      "Session created on your local Chrome",
+      "Passport file ready for the agent",
+    ]);
   });
 });
 

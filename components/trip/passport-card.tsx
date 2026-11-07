@@ -39,12 +39,14 @@ export function PassportCard({
   arrivalAt,
   onConfirm,
   onDocumentConfirmed,
+  searchRequest = 0,
 }: {
   demo: boolean;
   returnDate: string | null;
   arrivalAt: string | null;
   onConfirm?: (fields: PassportFields | null) => void;
-  onDocumentConfirmed?: (id: string) => void;
+  onDocumentConfirmed?: (id: string | null) => void;
+  searchRequest?: number;
 }) {
   const [reader, setReader] = useState<"off" | "h" | "anthropic">("off");
   const [busy, setBusy] = useState(false);
@@ -55,6 +57,7 @@ export function PassportCard({
   const [consent, setConsent] = useState(false);
   const [edited, setEdited] = useState<PassportFieldKey[]>([]);
   const [document, setDocument] = useState<DocumentChoice | null>(null);
+  const [handledSearchRequest, setHandledSearchRequest] = useState(0);
   const requestId = useRef(0);
 
   const unconfirm = () => {
@@ -90,6 +93,8 @@ export function PassportCard({
       if (!["image/jpeg", "image/png"].includes(file.type)) return setError("Send a JPEG or PNG photo.");
       if (file.size > MAX_BYTES) return setError("Photo too large (5 MB max).");
       setDocument(null);
+      onDocumentConfirmed?.(null);
+      setHandledSearchRequest(searchRequest);
       const form = new FormData();
       form.set("consent_provider", reader);
       form.set("image", file);
@@ -145,6 +150,8 @@ export function PassportCard({
     unconfirm();
     setConsent(false);
     setDocument(null);
+    onDocumentConfirmed?.(null);
+    setHandledSearchRequest(searchRequest);
   };
 
   return (
@@ -169,15 +176,26 @@ export function PassportCard({
           <DocumentPreview document={document} demo={demo} />
           <p className="min-w-0 break-all text-sm">Selected document: {document.name}</p>
         </div>
-      ) : !FIELDS.some((field) => displayedValues[field.key].trim()) ? (
-        <DocumentFinder demo={demo} onConfirm={(selected) => {
-          requestId.current++;
-          setBusy(false);
-          setConsent(false);
-          setConfirmed(false);
-          setDocument(selected);
-          onDocumentConfirmed?.(selected.id);
-        }} />
+      ) : null}
+      {searchRequest > handledSearchRequest || (!document && !FIELDS.some((field) => displayedValues[field.key].trim())) ? (
+        <DocumentFinder
+          key={searchRequest}
+          demo={demo}
+          focusOnMount={searchRequest > handledSearchRequest}
+          onConfirm={(selected) => {
+            requestId.current++;
+            setBusy(false);
+            setConsent(false);
+            unconfirm();
+            setValues(null);
+            setExtraction(null);
+            setEdited([]);
+            setError(null);
+            setDocument(selected);
+            setHandledSearchRequest(searchRequest);
+            onDocumentConfirmed?.(selected.id);
+          }}
+        />
       ) : null}
       {reader === "off" ? (
         <p className="text-sm text-muted-foreground">

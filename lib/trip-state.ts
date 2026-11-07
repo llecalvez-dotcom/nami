@@ -383,7 +383,7 @@ export function pushAgentMessage(trip: Trip, text: string): Trip {
   return push(trip, { kind: "agent", text });
 }
 
-export function startVisaRun(trip: Trip, itemId: string, sessionId: string, now: Date): Trip {
+export function startVisaRun(trip: Trip, itemId: string, sessionId: string, now: Date, passportFileReady = false): Trip {
   const item = trip.conversation.find((i) => i.id === itemId);
   if (!item || item.kind !== "proposal" || item.action !== "create_visa" || item.decision !== null) return trip;
   const evoa = getBaliPaper("evoa");
@@ -399,7 +399,10 @@ export function startVisaRun(trip: Trip, itemId: string, sessionId: string, now:
         handled_tool_ids: [],
         drained: false,
       },
-      agent_steps: ["Session created on your local Chrome"],
+      agent_steps: [
+        "Session created on your local Chrome",
+        ...(passportFileReady ? ["Passport file ready for the agent"] : []),
+      ],
     },
     { kind: "agent", text: `The agent is filling in your visa on ${evoa.domain}, in your Chrome. Keep your hand on Stop agent.` },
   );
