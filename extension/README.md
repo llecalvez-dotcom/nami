@@ -30,6 +30,7 @@ Clic droit sur l'icône, **Options** :
 | `options.html`, `options.js` | Adresse de Nami, autorisation du micro |
 | `settings.js` | Adresse par défaut et lecture de l'adresse enregistrée |
 | `agent-overlay.js` | Curseur, onde, contour du champ, cadre et bulle dans un Shadow DOM fermé, sans intercepter les gestes |
+| `agent-state.js` | Relais partagé vers les trois hôtes officiels, utilisé par le panneau et le service worker module |
 
 ## Voir l'agent travailler (ticket 13)
 
@@ -40,6 +41,8 @@ La flèche violette de 24 px glisse en 300 ms et disparaît après 1,5 s ; l'ond
 `useAgentRun` observe les changements du voyage et envoie au parent `{ type: "nami:agent-state", active, step }`, seulement dans une iframe. Le dernier texte d'Agent Activity est déjà masqué ; les secrets sont masqués à nouveau avant l'envoi. Aucun objet passeport ni résultat brut n'est transmis. Le cadre reste actif dans tous les états non terminaux, y compris pendant un outil et en pause. Il s'éteint quand une question attend l'utilisateur, quand la session est drainée et à la fin ; quitter le panneau envoie aussi l'état inactif.
 
 `panel.js` n'accepte cet état que de l'iframe Nami et de son origine configurée, comme pour `nami:focus-official`. Il transmet le message aux seuls onglets HTTPS des trois hôtes, via `chrome.tabs.sendMessage`, sans ouvrir ni activer d'onglet. La couche accepte uniquement les messages de l'extension et pose la bulle avec `textContent`, jamais du HTML.
+
+Le panneau ouvre aussi un port `nami-panel` vers le service worker. À sa déconnexion, le service worker envoie l'état inactif aux mêmes onglets officiels. Fermer le panneau efface donc le cadre et la bulle même quand Chrome détruit l'iframe sans exécuter le nettoyage React.
 
 Test manuel : recharger l'extension puis l'onglet officiel. Déplacer la souris, cliquer dans un champ et saisir du texte pour voir flèche, onde et contour. Depuis la console du panneau, envoyer un état fictif :
 

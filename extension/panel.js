@@ -1,4 +1,7 @@
 import { namiUrl } from "./settings.js";
+import { relayAgentState } from "./agent-state.js";
+
+chrome.runtime.connect({ name: "nami-panel" });
 
 const frame = document.getElementById("nami");
 const origin = await namiUrl();
@@ -13,20 +16,6 @@ const sameSite = (tabUrl, host) => {
     return false;
   }
 };
-
-const officialHosts = new Set(["evisa.imigrasi.go.id", "allindonesia.imigrasi.go.id", "lovebali.baliprov.go.id"]);
-
-async function relayAgentState(message) {
-  const tabs = await chrome.tabs.query({});
-  await Promise.all(tabs.map(async (tab) => {
-    if (tab.id === undefined || !tab.url) return;
-    try {
-      const url = new URL(tab.url);
-      if (url.protocol !== "https:" || !officialHosts.has(url.hostname)) return;
-      await chrome.tabs.sendMessage(tab.id, { type: "nami:agent-state", active: message.active, step: message.step.slice(0, 320) });
-    } catch { return; }
-  }));
-}
 
 async function bringToFront(url) {
   const host = url.hostname;

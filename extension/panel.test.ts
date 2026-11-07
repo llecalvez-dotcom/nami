@@ -2,13 +2,15 @@ import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { describe, expect, it, vi } from "vitest";
 
-const source = readFileSync(new URL("./panel.js", import.meta.url), "utf8").replace(/^import .*\n/, "");
+const relaySource = readFileSync(new URL("./agent-state.js", import.meta.url), "utf8").replace(/^export /gm, "");
+const source = relaySource + readFileSync(new URL("./panel.js", import.meta.url), "utf8").replace(/^import .*\n/gm, "");
 const origin = "http://localhost:3001";
 const state = { type: "nami:agent-state", active: true, step: "Choosing FRANCE" };
 
 async function panel() {
   const frame = { contentWindow: { postMessage: vi.fn() }, src: "" };
   const sendMessage = vi.fn().mockResolvedValue(undefined);
+  const connect = vi.fn();
   const query = vi.fn().mockResolvedValue([
     { id: 1, url: "https://evisa.imigrasi.go.id/front/login" },
     { id: 2, url: "https://allindonesia.imigrasi.go.id/" },
@@ -24,12 +26,16 @@ async function panel() {
     namiUrl: async () => origin,
     document: { getElementById: () => frame },
     window: { addEventListener: (_: string, handler: typeof listener) => { listener = handler; } },
-    chrome: { tabs: { query, sendMessage } }, URL,
+    chrome: { tabs: { query, sendMessage }, runtime: { connect } }, URL,
   });
-  return { frame, sendMessage, query, send: (data: unknown = state, eventOrigin = origin, eventSource: unknown = frame.contentWindow) => listener({ data, origin: eventOrigin, source: eventSource }) };
+  return { frame, sendMessage, query, connect, send: (data: unknown = state, eventOrigin = origin, eventSource: unknown = frame.contentWindow) => listener({ data, origin: eventOrigin, source: eventSource }) };
 }
 
 describe("panel agent state relay", () => {
+  it("connects a named lifetime port when the panel loads", async () => {
+    const p = await panel();
+    expect(p.connect).toHaveBeenCalledExactlyOnceWith({ name: "nami-panel" });
+  });
   it("relays only to the three exact official HTTPS hosts", async () => {
     const p = await panel();
     await p.send();
