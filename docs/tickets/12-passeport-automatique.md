@@ -37,6 +37,19 @@ L'agent H en mode navigateur ne voit pas la fenêtre de sélection de fichiers d
 
 Tests (vitest, CDP simulé) : bon onglet choisi parmi plusieurs ; aucun onglet officiel → pas de dépôt ; deux champs fichier sans indice → réponse « no file input found » ; le chemin déposé est celui du `document_id` confirmé.
 
+## Partie C : les menus Select2 (responsable : **Clément**, même branchement CDP que la partie B)
+
+Constat du samedi 18 h (page `evisa.imigrasi.go.id/web/visa-selection` lue le jour même) : les 5 menus en cascade de l'e-VOA (`#selectCountry`, `#selectParentActivity`, `#selectActivity`, `#selectVisa`, `#selectStay`) sont des menus **Select2 4.0.13** (bibliothèque d'interface, pas un dispositif anti-robots ; aucun captcha ni détection d'automatisation sur cette page). Select2 cache le vrai `<select>` et n'ouvre sa liste que sur un `mousedown` du bouton gauche ; l'agent H, qui clique sans cet événement, ne l'ouvre jamais, et `select_option` sur le `<select>` caché change la valeur sans prévenir la page (le menu suivant ne se charge pas). Au test de Nathan, l'agent a passé 3 essais puis a demandé à l'humain.
+
+1. **Essai rapide (consigne, déjà dans la copie de test de Nathan)** : ajouter à `buildPaperTask` la ligne « Some dropdowns (Select2, shown as a box with a small arrow) only open on a real mouse press and ignore plain clicks. If such a dropdown does not open after one click, use the keyboard instead: click it once so it has focus, press Enter to open it, type the first letters of the value (for example FRANCE), wait for the list to filter, then press Enter to pick the highlighted option. Then check on a fresh screenshot that the box shows the value before moving on. » Select2 ouvre sa liste sur Entrée ou Espace quand il a le focus. Noter dans `docs/tests/f1-evoa.md` si ça suffit.
+2. **Solution sûre : outil `choose_option { field, option }`**. Consigne : « For a dropdown you cannot open, call choose_option with the label of the field and the exact text of the option to pick, wait for the answer, then check the page on a fresh screenshot. »
+   - Le serveur de Nami, branché au Chrome de l'agent comme en partie B, sur l'onglet du domaine officiel : trouve le `<select>` dont le libellé, l'`id`, le `name` ou le placeholder Select2 correspond à `field`, puis l'`<option>` dont le texte correspond à `option` (sans casse ni accents, correspondance unique, sinon refus).
+   - Il choisit l'option avec le moyen de la page : `jQuery(select).val(value).trigger("change")` si jQuery et Select2 sont présents, sinon `select.value = value` puis un événement `change` qui remonte. Il vérifie ensuite que la valeur est prise et renvoie `"selected: <texte>"`, ou `"no such field"`, `"no such option"`, `"several matches"`.
+   - Jamais hors du domaine officiel ; jamais sur un bouton ni un champ texte ; seulement des `<select>`.
+3. Tests (vitest, CDP simulé) : option trouvée sans casse ni accents (« france » → « FRANCE ») ; deux options proches → « several matches » ; page sans jQuery → repli sur l'événement `change` ; onglet hors domaine → refus.
+
+Critère : au test réel, les 5 menus de la page de choix du visa remplis par l'agent sans aide humaine, 3 fois sur 3.
+
 ## Test réel
 
 Avec le portable de démo : « Create my visa » sans passeport → « Shall I look for it? » → « yes » → passeport trouvé dans le dossier → champs lus et confirmés → l'agent remplit l'e-VOA et le fichier est déposé sans clic humain → arrêt avant le paiement. Résultat dans `docs/tests/t12-passeport-auto.md` (sans aucune donnée du passeport).
