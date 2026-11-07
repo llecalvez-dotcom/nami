@@ -1,6 +1,6 @@
 # ✅ Checklist globale Nami
 
-État vérifié sur `main` le samedi 7 novembre à 14 h (dernière fusion : PR #5). À mettre à jour à chaque PR fusionnée ou test passé.
+État vérifié sur `main` le samedi 7 novembre à 14 h 07 (dernières fusions : PR #5 voix, PR #7 docs). PR #6 (ticket 03) en brouillon. À mettre à jour à chaque PR fusionnée ou test passé.
 
 **Légende** : ✅ fait et testé en réel · 🟡 codé et testé automatiquement, pas encore testé en réel · 🔵 en cours · ⬜ à faire · ❓ fait peut-être, mais rien sur GitHub
 
@@ -28,8 +28,8 @@
 | B1 | `/api/voice/transcribe` : la voix devient du texte (Gladia) | ✅ | Nathan | 04 |
 | B2 | `/api/trip/parse` : la phrase devient une demande structurée (modèle H) | ✅ | Nathan | 02 |
 | B3 | `lib/planner/` : quelles questions, quels modules, fenêtres d'ouverture | ✅ | Nathan | 02 |
-| B4 | `/api/formalities` : papiers cherchés en direct (Linkup) + contrôle des domaines officiels | ⬜ | Ali | 03 |
-| B5 | `/api/documents/extract` : lecture du passeport (vision H) | ⬜ | Ali | 03 |
+| B4 | `/api/formalities` : papiers cherchés en direct (Linkup) + contrôle des domaines officiels | 🔵 PR #6 (brouillon), relue et testée par Claude | Ali | 03 |
+| B5 | `/api/documents/extract` : lecture du passeport (vision H) | 🔵 PR #6 (brouillon), relue et testée par Claude | Ali | 03 |
 | B6 | `lib/h-agent.ts` + `/api/papers/start` + routes `agent` (suivre, répondre, arrêter) | ⬜ (ticket écrit) | Clément | 05 |
 | B7 | Mode démo préparé (sessions lancées 5 min avant, heure réelle affichée) | ⬜ (ticket à écrire) | Nathan | 06 |
 | B8 | Module Vol (Google Flights), seulement s'il reste du temps | ⬜ | Clément | 07 |
@@ -44,7 +44,7 @@
 | T4 | F6 : l'agent H pilote le Chrome du portable par l'API | ❓ | Clément | `docs/tests/f6-local.md` |
 | T5 | F8 : l'agent H sait déposer un fichier | ❓ | Clément | `docs/tests/f8-upload.md` |
 | T6 | F1 agent : l'agent remplit le visa jusqu'au paiement, 3 fois sur 3 | ⬜ (après le ticket 05) | Clément | `docs/tests/f1-evoa.md` |
-| T7 | L1 : Linkup trouve les papiers justes (Bali + 5 pays) | ❓ | Ali | `docs/tests/l1-linkup.md` |
+| T7 | L1 : Linkup trouve les papiers justes (Bali + 5 pays) | 🔵 rapport en cours dans la PR #6 | Ali | `docs/tests/l1-linkup.md` |
 | T8 | F7 : lecture du vrai passeport, 7 champs justes | ❓ | Ali | `docs/tests/f7-passeport.md` |
 
 ## 4. Sécurité et données
@@ -62,7 +62,7 @@
 | # | Élément | État | Qui |
 |---|---|---|---|
 | O1 | Note de cadrage, cockpit, tickets 01 à 04 | ✅ | Claude |
-| O2 | Ticket 05 + mode opératoire + cette checklist : PR à fusionner | 🔵 | Nathan (fusion) |
+| O2 | Ticket 05 + mode opératoire + cette checklist | ✅ (PR #7) | Nathan |
 | O3 | Ticket 06 : tout brancher ensemble + mode démo préparé | ⬜ (dès que 03 et 05 avancent) | Claude (écriture), Nathan (exécution) |
 | O4 | Texte du pitch de 3 minutes | ⬜ | Claude, Nathan |
 | O5 | Vidéo de secours (samedi 22 h, quel que soit l'état) | ⬜ | Nathan |
