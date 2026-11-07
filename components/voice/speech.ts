@@ -58,9 +58,25 @@ function browserEngine(): SpeechEngine {
   };
 }
 
+// Chrome refuses speechSynthesis.speak() ("not-allowed") in a frame without a user gesture, as in the side panel's
+// iframe (measured on 2026-11-07). The first click or key press in Nami speaks a silent line, which unlocks the voice.
+function unlockOnFirstGesture() {
+  const unlock = () => {
+    const silent = new SpeechSynthesisUtterance(" ");
+    silent.volume = 0;
+    window.speechSynthesis.speak(silent);
+    if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+    window.removeEventListener("pointerdown", unlock, true);
+    window.removeEventListener("keydown", unlock, true);
+  };
+  window.addEventListener("pointerdown", unlock, true);
+  window.addEventListener("keydown", unlock, true);
+}
+
 function getQueue(): SpeechQueue | null {
   if (queue !== undefined) return queue;
   if (typeof window === "undefined") return null;
+  if ("speechSynthesis" in window) unlockOnFirstGesture();
   queue = "speechSynthesis" in window ? createSpeechQueue(browserEngine(), readMuted()) : null;
   return queue;
 }
