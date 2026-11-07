@@ -142,5 +142,6 @@ describe("nationalityCode", () => {
   it("maps the German MRZ code D<< to DE", () => {
     expect(nationalityCode("D<<")).toBe("DE");
     expect(nationalityCode("FRA")).toBe("FR");
+    expect(nationalityCode("FR<")).toBe("FR<");
   });
 });
