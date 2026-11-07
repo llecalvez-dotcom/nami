@@ -47,7 +47,7 @@ export function AppNav({ children }: { children?: React.ReactNode }) {
   }, [open]);
 
   return (
-    <header className="sticky top-0 z-30 px-4 pt-4 sm:px-7 sm:pt-6">
+    <header className="app-header sticky top-0 z-30 px-4 py-3 sm:px-7 sm:py-4">
       <div ref={root} className="relative mx-auto flex h-[50px] max-w-6xl items-center gap-2">
         <button
           type="button"
@@ -79,7 +79,7 @@ export function AppNav({ children }: { children?: React.ReactNode }) {
             </Link>
           ))}
         </nav>
-        <Logo className="absolute left-1/2 -translate-x-1/2" />
+        <Logo className="ml-1 sm:absolute sm:left-1/2 sm:ml-0 sm:-translate-x-1/2" />
         <div className="ml-auto flex items-center gap-2">
           {children}
           <ThemeToggle />
@@ -87,7 +87,7 @@ export function AppNav({ children }: { children?: React.ReactNode }) {
       </div>
       <nav
         aria-label="Quick links"
-        className="glass fixed inset-x-3 bottom-3 z-30 flex items-center justify-around rounded-[28px] px-2 py-2 md:hidden"
+        className="glass app-dock fixed inset-x-3 bottom-3 z-30 flex items-center justify-around rounded-[28px] px-2 py-2 md:hidden"
       >
         <MobileLink href="/" label="Explore" active={isActive(pathname, "/")} icon={<Compass className="size-5" />} />
         <MobileLink href="/trips" label="Trips" active={isActive(pathname, "/trips")} icon={<Plane className="size-5" />} />

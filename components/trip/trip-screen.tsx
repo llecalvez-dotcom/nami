@@ -90,10 +90,10 @@ export function TripScreen({ id }: { id: string }) {
             <SampleBadge />
             <button
               type="button"
-              className="glass inline-flex h-10 items-center gap-1.5 px-4 font-mono text-[11px] tracking-[0.1em] uppercase"
+              className="glass inline-flex h-10 items-center gap-1.5 px-3 font-mono text-[11px] tracking-[0.1em] uppercase sm:px-4"
               onClick={() => update(createSampleTrip(new Date()))}
             >
-              <RotateCcw className="size-3.5" /> Reset
+              <RotateCcw className="size-3.5" /> <span className="sr-only sm:not-sr-only">Reset</span>
             </button>
           </>
         ) : null}
