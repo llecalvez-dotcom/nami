@@ -29,7 +29,7 @@
 | F15 | Accès à l'app par code (`/access`) | ✅ (PR #12, testé par Devin dans le navigateur) | Ali | PR #12 |
 | F16 | Conversation à la voix : Nami lit tout à voix haute, réponses à la voix partout, fin de parole et envoi automatiques | ⬜ | Nathan | 06 |
 | F17 | Validation page par page : l'agent attend un « oui » avant chaque « Suivant » (`confirm_page`) | ⬜ | Nathan | 06 |
-| F18 | Extension Chrome : Nami dans le panneau latéral, l'agent dans l'onglet | ⬜ | Léon | 08 |
+| F18 | Extension Chrome : Nami dans le panneau latéral, l'agent dans l'onglet | 🔵 PR du ticket 08 (`feat/08-extension`), test réel avec l'agent H à faire | Léon | 08 |
 | F19 | Retrouver le passeport : dans un dossier local (A) ou par l'agent dans le Finder (C) | ⬜ | Ali (A), Clément ou Ali (C) | 09, 10 |
 
 ## 2. Back (routes serveur et logique)

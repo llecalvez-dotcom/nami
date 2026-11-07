@@ -8,6 +8,7 @@ import type { Formality, ModuleKind, ModuleSuggestion, TripRequestDraft } from "
 import { formatDate, formatDateTime, formatTime } from "@/lib/format";
 import { LivePapersList, type LivePapersState } from "@/components/trip/live-papers";
 import { isAgentActive, type Trip } from "@/lib/trip-state";
+import { agentOfficialUrl, showOfficialSite } from "@/lib/official-tab";
 
 const MODULES: { module: ModuleKind; label: string }[] = [
   { module: "papers", label: "Entry papers" },
@@ -107,6 +108,7 @@ function PaperCard({ formality }: { formality: Formality }) {
 function AgentActivity({ trip, onStop }: { trip: Trip; onStop: () => void }) {
   const run = trip.agent_run;
   const active = isAgentActive(run);
+  const officialUrl = agentOfficialUrl(trip);
   return (
     <div className="rounded-[18px] bg-foreground p-6 text-background">
       <div className="flex items-center justify-between gap-3">
@@ -129,6 +131,16 @@ function AgentActivity({ trip, onStop }: { trip: Trip; onStop: () => void }) {
           <Octagon /> Stop agent
         </Button>
       </div>
+      {officialUrl ? (
+        <button
+          type="button"
+          onClick={() => void showOfficialSite(officialUrl)}
+          className="mt-4 inline-flex h-10 max-w-full items-center gap-2 rounded-full bg-white/10 px-4 text-sm text-background transition-colors hover:bg-white/20"
+        >
+          <ExternalLink className="size-4 shrink-0" /> Open the official site
+          <span className="truncate font-mono text-[11px] text-background/60">{new URL(officialUrl).hostname}</span>
+        </button>
+      ) : null}
       {trip.agent_steps.length > 0 ? (
         <ol className="mt-5 space-y-2.5 border-t border-white/10 pt-5">
           {trip.agent_steps.map((step, i) => (

@@ -1,0 +1,15 @@
+{
+  "manifest_version": 3,
+  "name": "Nami",
+  "version": "0.1.0",
+  "description": "Nami in the side panel, the H agent in the tab.",
+  "action": {
+    "default_title": "Open Nami",
+    "default_icon": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" }
+  },
+  "icons": { "16": "icons/16.png", "48": "icons/48.png", "128": "icons/128.png" },
+  "background": { "service_worker": "background.js" },
+  "side_panel": { "default_path": "panel.html" },
+  "options_page": "options.html",
+  "permissions": ["sidePanel", "storage", "tabs"]
+}
