@@ -91,3 +91,9 @@ export async function resolveDocumentPath(id: string): Promise<string | null> {
     return null;
   }
 }
+
+export async function documentFilePaths(ids: readonly string[]): Promise<string[] | null> {
+  if (!documentsEnabled()) return null;
+  const paths = await Promise.all([...new Set(ids)].map(resolveDocumentPath));
+  return paths.every((path): path is string => path !== null) ? paths : null;
+}
