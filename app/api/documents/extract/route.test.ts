@@ -91,8 +91,10 @@ describe("POST /api/documents/extract (route 12)", () => {
     });
     vi.stubGlobal("fetch", fetch);
     expect((await form(jpeg(), {}, "anthropic")).status).toBe(200);
-    expect(fetch).toHaveBeenCalledTimes(1);
-    expect(String(fetch.mock.calls[0][0])).toContain("api.anthropic.com");
+    // Two calls at most: the specimen has no MRZ, so the reader reads once more (lib/passport.ts, extractPassport).
+    expect(fetch.mock.calls.length).toBeGreaterThanOrEqual(1);
+    expect(fetch.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(fetch.mock.calls.every(([url]) => String(url).includes("api.anthropic.com"))).toBe(true);
   });
 
   it.each([

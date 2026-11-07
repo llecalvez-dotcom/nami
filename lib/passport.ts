@@ -158,6 +158,8 @@ function cleanValue(key: PassportFieldKey, value: unknown): string | null {
   if (key === "nationality") text = nationalityCode(text);
   if (key === "passport_number") text = text.replace(/\s+/g, "").toUpperCase();
   if (key === "surname") text = text.toUpperCase();
+  // French passports print the given names separated by commas: the forms want them separated by spaces.
+  if (key === "given_names") text = text.replace(/\s*,\s*/g, " ").replace(/\.$/, "");
   const field = PassportFieldsSchema.shape[key].safeParse(text);
   return field.success ? field.data : null;
 }
@@ -171,6 +173,17 @@ const FIELD_LABELS: Record<PassportFieldKey, string> = {
   issue_date: "Date of issue",
   expiry_date: "Expiry date",
 };
+
+// A compound name printed on two lines, or a particle (LE, DE, VAN…) left out of the printed reading: every printed
+// word is in the MRZ name, in order, and the MRZ has more. The MRZ is what the official sites read, so it wins.
+function isPartOfMrzName(printed: string, mrz: string): boolean {
+  const words = normalizeMrz(printed).split("<").filter(Boolean);
+  const mrzWords = mrz.split("<").filter(Boolean);
+  if (words.length === 0 || words.length >= mrzWords.length) return false;
+  let at = 0;
+  for (const word of mrzWords) if (word === words[at]) at++;
+  return at === words.length;
+}
 
 export function toExtraction(modelText: string, trip: TripDates): DocumentExtraction {
   const raw = parseModelJson(modelText);
@@ -198,8 +211,11 @@ export function toExtraction(modelText: string, trip: TripDates): DocumentExtrac
     warnings.push("The MRZ could not be checked: review the printed fields.");
   } else {
     for (const key of Object.keys(mrz.fields) as (keyof typeof mrz.fields)[]) {
-      const printed = fields[key];
       const value = mrz.fields[key];
+      if ((key === "surname" || key === "given_names") && fields[key] && value && isPartOfMrzName(fields[key]!, value)) {
+        fields[key] = value.replace(/</g, " ");
+      }
+      const printed = fields[key];
       const checked = key in mrz.checks ? mrz.checks[key as keyof typeof mrz.checks] : true;
       if (printed && value && normalizeMrz(printed) === normalizeMrz(value) && checked) {
         mrz_verified.push(key);
@@ -214,9 +230,25 @@ export function toExtraction(modelText: string, trip: TripDates): DocumentExtrac
   return DocumentExtractionSchema.parse({ fields, confidence_per_field, warnings, mrz_verified });
 }
 
+// A reading the MRZ does not confirm: a field disagrees, a check digit fails, or the MRZ is unreadable.
+function unconfirmed(extraction: DocumentExtraction): boolean {
+  return extraction.warnings.some((warning) => /MRZ/.test(warning));
+}
+
+const score = (extraction: DocumentExtraction) => (extraction.mrz_verified?.length ?? 0) * 10 - extraction.warnings.length;
+
+// The vision model reads the same image differently from one call to the next (seen on 2026-11-07): when the MRZ
+// does not confirm the first reading, it reads once more and the better reading is kept.
 export async function extractPassport(image: PassportImage, trip: TripDates, reader: PassportReader): Promise<DocumentExtraction> {
   try {
-    return toExtraction(await reader.read(image), trip);
+    const first = toExtraction(await reader.read(image), trip);
+    if (!unconfirmed(first)) return first;
+    try {
+      const second = toExtraction(await reader.read(image), trip);
+      return score(second) > score(first) ? second : first;
+    } catch {
+      return first;
+    }
   } catch (error) {
     console.error(`passport: ${reader.name} reader failed:`, error instanceof PassportReadError ? error.message : "request failed");
     throw error instanceof PassportReadError ? error : new PassportReadError("Passport reading failed");
