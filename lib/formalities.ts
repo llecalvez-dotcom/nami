@@ -55,13 +55,17 @@ export const LINKUP_OUTPUT_SCHEMA = {
   properties: {
     formalities: {
       type: "array",
-      description: "Only the entry formalities that apply to this traveller. Empty if none.",
+      description:
+        "Entry formalities this traveller must or can do before or on arrival (visa, travel authorization, arrival card, entry tax, mandatory insurance or health form). Empty if none.",
       items: {
         type: "object",
         properties: {
           name: { type: "string", description: "Official name of the formality" },
           kind: { type: "string", enum: ["visa", "travel_authorization", "arrival_card", "tax", "health", "other"] },
-          required: { type: "boolean", description: "true if mandatory for this traveller" },
+          required: {
+            type: "boolean",
+            description: "true only if this traveller must do it; false if exempted, optional or only recommended",
+          },
           official_cost: { type: "string", description: "Official cost with its currency, or Free" },
           official_url: { type: "string", description: "URL of the official government website where it is done" },
           when: { type: "string", description: "When it can or must be done, relative to departure or arrival" },
@@ -94,11 +98,15 @@ export function buildQuery({ destination, country_iso2 }: Pick<FormalitiesInput,
     `Which entry formalities does a traveller with a French passport, leaving from France, need for a short tourist stay in ${place}? ` +
     `Use France Diplomatie (conseils aux voyageurs, entrée et séjour, ${country}) and the official government websites of ${country}. ` +
     `List each visa, electronic travel authorization, online arrival card or entry tax that applies, with its official name, ` +
-    `whether it is mandatory, its official cost, the official government website where it is done, and when it can be done.`
+    `whether it is mandatory, its official cost, the official government website where it is done, and when it can be done. ` +
+    `Answer in English. Write "Not stated" when a source does not give a value; never guess.`
   );
 }
 
-const NOT_FOUND = /\b(not (found|stated|specified|confirmed|available|provided|mentioned)|unknown|n\/a)\b/i;
+const NOT_FOUND =
+  /\b(not (found|stated|specified|confirmed|available|provided|mentioned)|unknown|n\/a)\b|non (indiqu|précis|mentionn|communiqu)|inconnu/i;
+const NOT_NEEDED =
+  /\b(not required|no visa (is )?(required|needed)|optional|recommended|exempt(ed|ion)?|visa[- ]free)\b|non requis|pas requis|facultati|exempt/i;
 
 function asUrl(value: string | undefined): string | null {
   if (!value) return null;
@@ -110,10 +118,11 @@ function asUrl(value: string | undefined): string | null {
   }
 }
 
-function asRequired(value: LinkupItem["required"]): boolean {
-  if (typeof value === "boolean") return value;
-  if (typeof value !== "string") return true;
-  return !/^\s*(no|not required|optional|false)\b/i.test(value);
+// Linkup sometimes marks a visa exemption or a recommended form as required: its own wording wins.
+function asRequired(item: LinkupItem): boolean {
+  const said = item.required;
+  if (said === false || (typeof said === "string" && /^\s*(no|not required|optional|false)\b/i.test(said))) return false;
+  return ![item.name, item.official_cost, item.when].some((text) => text && NOT_NEEDED.test(text));
 }
 
 function asCost(value: string | undefined): string {
@@ -274,7 +283,7 @@ export async function findFormalities(input: FormalitiesInput, deps: Deps): Prom
         return {
           id: `live-${i + 1}`,
           name: item.name,
-          required: asRequired(item.required),
+          required: asRequired(item),
           official_url: link.url,
           official_cost: asCost(item.official_cost),
           opens_at: null,

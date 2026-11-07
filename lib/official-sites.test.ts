@@ -90,3 +90,14 @@ describe("checkOfficialLink", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 });
+
+describe("checkOfficialLink on a home page", () => {
+  it("does not call a home page that fails 'replaced'", async () => {
+    const fetch = vi.fn(async () => new Response(null, { status: 503 })) as unknown as typeof globalThis.fetch;
+    expect(await checkOfficialLink("https://www.mofa.go.jp/", { fetch })).toEqual({
+      url: "https://www.mofa.go.jp/",
+      official: true,
+      replaced: false,
+    });
+  });
+});

@@ -81,7 +81,12 @@ export type CheckedLink = {
 const HEAD_TIMEOUT_MS = 4_000;
 
 async function answers(url: string, method: "HEAD" | "GET", fetchImpl: typeof fetch, timeoutMs: number): Promise<number> {
-  const response = await fetchImpl(url, { method, redirect: "follow", signal: AbortSignal.timeout(timeoutMs) });
+  const response = await fetchImpl(url, {
+    method,
+    redirect: "follow",
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; Nami/0.1; official link check)" },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
   await response.body?.cancel().catch(() => {});
   return response.status;
 }
@@ -98,5 +103,6 @@ export async function checkOfficialLink(
   } catch {
     // Unreachable: fall through to the home page.
   }
-  return { url: homepageOf(url)!, official: true, replaced: true };
+  const homepage = homepageOf(url)!;
+  return { url: homepage, official: true, replaced: homepage !== new URL(url).toString() };
 }

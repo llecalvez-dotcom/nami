@@ -235,3 +235,32 @@ describe("costAmount", () => {
     expect(costAmount(cost)).toBe(amount);
   });
 });
+
+describe("findFormalities: Linkup wording wins over its own flags", () => {
+  const JP = { destination: "Japan", country_iso2: "JP", arrival_at: null };
+  const item = (over: Record<string, unknown>) => ({
+    name: "Visa",
+    kind: "visa",
+    required: true,
+    official_cost: "Free",
+    official_url: "https://www.mofa.go.jp/j_info/visit/visa/index.html",
+    when: "Before departure",
+    source_url: "https://www.diplomatie.gouv.fr/fr/information-par-pays/japon/conseils-aux-voyageurs-entree-sejour",
+    ...over,
+  });
+
+  it.each([
+    { official_cost: "Free (no visa required)" },
+    { when: "Optional; recommended before arrival" },
+    { name: "Visa exemption for French passport holders" },
+    { required: false },
+  ])("marks %o as not required", async (over) => {
+    const result = await run(JP, fakeFetch({ linkup: answer({ formalities: [item(over)] }) }));
+    expect(result.formalities[0].required).toBe(false);
+  });
+
+  it("keeps an unknown cost written in French as unknown", async () => {
+    const result = await run(JP, fakeFetch({ linkup: answer({ formalities: [item({ official_cost: "Non indiqué dans les sources" })] }) }));
+    expect(result.formalities[0].official_cost).toBe("Not stated on the source");
+  });
+});

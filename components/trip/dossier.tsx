@@ -6,6 +6,7 @@ import { ModuleStateBadge, SampleBadge, StatusBadge } from "@/components/status-
 import { getBaliPaper, type BaliPaperId } from "@/lib/bali-papers";
 import type { Formality, ModuleKind, ModuleSuggestion, TripRequestDraft } from "@/lib/contracts";
 import { formatDate, formatDateTime, formatTime } from "@/lib/format";
+import { LivePapersList, type LivePapersState } from "@/components/trip/live-papers";
 import { isAgentActive, type Trip } from "@/lib/trip-state";
 
 const MODULES: { module: ModuleKind; label: string }[] = [
@@ -142,7 +143,17 @@ function AgentActivity({ trip, onStop }: { trip: Trip; onStop: () => void }) {
   );
 }
 
-export function Dossier({ trip, onStop }: { trip: Trip; onStop: () => void }) {
+export function Dossier({
+  trip,
+  onStop,
+  livePapers = null,
+  children,
+}: {
+  trip: Trip;
+  onStop: () => void;
+  livePapers?: LivePapersState | null;
+  children?: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-8">
       <section className="space-y-4">
@@ -156,13 +167,18 @@ export function Dossier({ trip, onStop }: { trip: Trip; onStop: () => void }) {
       {trip.formalities.length > 0 ? (
         <section className="space-y-3">
           <SectionTitle>Entry papers</SectionTitle>
-          <ul className="space-y-3">
-            {trip.formalities.map((f) => (
-              <PaperCard key={f.id} formality={f} />
-            ))}
-          </ul>
+          {livePapers ? (
+            <LivePapersList papers={livePapers} />
+          ) : (
+            <ul className="space-y-3">
+              {trip.formalities.map((f) => (
+                <PaperCard key={f.id} formality={f} />
+              ))}
+            </ul>
+          )}
         </section>
       ) : null}
+      {children}
       <AgentActivity trip={trip} onStop={onStop} />
     </div>
   );
