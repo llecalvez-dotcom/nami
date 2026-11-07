@@ -77,11 +77,47 @@ function unlockOnFirstGesture() {
   window.addEventListener("keydown", unlock, true);
 }
 
+// On the demo laptop, Nami speaks through the Mac's speakers (/api/voice/say, macOS `say`): the browser refused its
+// voice in the side panel. Anywhere else, the browser's voice.
+function macOrBrowserEngine(): SpeechEngine {
+  const browser = browserEngine();
+  let mac = false;
+  let request: AbortController | null = null;
+  const ready = fetch("/api/voice/say", { cache: "no-store" })
+    .then((response) => response.json() as Promise<{ enabled?: boolean }>)
+    .then((body) => {
+      mac = body.enabled === true;
+    })
+    .catch(() => {});
+  return {
+    speak(text, done) {
+      void ready.then(() => {
+        if (!mac) return browser.speak(text, done);
+        request = new AbortController();
+        fetch("/api/voice/say", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, language: readSpokenLanguage() }),
+          signal: request.signal,
+        })
+          .then((response) => response.json() as Promise<{ spoken?: boolean }>)
+          .then((body) => done(body.spoken === true))
+          .catch(() => done(false));
+      });
+    },
+    cancel() {
+      if (!mac) return browser.cancel();
+      request?.abort();
+      void fetch("/api/voice/say", { method: "DELETE" }).catch(() => {});
+    },
+  };
+}
+
 function getQueue(): SpeechQueue | null {
   if (queue !== undefined) return queue;
   if (typeof window === "undefined") return null;
   if ("speechSynthesis" in window) unlockOnFirstGesture();
-  queue = "speechSynthesis" in window ? createSpeechQueue(browserEngine(), readMuted()) : null;
+  queue = createSpeechQueue(macOrBrowserEngine(), readMuted());
   return queue;
 }
 
