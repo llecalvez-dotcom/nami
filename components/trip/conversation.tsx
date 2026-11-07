@@ -161,7 +161,9 @@ function OpenQuestion({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const voice = useCardVoice(item.id, async (text) => {
-    const option = matchOption(text, item.options);
+    // A spoken "yes" in any language picks the only option of a proposed answer ("Yes, that's right").
+    const option = matchOption(text, item.options)
+      ?? (item.options.length === 1 && shortAnswer("proposal", text) === "accept" ? item.options[0] : null);
     if (option) return onAnswer(item.id, option.value, option.label);
     setBusy(true);
     setError(null);

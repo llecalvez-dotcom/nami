@@ -74,9 +74,10 @@ describe("parsed request flow", () => {
 
     trip = answerQuestion(trip, open(trip, "question").id, "FR", "Yes, French passport");
     const landing = open(trip, "question");
-    expect(landing).toMatchObject({ field: "arrival_at", question: "When do you land in Bali?" });
+    // Nami proposes the landing rather than asking for it (Nathan, 2026-11-07).
+    expect(landing).toMatchObject({ field: "arrival_at", question: expect.stringContaining("you land in Bali the next day, Tuesday 10 November, around 6 pm. Is that right?") });
     expect(landing.kind === "question" && landing.options).toEqual([
-      { label: "I don't know yet", value: "2026-11-10T00:00+08:00" },
+      { label: "Yes, that's right", value: "2026-11-10T18:00+08:00" },
     ]);
 
     trip = answerQuestionWithText(trip, landing.id, "Tuesday 14:30", { ...trip.request, arrival_at: "2026-11-10T14:30+08:00" });
