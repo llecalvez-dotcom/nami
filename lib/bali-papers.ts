@@ -17,6 +17,8 @@ export type BaliPaper = {
   // To adjust after the first real run (docs/tests/f1-evoa.md).
   forbidden_buttons: readonly string[];
   stop_condition: string;
+  // Path through the official menus, checked by hand; added to the task right after its first line.
+  route_hint?: string;
   observed_on: string;
   source_urls: string[];
 };
@@ -42,6 +44,8 @@ export const BALI_PAPERS: readonly BaliPaper[] = [
       "any button that chooses a payment method (card, bank transfer, e-wallet, virtual account)",
     ],
     stop_condition: "Stop on the summary screen or the payment screen, without clicking anything on it.",
+    route_hint:
+      "The e-VOA is applied for on this visa selection page: do not look for another page or site. Pick, in this order: the passport country (for example FRANCE), then General, Family, or Social, then Tourism, Family Visit, and Transit, then B1 - Tourist (Visa On Arrival). The length of stay (30 Days) fills itself. Then click Detail & Apply: a window with the visa conditions opens; click Apply in it to reach the application form.",
     observed_on: OBSERVED_ON,
     source_urls: ["https://evisa.imigrasi.go.id/web/visa-selection", "https://evisa.imigrasi.go.id"],
   },

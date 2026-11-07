@@ -49,9 +49,15 @@ export function pickExpression(field: string, option: string): string {
     if (!hit) continue;
     if (window.jQuery) window.jQuery(s).val(hit.value).trigger("change");
     else { s.value = hit.value; s.dispatchEvent(new Event("input", { bubbles: true })); s.dispatchEvent(new Event("change", { bubbles: true })); }
-    return "Picked " + hit.text.trim() + " in " + (s.name || s.id || "the list") + ". Take a fresh look before going on.";
+    return "Picked " + hit.text.trim() + " in " + (s.name || s.id || "the list") + ". The page already shows it. Do not reload or refresh the page or navigate away; take a screenshot and continue with the next field.";
   }
-  return "No list has an option matching " + option + ". Try another wording, or call ask_user.";
+  const target = named[0];
+  if (!target) {
+    const lists = selects.map((s) => s.name || s.id).filter(Boolean).slice(0, 30);
+    return "No list has an option matching " + option + ". No list is labelled " + field + "; lists on this page: " + (lists.join(", ") || "none") + ". Call pick_option again with one of them.";
+  }
+  const options = [...target.options].filter((x) => x.value !== "").map((x) => x.text.replace(/\\s+/g, " ").trim()).filter(Boolean).slice(0, 30);
+  return "No list has an option matching " + option + ". Options of " + (target.name || target.id || field) + ": " + (options.join(", ") || "none") + ". Call pick_option again with the closest one.";
 })(${JSON.stringify(field)}, ${JSON.stringify(option)})`;
 }
 

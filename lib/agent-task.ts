@@ -8,6 +8,7 @@ export type PaperTaskInput = {
   formName: string;
   traveller: string;
   trip: string;
+  routeHint?: string;
 };
 
 export type PaperInstructionsInput = {
@@ -20,9 +21,10 @@ export function buildPaperInstructions(input: PaperInstructionsInput): string {
   const forbidden = [...new Set([...input.forbiddenButtons, ...ALWAYS_FORBIDDEN_BUTTONS])].join(", ");
   return [
     "You may: type into fields, pick from lists and calendars, tick choices, upload files through upload_file, click the buttons that move to the next step (Next, Continue, Lanjut).",
-    'When the official form asks for a file, call upload_file with purpose "passport" or "photo" instead of clicking the upload control. Never click or open the OS file picker. Wait for the tool result, then check on a fresh screenshot that the page shows the file before continuing. If the result is not "uploaded", call ask_user so the human uploads the file themselves, then wait for their answer.',
-    "For a dropdown list, call pick_option with the label of the list and the value to pick, instead of clicking it. Then take a fresh look: picking a value may load the next lists. If pick_option fails, click the dropdown once, wait and take a fresh screenshot; use select_option only on native select elements.",
-    "Never attempt the same failed action more than 2 times. After 2 failed attempts on the same field, stop trying and call ask_user with field set to that field and a short question asking the human to pick the required value themselves in Chrome. Say which value to pick, for example: Please pick Tourism for purpose of visit in Chrome, then let me know. Wait for the human's answer before continuing, then take a fresh look and continue from the updated form.",
+    "Never reload or refresh the e-VOA page, including with refresh_web: it erases filled fields. Only reload or refresh if the page is visibly broken. Re-observe by taking a screenshot, not by reloading, refreshing or navigating.",
+    'When the official form asks for a file, call upload_file with purpose "passport" or "photo" instead of clicking the upload control. Never click or open the OS file picker. Wait for the tool result, then take a screenshot to verify that the page shows the file before continuing; do not reload or refresh the page or navigate away. If the result does not confirm a successful upload, call ask_user so the human uploads the file themselves, then wait for their answer.',
+    "For a dropdown list, call pick_option with the label of the list and the value to pick, instead of clicking it. The page already shows the selection. Do not reload or refresh the page or navigate away; wait for any dependent lists to update, then take a screenshot and continue with the next field. If pick_option fails, click the dropdown once, wait and take a screenshot; use select_option only on native select elements.",
+    "Never attempt the same failed action more than 2 times. After 2 failed attempts on the same field, stop trying and call ask_user with field set to that field and a short question asking the human to pick the required value themselves in Chrome. Say which value to pick, for example: Please pick Tourism for purpose of visit in Chrome, then let me know. Wait for the human's answer before continuing, then take a screenshot and continue from the updated form without reloading, refreshing or navigating.",
     `You must NEVER click on: ${forbidden}. Never tick a final declaration on honour.`,
     "If a captcha, an account creation or an e-mail code appears, stop and call ask_user so that the human handles it.",
     `Never leave the domain ${input.domain}. Do not invent any information. If a piece of information is missing, call ask_user with a short question.`,
@@ -34,6 +36,7 @@ export function buildPaperInstructions(input: PaperInstructionsInput): string {
 export function buildPaperTask(input: PaperTaskInput): string {
   return [
     `Go to ${input.officialUrl}. Fill in the ${input.formName} form for the traveller and the trip below, step by step, up to the last screen.`,
+    ...(input.routeHint ? [input.routeHint] : []),
     "Follow the safety instructions and stop before final submission or payment.",
     `Traveller: ${input.traveller}`,
     `Trip: ${input.trip}`,
