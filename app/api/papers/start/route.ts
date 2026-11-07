@@ -5,6 +5,7 @@ import { bindSessionDocument } from "@/lib/agent-passport-upload";
 import { AgentPreflightError, preflightBrowser } from "@/lib/agent-preflight";
 import {
   buildPilotTask,
+  buildPilotInstructions,
   fail,
   H_SLOTS_BUSY,
   hErrorResponse,
@@ -47,9 +48,6 @@ async function start(request: Request): Promise<Response> {
   if (documentPaths === null) {
     return fail("The passport document is no longer available. Search for your passport again.", 400);
   }
-  const filePaths = input.data.document_id === undefined
-    ? input.data.file_paths
-    : [...new Set([...input.data.file_paths, ...documentPaths])];
   let browser: Awaited<ReturnType<typeof preflightBrowser>> | undefined;
   try {
     browser = await preflightBrowser(input.data.local_session_id, undefined, input.data.resume ? input.data.idempotency_key : undefined);
@@ -60,7 +58,8 @@ async function start(request: Request): Promise<Response> {
       } catch {}
     }
     const session = await createSession({
-      task: buildPilotTask({ ...input.data, file_paths: filePaths }),
+      task: buildPilotTask(input.data),
+      instructions: buildPilotInstructions(),
       tools: PAPER_TOOLS,
       localBrowserSessionId: input.data.local_session_id,
       maxTimeS: PAPER_MAX_TIME_S,

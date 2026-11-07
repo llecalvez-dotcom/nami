@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildFlightsTask, buildPaperTask } from "@/lib/agent-task";
+import { buildFlightsTask, buildPaperInstructions, buildPaperTask, UNTRUSTED_CONTENT_RULE } from "@/lib/agent-task";
 import { getBaliPaper } from "@/lib/bali-papers";
 import { TripRequestDraftSchema } from "@/lib/contracts";
 import {
@@ -127,34 +127,31 @@ describe("parsed request flow", () => {
 describe("agent tasks", () => {
   it("always forbids final submit and payment", () => {
     const paper = getBaliPaper("evoa");
-    const task = buildPaperTask({
-      officialUrl: paper.official_url,
-      formName: paper.name,
+    const instructions = buildPaperInstructions({
       domain: paper.domain,
-      filePaths: [],
       forbiddenButtons: ["Proceed to payment"],
       stopCondition: paper.stop_condition,
-      traveller: "…",
-      trip: "…",
     });
     for (const word of ["Proceed to payment", "Submit", "Pay", "Kirim", "Bayar", "Sign in", "Register"]) {
-      expect(task).toContain(word);
+      expect(instructions).toContain(word);
     }
-    expect(task).toContain("Never leave the domain evisa.imigrasi.go.id");
-    expect(task).toContain(paper.stop_condition);
-    expect(task).toContain("call report_ready as your last action. After calling it the session ends. Do not take any further action.");
+    expect(instructions).toContain("Never leave the domain evisa.imigrasi.go.id");
+    expect(instructions).toContain(paper.stop_condition);
+    expect(instructions).toContain(UNTRUSTED_CONTENT_RULE);
+    expect(instructions).toContain("Never tick a final declaration on honour");
+    expect(instructions).toContain("Never click or open the OS file picker");
+    expect(instructions).toContain('call upload_file with purpose "passport" or "photo"');
+    expect(instructions).toContain("check on a fresh screenshot that the page shows the file");
+    expect(instructions).toContain("If a captcha, an account creation or an e-mail code appears, stop and call ask_user");
+    expect(instructions).toContain("Do not invent any information");
+    expect(instructions).toContain("call report_ready as your last action. After calling it the session ends. Do not take any further action.");
   });
 
   it("handles delayed custom dropdowns and hands blocked fields to the human", () => {
-    const task = buildPaperTask({
-      officialUrl: "https://example.gov/form",
-      formName: "Visa",
+    const task = buildPaperInstructions({
       domain: "example.gov",
-      filePaths: [],
       forbiddenButtons: [],
       stopCondition: "Stop before payment.",
-      traveller: "Nationality: France.",
-      trip: "Purpose: tourism.",
     });
     expect(task).toContain("call pick_option with the label of the list and the value to pick, instead of clicking it");
     expect(task).toContain("use select_option only on native select elements");
@@ -163,7 +160,19 @@ describe("agent tasks", () => {
     expect(task).toContain("asking the human to pick the required value themselves in Chrome");
     expect(task).toContain("Say which value to pick");
     expect(task).toContain("Wait for the human's answer before continuing, then take a fresh look and continue from the updated form");
-    expect(task).toContain("upload the provided files (none)");
+    expect(task).toContain("If the result is not \"uploaded\", call ask_user");
+  });
+
+  it("keeps the per-session task focused on the traveller and trip with only a safety reminder", () => {
+    const task = buildPaperTask({
+      officialUrl: "https://example.gov/form", formName: "Visa", traveller: "Nationality: France.", trip: "Purpose: tourism.",
+    });
+    expect(task).toContain("Go to https://example.gov/form");
+    expect(task).toContain("Traveller: Nationality: France.");
+    expect(task).toContain("Trip: Purpose: tourism.");
+    expect(task).toContain("stop before final submission or payment");
+    expect(task).not.toContain(UNTRUSTED_CONTENT_RULE);
+    expect(task).not.toContain("Never click or open the OS file picker");
   });
 
   it("builds the flights task", () => {
