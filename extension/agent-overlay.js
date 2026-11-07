@@ -58,6 +58,20 @@
     cursor.style.transform = `translate(${event.clientX}px, ${event.clientY}px)`;
     cursor.style.opacity = agentActive ? "1" : "0";
   };
+  const ripple = (x, y) => {
+    const ring = layer("ripple");
+    ring.style.left = `${x}px`;
+    ring.style.top = `${y}px`;
+    ring.addEventListener("animationend", () => ring.remove(), { once: true });
+  };
+  // Nami's pick_option shows where it picks (lib/local-chrome.ts, showPickExpression): the page sets the point on the
+  // root element, the same DOM for the page and this script. Only moves the cursor while the agent works.
+  document.addEventListener("nami-agent-point", () => {
+    const [x, y] = String(document.documentElement.dataset.namiAgentPoint || "").split(",").map(Number);
+    if (!agentActive || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    move({ clientX: x, clientY: y });
+    setTimeout(() => ripple(x, y), 380);
+  });
   const highlight = (event) => {
     if (!(event.target instanceof Element)) return;
     const rect = event.target.getBoundingClientRect();
@@ -73,12 +87,7 @@
     document.addEventListener(type, (event) => {
       if (!event.isTrusted) return;
       if (type === "pointerdown") move(event);
-      if (type === "pointerdown") {
-        const ripple = layer("ripple");
-        ripple.style.left = `${event.clientX}px`;
-        ripple.style.top = `${event.clientY}px`;
-        ripple.addEventListener("animationend", () => ripple.remove(), { once: true });
-      }
+      if (type === "pointerdown") ripple(event.clientX, event.clientY);
       if (type === "input" || type === "focusin") highlight(event);
     }, true);
   }

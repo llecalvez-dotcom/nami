@@ -1,17 +1,27 @@
 import type { ConversationItem } from "@/lib/trip-state";
 
+// Nami says less than she writes (Nathan, 2026-11-07: « à l'oral, il faut que le bot dise moins de choses »): the first
+// sentence, and the question when it comes later. The whole text stays on the screen.
+export function spokenShort(text: string): string {
+  const sentences = text.trim().split(/(?<=[.!?])\s+/).filter(Boolean);
+  const first = sentences[0] ?? "";
+  if (first.endsWith("?")) return first;
+  const question = sentences.find((sentence) => sentence.endsWith("?"));
+  return question ? `${first} ${question}` : first;
+}
+
 // What Nami says aloud for each item; null for what the user said.
 export function speechText(item: ConversationItem): string | null {
   switch (item.kind) {
     case "user":
       return null;
     case "agent":
-      return item.text;
+      return spokenShort(item.text);
     case "question":
     case "agent_question":
-      return item.question;
+      return spokenShort(item.question);
     case "proposal":
-      return item.text;
+      return spokenShort(item.text);
   }
 }
 

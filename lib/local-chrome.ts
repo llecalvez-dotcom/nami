@@ -122,7 +122,65 @@ export function fillExpression(field: string, value: string, settleMs = FILL_SET
 })(${JSON.stringify(field)}, ${JSON.stringify(value)}, ${Number(settleMs) || 0})`;
 }
 
+const NO_OFFICIAL_TAB = "The official site is not open in Chrome.";
 export const NOT_ON_OFFICIAL_SITE = "The tab is no longer on the official site; nothing was changed. Take a screenshot and go back to the official form.";
+
+export const AGENT_POINT_EVENT = "nami-agent-point";
+
+// Runs in the page, before the pick, so the traveller sees it happen (Nathan, 2026-11-07: « on ne voit pas que tu
+// scrolles pour aller chercher France »): the purple cursor of the extension goes to the list, the Select2 list opens,
+// the option is typed letter by letter in its search field, the cursor points at the line found, then the list closes.
+// It never selects anything itself; pickExpression does, right after. Resolves "no" when there is nothing to show.
+export function showPickExpression(field: string, option: string): string {
+  return `((field, option) => new Promise((resolve) => {${FIELD_HELPERS}
+  const $ = window.jQuery;
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const point = (el) => {
+    const r = el.getBoundingClientRect();
+    document.documentElement.dataset.namiAgentPoint = Math.round(r.left + Math.min(r.width / 2, 48)) + "," + Math.round(r.top + r.height / 2);
+    document.dispatchEvent(new Event(${JSON.stringify(AGENT_POINT_EVENT)}));
+  };
+  try {
+    const f = norm(field), o = norm(option);
+    const selects = [...document.querySelectorAll("select")].filter((x) => !x.disabled);
+    const named = byLabel(selects, f);
+    const s = (named.length ? named : selects).find((x) => [...x.options].some((y) => norm(y.text).includes(o)));
+    const box = s && s.nextElementSibling && (s.nextElementSibling.querySelector(".select2-selection") || s.nextElementSibling);
+    if (!s || !$ || !$(s).data("select2") || !box) return resolve("no");
+    (async () => {
+      box.scrollIntoView({ block: "center", behavior: "smooth" });
+      await wait(400);
+      point(box);
+      await wait(500);
+      $(s).select2("open");
+      await wait(250);
+      const search = document.querySelector(".select2-container--open .select2-search__field");
+      const text = String(option).slice(0, 14);
+      if (search) {
+        for (let i = 1; i <= text.length; i++) {
+          search.value = text.slice(0, i);
+          search.dispatchEvent(new Event("input", { bubbles: true }));
+          search.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }));
+          await wait(70);
+        }
+      }
+      await wait(300);
+      const line = document.querySelector(".select2-container--open .select2-results__option--highlighted");
+      if (line) {
+        point(line);
+        await wait(500);
+      }
+      $(s).select2("close");
+      resolve("shown");
+    })().catch(() => {
+      try { $(s).select2("close"); } catch (e) {}
+      resolve("no");
+    });
+  } catch (e) {
+    resolve("no");
+  }
+}))(${JSON.stringify(field)}, ${JSON.stringify(option)})`;
+}
 
 // Runs in the page, around the action: the tab was official when chosen, but it may have navigated since. The page
 // itself checks its hostname again, so the traveller's data never goes into another site.
@@ -137,7 +195,7 @@ export function guardedExpression(expression: string, domains: string[]): string
 async function evaluateInOfficialTab(expression: string, domains: string[], urls: string[], fallback: string, timeoutMs: number): Promise<string> {
   const tabs = await listTabs(urls);
   const tab = tabs.find((t) => t.type === "page" && t.webSocketDebuggerUrl && onDomain(t.url, domains));
-  if (!tab?.webSocketDebuggerUrl) return "The official site is not open in Chrome.";
+  if (!tab?.webSocketDebuggerUrl) return NO_OFFICIAL_TAB;
   const ws = new WebSocket(tab.webSocketDebuggerUrl);
   return new Promise<string>((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -162,6 +220,9 @@ async function evaluateInOfficialTab(expression: string, domains: string[], urls
 }
 
 export async function pickOption(field: string, option: string, domains: string[], urls = cdpUrls()): Promise<string> {
+  // Showing the pick is a nicety: whatever happens there, the pick itself runs right after (unless no official tab is open).
+  const shown = await evaluateInOfficialTab(showPickExpression(field, option), domains, urls, "no", 6000).catch(() => "no");
+  if (shown === NO_OFFICIAL_TAB) return shown;
   return evaluateInOfficialTab(pickExpression(field, option), domains, urls, "Chrome could not pick the option.", 5000);
 }
 

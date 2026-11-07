@@ -1,14 +1,14 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { createSampleTrip, createTripFromRequest, decideProposal, type ConversationItem } from "@/lib/trip-state";
-import { alreadyHeard, speechPlan, speechText } from "@/lib/voice/conversation-speech";
+import { alreadyHeard, speechPlan, speechText, spokenShort } from "@/lib/voice/conversation-speech";
 
 const now = new Date("2026-11-08T12:52:00Z");
 
 describe("conversation speech", () => {
   it("reads Nami's items, not the user's", () => {
     const items = createSampleTrip(now).conversation;
-    expect(items.map(speechText)).toEqual([null, "Bali, Monday 9 to Friday 20 November, for a friend's wedding. One thing I need:", "When do you land in Bali?"]);
+    expect(items.map(speechText)).toEqual([null, "Bali, Monday 9 to Friday 20 November, for a friend's wedding.", "When do you land in Bali?"]);
   });
 
   it("on a new trip, reads what came after the request, in order", () => {
@@ -46,5 +46,15 @@ describe("conversation speech", () => {
   it("never puts a microphone on the passport card", () => {
     const source = readFileSync(new URL("../../components/trip/passport-card.tsx", import.meta.url), "utf8");
     expect(source).not.toMatch(/components\/voice|useVoiceInput|MicButton/);
+  });
+
+  it("says the first sentence and the question, never the whole paragraph", () => {
+    expect(spokenShort("For Bali you need an e-VOA. Shall I fill it in for you on the official site? I stop before anything is sent: you check, you send."))
+      .toBe("For Bali you need an e-VOA. Shall I fill it in for you on the official site?");
+    expect(spokenShort("I found your passport on this computer (passport.jpg). Shall I read it? It is sent to H Company to be read, never stored."))
+      .toBe("I found your passport on this computer (passport.jpg). Shall I read it?");
+    expect(spokenShort("Watch the tab on the left: you will see every click. I never click Pay.")).toBe("Watch the tab on the left: you will see every click.");
+    expect(spokenShort("Do you also want me to help you find your flights?")).toBe("Do you also want me to help you find your flights?");
+    expect(spokenShort("Pour Bali, il vous faut un e-VOA. Je le remplis pour vous ? Je m'arrête avant tout envoi.")).toBe("Pour Bali, il vous faut un e-VOA. Je le remplis pour vous ?");
   });
 });
