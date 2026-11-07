@@ -16,7 +16,30 @@ async function readJson(response: Response, provider: string): Promise<unknown> 
   return response.json();
 }
 
-const completeWithH: CompleteJson = async ({ system, user, schema }) => {
+// H answers in 1 to 3 s, but a call sometimes hangs (seen twice on 2026-11-07, given up after 20 s): a short first
+// try, then one more on a timeout, a network error or a 5xx/429 answer. Never on a 4xx: the request itself is wrong.
+export const H_ATTEMPTS_MS = [8_000, 10_000];
+
+function retryable(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (error.name === "TimeoutError" || error.name === "AbortError" || error.name === "TypeError") return true;
+  return /returned (429|5\d\d)/.test(error.message);
+}
+
+const completeWithH: CompleteJson = async (input) => {
+  let lastError: unknown;
+  for (const timeoutMs of H_ATTEMPTS_MS) {
+    try {
+      return await completeWithHOnce(input, timeoutMs);
+    } catch (error) {
+      lastError = error;
+      if (!retryable(error)) throw error;
+    }
+  }
+  throw lastError;
+};
+
+async function completeWithHOnce({ system, user, schema }: Parameters<CompleteJson>[0], timeoutMs: number): Promise<string> {
   const response = await fetch("https://api.hcompany.ai/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${requireEnv("HAI_API_KEY")}`, "Content-Type": "application/json" },
@@ -30,13 +53,13 @@ const completeWithH: CompleteJson = async ({ system, user, schema }) => {
       chat_template_kwargs: { enable_thinking: false },
       temperature: 0,
     }),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const body = (await readJson(response, "H Models API")) as { choices?: { message?: { content?: string | null } }[] };
   const content = body.choices?.[0]?.message?.content;
   if (!content) throw new Error("H Models API returned no content");
   return content;
-};
+}
 
 const completeWithAnthropic: CompleteJson = async ({ system, user, schema }) => {
   const response = await fetch("https://api.anthropic.com/v1/messages", {
