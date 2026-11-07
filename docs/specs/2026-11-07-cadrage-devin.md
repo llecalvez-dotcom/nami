@@ -36,6 +36,7 @@ P0 (la V1, indispensable) :
 - Moteur de suggestions (`lib/planner/`) : quels modules proposer pour ce trajet (règles déterministes, section 4.3).
 - Module **Papiers** pour Français vers Bali : liste des papiers par Linkup avec domaines officiels contrôlés, fenêtre d'ouverture de chaque papier, puis **une action réelle de l'agent H** sur le site officiel d'un papier (le « papier pilote », choisi après le test F1), avec arrêt avant toute création de compte, envoi, téléversement ou paiement.
 - Conversation agent ↔ utilisateur avec les 4 statuts (section 4.2).
+- **Documents** : l'agent demande les pièces dont il a besoin (« Send me a photo of your passport »), l'utilisateur les dépose dans l'app, et les champs du profil se remplissent tout seuls (route 12). Ces fichiers restent dans notre app : l'agent ne les téléverse jamais sur un site officiel. En démo, un passeport **spécimen** (image d'exemple officielle), jamais un vrai passeport. Si l'extraction échoue (test F7), repli sur le profil fictif saisi.
 
 P1 (dès que le P0 tourne de bout en bout, ou plus tôt si le site du papier pilote bloque l'agent) :
 - Module **Vol** : recherche réelle par l'agent H sur Google Flights (section 4.5), 3 options au plus. C'est la deuxième action H, qui sécurise la démo si le site officiel bloque.
@@ -103,6 +104,8 @@ Direction de l'équipe : « Premium Editorial Travel Concierge » (anticipation,
 10. (P2) `POST /api/checkout` : Stripe Checkout en mode test, 4,99 EUR.
 
 11. **Mode démo préparé** : un bouton « Prepare demo » (visible seulement avec `?demo=1`) annule d'abord toutes les sessions H actives, puis lance les sessions longues de la démo (papier pilote si le créneau ne suffit pas, recherche de vols) et garde leurs `session_id`. Pendant la démo, l'interface affiche leurs résultats **avec leur heure de lancement réelle** (« started at 13:52 ») et la vue de l'agent en relecture. Aucun résultat inventé ni rejoué depuis un fichier.
+
+12. `POST /api/documents/extract` (multipart, une image JPEG ou PNG, 5 Mo au plus) → `{ fields: { surname, given_names, nationality, birth_date, passport_number, issue_date, expiry_date }, confidence_per_field, warnings[] }`, validé par zod. Modèle de vision de H (Models API, compatible OpenAI, image passée dans le message ; nom du modèle via list-models), repli Claude Haiku. Le fichier est traité en mémoire et jamais écrit sur disque ni journalisé. Chaque champ extrait s'affiche dans la conversation pour que l'utilisateur le confirme ou le corrige en un clic avant d'entrer dans le profil. Règle automatique : un passeport qui expire moins de 6 mois après le retour déclenche une alerte.
 
 Toutes les sessions H : `POST https://agp.eu.hcompany.ai/api/v2/sessions`, `Authorization: Bearer $HAI_API_KEY`, **`queue: false`** (une session en trop échoue tout de suite et visiblement), agent `HAI_AGENT_NAME` (validé via https://hub.hcompany.ai/agents-api/agents/list.md), `max_time_s` (900 pour un papier, 300 pour les vols) et `max_steps` (80 et 60, ajustés après les tests). Outils dans `agent.tools`. Ne pas utiliser `runSession` du SDK avec une fonction `fn` (elle attendrait un humain pendant des minutes) : tout passe par l'API REST avec `fetch`. En cas de doute sur un champ, lire la doc au lieu de l'inventer : https://hub.hcompany.ai/agents-api/sessions/create.md, https://hub.hcompany.ai/agents-api/custom-tools.md, https://hub.hcompany.ai/agents-api/observe-and-steer.md. Exemple réutilisable : `examples/extract_anything` du dépôt https://github.com/hcompai/agents-api-demos (Python, à transposer).
 
@@ -182,6 +185,7 @@ Quand `pending_tool_calls` contient `ask_user` : la question apparaît dans la c
 | F0 | `chat/completions` de la Models API de H avec `HAI_API_KEY`, sur 5 demandes variées (Bali, Espagne, Tanzanie, demande incomplète, famille) | `TripRequest` valide et bons champs manquants, 5 sur 5 | Claude Haiku |
 | F6 | Mode navigateur local : Chrome dédié, `holo local browser`, puis trois points : session créée **par l'API REST** sur l'identifiant local ; `ask_user` reçu et résolu ; **deux sessions de suite** sur le même identifiant | Les trois passent, et le formulaire reste modifiable à la main après la session | Repli cloud (section 4.6) |
 | G1 | (P1) Agent H sur Google Flights, `start_url` direct, `answer_format`, Paris → DPS ; en même temps un essai sur Kayak et un sur le site d'une compagnie ; d'abord `agents/list` | Réponse conforme avec numéros de vol, 3 fois sur 3 ; durée médiane et `metrics` notés | Proxy géré FR (vérifier qu'il existe dans l'offre gratuite), puis le meilleur des replis testés |
+| F7 | Extraction (route 12) sur 3 images de passeport spécimen (photo nette, photo de travers, faible lumière) | Les 7 champs exacts sur au moins 2 images sur 3 | Champs saisis à la main avec le profil fictif |
 | F4 | Lien de partage d'une session H dans une iframe locale | La vue s'affiche | Fenêtre séparée |
 | F5 | Gladia pré-enregistré dans la salle, 5 demandes variées | 4 sur 5 justes sans correction | Champ texte mis en avant |
 
@@ -213,10 +217,12 @@ Devin valide les tests 1 à 4 et 8. La personne D valide les tests 5 à 7 (micro
 
 | Qui | Périmètre | Premier livrable (avant 15 h) | Ensuite |
 |---|---|---|---|
-| A, agent H | Sessions H, consignes, condition d'arrêt, navigateur local, module Vol en P1 | Parcours manuel des 3 sites officiels (F1, première partie) et choix du papier pilote | F1 agent, F6, route 5, puis G1 et route 9 |
-| B, papiers et intelligence | Linkup, domaines officiels, `lib/planner/`, compréhension de la demande | L1 et F0 | Routes 2 et 4, fenêtres, questions de l'agent |
-| C, front et conversation | Écrans, cartes de la conversation, dossier du voyage, statuts, direction visuelle | Parcours cliquable sur données d'exemple | Branchement des routes au fur et à mesure |
-| D, voix, démo et qualité | Gladia, déroulé de démo, vidéo de secours, tests de bout en bout, questions Discord | F5 et premier déroulé chronométré | Route 1, tests 5 à 7, répétitions, vidéo de 22 h |
+| A, agent H (proposé : Clément) | Sessions H, consignes, condition d'arrêt, navigateur local, module Vol en P1 | Parcours manuel des 3 sites officiels (F1, première partie) et choix du papier pilote | F1 agent, F6, route 5, puis G1 et route 9 |
+| B, papiers et intelligence (proposé : Ali) | Linkup, domaines officiels, `lib/planner/`, compréhension de la demande, extraction des documents | L1, F0 et F7 | Routes 2, 4 et 12, fenêtres, questions de l'agent |
+| C, front et conversation (proposé : Léon) | Écrans, cartes de la conversation, dépôt de documents, dossier du voyage, statuts, direction visuelle | Parcours cliquable sur données d'exemple | Branchement des routes au fur et à mesure |
+| D, voix, démo, qualité et orchestration (proposé : Nathan) | Gladia, déroulé de démo, vidéo de secours, tests de bout en bout, questions Discord, pilotage de Devin et de Claude | F5 et premier déroulé chronométré | Route 1, tests 5 à 7, répétitions, vidéo de 22 h |
+
+Répartition proposée sans connaître les compétences de chacun : Léon a écrit le brief produit et sa direction visuelle (front), Nathan pilote déjà Devin et Claude (orchestration et démo). À échanger librement entre vous.
 | Devin | Squelette, contrats, composants, tests unitaires | Ticket 01 | Tickets suivants, un par périmètre |
 | Claude | Orchestration : tickets Devin, relecture des PR, note à jour, cohérence des contrats | Note v4 | Relecture de chaque PR avant fusion |
 
@@ -231,4 +237,4 @@ Règle : chacun code contre les contrats de la section 4.4 avec des données d'e
 
 - Q1 : critères des prix Devin et Gladia (Discord).
 - Q2 : « Nami » est-il le nom du produit ?
-- Q3 : qui prend A, B, C et D dans l'équipe.
+- Q3 : validation de la répartition proposée (section 10).
