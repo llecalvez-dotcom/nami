@@ -97,7 +97,8 @@ export const ARRIVAL_CARD_READY_MESSAGE = "Your arrival card is filled in, and I
 
 // After a reload the confirmed passport is gone (never stored): nothing from H is read, so nothing is saved unmasked, until it is confirmed again.
 export function needsPassportReconfirm(run: AgentRun | null, passportConfirmed: boolean): boolean {
-  return run !== null && !run.drained && !passportConfirmed;
+  // A flights session holds no passport: nothing to reconfirm, the polling goes on after a reload.
+  return run !== null && run.kind !== "flights" && !run.drained && !passportConfirmed;
 }
 
 export function isAgentActive(run: AgentRun | null): boolean {
