@@ -154,11 +154,13 @@ export function CountryPanel({
   country,
   iso2,
   homeTrips,
+  passport,
   onClose,
 }: {
   country: MapCountry | null;
   iso2: string;
   homeTrips: number;
+  passport: string | null;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -200,12 +202,13 @@ export function CountryPanel({
           {status === "home" ? (
             <div className="space-y-4">
               <p className="text-muted-foreground">
-                Where you live and where your trips start. Nami checks every entry rule for a {name} passport.
+                Where you live and where your trips start.
+                {passport ? ` Nami checks every entry rule for a ${countryName(passport)} passport.` : null}
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-[22px] bg-muted p-4">
                   <p className="text-sm text-muted-foreground">Passport</p>
-                  <p className="text-2xl font-semibold">{iso2}</p>
+                  <p className="text-2xl font-semibold">{passport ?? "To confirm"}</p>
                 </div>
                 <div className="rounded-[22px] bg-muted p-4">
                   <p className="text-sm text-muted-foreground">Trips from here</p>

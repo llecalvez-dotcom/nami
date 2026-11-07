@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { answerQuestion, createSampleTrip, decideProposal, type Trip } from "@/lib/trip-state";
-import { homeCountry, mapCountries, progressRatio, tripStatus, visaSteps } from "@/lib/trip-progress";
+import { homeCountry, homePassport, mapCountries, progressRatio, tripStatus, visaSteps } from "@/lib/trip-progress";
 
 const now = new Date("2026-11-08T12:52:00Z");
 
@@ -65,5 +65,11 @@ describe("map countries", () => {
     const real = { sample: false, request: { origin_country: "BE", nationality: "BE" } } as never;
     expect(homeCountry([sample, real])).toBe("BE");
     expect(homeCountry([sample])).toBe("FR");
+  });
+  it("keeps the passport separate from the home country", () => {
+    const trip = { sample: false, request: { origin_country: "DE", nationality: "FR" } } as never;
+    expect(homeCountry([trip])).toBe("DE");
+    expect(homePassport([trip], "DE")).toBe("FR");
+    expect(homePassport([], "DE")).toBeNull();
   });
 });

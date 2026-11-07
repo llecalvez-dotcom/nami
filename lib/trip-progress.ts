@@ -66,14 +66,29 @@ export function progressRatio(trip: Trip): number {
   return steps.filter((s) => s.state === "done").length / steps.length;
 }
 
-export function homeCountry(trips: (Pick<Trip, "request"> & { sample?: boolean })[], fallback = "FR"): string {
+type CountedTrip = Pick<Trip, "request"> & { sample?: boolean };
+
+function mostCommon(trips: CountedTrip[], pick: (t: CountedTrip) => string | null | undefined): string | null {
   const real = trips.filter((t) => !t.sample);
   const counts = new Map<string, number>();
   for (const t of real.length ? real : trips) {
-    const iso = t.request.origin_country ?? t.request.nationality;
+    const iso = pick(t);
     if (iso) counts.set(iso, (counts.get(iso) ?? 0) + 1);
   }
-  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? fallback;
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+}
+
+const originOf = (t: CountedTrip) => t.request.origin_country ?? t.request.nationality;
+
+export function homeCountry(trips: CountedTrip[], fallback = "FR"): string {
+  return mostCommon(trips, originOf) ?? fallback;
+}
+
+export function homePassport(trips: CountedTrip[], home: string): string | null {
+  return mostCommon(
+    trips.filter((t) => originOf(t) === home),
+    (t) => t.request.nationality,
+  );
 }
 
 export type MapCountry = { iso2: string; status: CountryStatus; trips: Trip[] };
