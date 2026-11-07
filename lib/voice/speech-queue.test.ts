@@ -81,3 +81,18 @@ describe("speech queue", () => {
     expect(spoken).toEqual(["First", "Third"]);
   });
 });
+
+describe("microphone after a line", () => {
+  it("opens the card's microphone only after a line really heard", async () => {
+    const { createSpeechQueue } = await import("@/lib/voice/speech-queue");
+    let finish: (spoken?: boolean) => void = () => {};
+    const queue = createSpeechQueue({ speak: (_text, done) => { finish = done; }, cancel: () => {} });
+    const heard: string[] = [];
+    queue.onSpoken((id) => heard.push(id));
+    queue.enqueue("a", "Shall I read it?");
+    finish(false);
+    queue.enqueue("b", "Is that right?");
+    finish(true);
+    expect(heard).toEqual(["b"]);
+  });
+});

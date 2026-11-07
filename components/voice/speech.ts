@@ -31,11 +31,12 @@ function browserEngine(): SpeechEngine {
     speak(text, done) {
       const synth = window.speechSynthesis;
       let finished = false;
-      const finish = () => {
+      let started = false;
+      const finish = (spoken: boolean) => {
         if (finished) return;
         finished = true;
         clearTimeout(watchdog);
-        done();
+        done(spoken);
       };
       // Kept in a variable: Chrome drops onend when the utterance is garbage collected.
       utterance = new SpeechSynthesisUtterance(text);
@@ -44,11 +45,14 @@ function browserEngine(): SpeechEngine {
       const voices = synth.getVoices();
       const voice = voices.find((v) => v.lang === locale) ?? voices.find((v) => v.lang.startsWith(locale.slice(0, 2)));
       if (voice) utterance.voice = voice;
-      utterance.onend = finish;
-      utterance.onerror = finish;
+      utterance.onstart = () => {
+        started = true;
+      };
+      utterance.onend = () => finish(started);
+      utterance.onerror = () => finish(false);
       if (synth.paused) synth.resume();
       synth.speak(utterance);
-      watchdog = setTimeout(finish, speechWatchdogMs(text));
+      watchdog = setTimeout(() => finish(false), speechWatchdogMs(text));
     },
     cancel() {
       clearTimeout(watchdog);
