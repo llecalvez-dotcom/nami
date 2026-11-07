@@ -14,7 +14,7 @@ import { hostOf } from "@/lib/official-sites";
 import { tripStatus, visaSteps, type MapCountry } from "@/lib/trip-progress";
 import { isAgentActive, stopAgent, type Trip } from "@/lib/trip-state";
 import { saveTrip } from "@/lib/trip-store";
-import { addWish, removeWish } from "@/lib/wishlist-store";
+import { addWish, removeWish, useWishlist } from "@/lib/wishlist-store";
 
 function LivePapersButton({ iso2, destination }: { iso2: string; destination: string }) {
   const [query, setQuery] = useState<PapersQuery | null>(null);
@@ -169,6 +169,7 @@ export function CountryPanel({
 
   const name = countryName(iso2);
   const status = country?.status ?? null;
+  const wished = useWishlist().includes(iso2);
 
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center md:items-center md:justify-end md:p-6" role="presentation">
@@ -217,6 +218,16 @@ export function CountryPanel({
           {country?.trips.map((trip) => (
             <TripBlock key={trip.id} trip={trip} />
           ))}
+
+          {wished && status !== "wish" ? (
+            <button
+              type="button"
+              onClick={() => removeWish(iso2)}
+              className="flex h-11 w-full items-center justify-center gap-2 rounded-full text-sm font-medium text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 className="size-4" /> Remove from wishlist
+            </button>
+          ) : null}
 
           {status === "wish" || status === null ? (
             <div className="space-y-4">
