@@ -36,4 +36,14 @@ Léon (front et conversation), Clément (agent H), Ali (papiers et intelligence)
 
 ## Lancer l'application
 
-À compléter par le ticket 01 (`npm install`, `npm run dev`, `npm test`).
+Prérequis : Node.js 20 ou plus récent.
+
+```bash
+npm install
+cp .env.example .env.local   # puis renseigner les clés (jamais commitées)
+npm run dev                  # http://localhost:3000
+npm test                     # tests unitaires (vitest)
+npm run build && npm start   # version de démo, sur le portable
+```
+
+L'état des voyages vit dans le `localStorage` du navigateur. Le voyage « Bali » de l'accueil est une donnée d'exemple (marquée « Sample data ») ; le bouton « Reset » le remet à zéro.
