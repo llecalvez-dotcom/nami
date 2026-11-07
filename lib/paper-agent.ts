@@ -80,6 +80,7 @@ export const PaperStartSchema = z.object({
   local_session_id: LOCAL_SESSION_ID,
   document_id: z.string().min(1).max(100).optional(),
   idempotency_key: z.uuid().optional(),
+  resume: z.literal(true).optional(),
   file_paths: z.array(z.string().trim().min(1).max(500)).max(10).default([]),
 });
 export type PaperStart = z.infer<typeof PaperStartSchema>;

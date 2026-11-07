@@ -14,7 +14,7 @@ export function createVisaStartAttempt(
   const serialized = JSON.stringify(input);
   const previous = options.scope === undefined ? undefined : unsettled.get(options.scope);
   const key = previous?.input === serialized ? previous.key : (options.uuid ?? (() => crypto.randomUUID()))();
-  const payload = JSON.stringify({ ...input, idempotency_key: key });
+  const payload = JSON.stringify({ ...input, idempotency_key: key, ...(previous?.input === serialized ? { resume: true } : {}) });
   const settle = (ambiguous: boolean) => {
     if (options.scope === undefined) return;
     if (ambiguous) unsettled.set(options.scope, { input: serialized, key });
@@ -32,7 +32,7 @@ export function createVisaStartAttempt(
     }
     const body = await response.json().catch(() => null) as { session_id?: string; error?: string } | null;
     if (!response.ok || !body?.session_id) {
-      settle(!response.ok && AMBIGUOUS(response.status));
+      settle(response.ok || AMBIGUOUS(response.status));
       throw new Error(body?.error ?? `The agent could not start (${response.status}).`);
     }
     settle(false);

@@ -50,6 +50,8 @@ describe("visa start attempts", () => {
     const keys = fetch.mock.calls.map(keyOf);
     expect(keys.slice(0, 3)).toEqual([keys[0], keys[0], keys[0]]);
     expect(new Set(keys.slice(3)).size).toBe(2);
+    const resumed = fetch.mock.calls.map((call) => JSON.parse((call[1] as RequestInit).body as string).resume ?? false);
+    expect(resumed).toEqual([false, true, true, false, false]);
     expect(keys[3]).not.toBe(keys[0]);
   });
 
@@ -63,5 +65,17 @@ describe("visa start attempts", () => {
     await createVisaStartAttempt({ paper_id: "evoa", a: 2 }, { fetch, uuid, scope: "trip-1" })();
     const keys = fetch.mock.calls.map((call) => JSON.parse((call[1] as RequestInit).body as string).idempotency_key);
     expect(keys[0]).not.toBe(keys[1]);
+  });
+
+  it("keeps the key when a successful response body is lost", async () => {
+    resetVisaStartAttempts();
+    let n = 0;
+    const uuid = () => `00000000-0000-4000-8000-00000000000${++n}`;
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(new Response("{", { status: 201 }))
+      .mockResolvedValueOnce(Response.json({ session_id: "s-1" }, { status: 201 }));
+    await expect(createVisaStartAttempt({ paper_id: "evoa" }, { fetch, uuid, scope: "trip-1" })()).rejects.toThrow();
+    expect(await createVisaStartAttempt({ paper_id: "evoa" }, { fetch, uuid, scope: "trip-1" })()).toBe("s-1");
+    const bodies = fetch.mock.calls.map((call) => JSON.parse((call[1] as RequestInit).body as string));
+    expect(bodies[1]).toMatchObject({ idempotency_key: bodies[0].idempotency_key, resume: true });
   });
 });

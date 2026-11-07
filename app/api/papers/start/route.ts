@@ -50,7 +50,7 @@ async function start(request: Request): Promise<Response> {
     ? input.data.file_paths
     : [...new Set([...input.data.file_paths, ...documentPaths])];
   // A keyed retry may belong to a session that already holds the last slot: let H return it.
-  if (input.data.idempotency_key === undefined) {
+  if (!(input.data.resume && input.data.idempotency_key)) {
     try {
       if (await getAvailableSessionSlots() <= 0) return fail(H_SLOTS_BUSY, 429);
     } catch {}
