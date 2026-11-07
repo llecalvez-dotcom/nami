@@ -71,14 +71,22 @@ async function uploadPassport(confirmedPath: string, connect: (port: number) => 
       expression: `(() => {
         const domain = ${JSON.stringify(domain)};
         if (location.hostname !== domain && !location.hostname.endsWith("." + domain)) return "no official tab";
-        const inputs = [...document.querySelectorAll('input[type="file"]')];
-        const visible = inputs.filter(input => {
+        const inputs = [...document.querySelectorAll('input[type="file"]')].filter(input => !input.disabled);
+        const isVisible = input => {
           const style = getComputedStyle(input);
           return input.getClientRects().length > 0 && style.visibility === "visible"
             && style.display !== "none" && style.opacity !== "0";
-        });
-        const input = visible.length === 1 ? visible[0] : inputs.length === 1 ? inputs[0] : null;
-        return input && !input.disabled ? input : null;
+        };
+        const describe = input => [
+          input.id, input.name, input.className, input.getAttribute && input.getAttribute("accept"),
+          input.getAttribute && input.getAttribute("aria-label"), input.getAttribute && input.getAttribute("data-name"),
+          ...[...(input.labels || [])].map(label => label.textContent),
+        ].filter(Boolean).map(String).join(" ").toLowerCase();
+        const candidates = inputs.filter(input => !/photo|picture|selfie|face|crop/.test(describe(input)));
+        const passport = candidates.filter(input => /pas+por/.test(describe(input)));
+        const pool = passport.length > 0 ? passport : candidates;
+        const shown = pool.filter(isVisible);
+        return shown.length === 1 ? shown[0] : pool.length === 1 ? pool[0] : null;
       })()`,
       objectGroup: "nami-passport-upload",
     }, targetSession) as RemoteResult;

@@ -28,11 +28,18 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-function mockChrome(visibility: boolean[], nativeEvents = true, hostname = DOMAIN) {
+type MockInput = boolean | { visible?: boolean; id?: string; name?: string; className?: string; label?: string; disabled?: boolean };
+
+function mockChrome(specs: MockInput[], nativeEvents = true, hostname = DOMAIN) {
   const objects = new Map<string, unknown>();
-  const inputs = visibility.map((visible, index) => {
+  const inputs = specs.map((spec, index) => {
+    const meta = typeof spec === "boolean" ? { visible: spec } : spec;
+    const visible = meta.visible ?? false;
     const input = Object.assign(new EventTarget(), {
-      visible, disabled: false, isConnected: true, files: [] as string[],
+      visible, disabled: meta.disabled ?? false, isConnected: true, files: [] as string[],
+      id: meta.id ?? "", name: meta.name ?? "", className: meta.className ?? "",
+      labels: meta.label ? [{ textContent: meta.label }] : [],
+      getAttribute: () => null,
       matches: (selector: string) => selector === 'input[type="file"]',
       getClientRects: () => visible ? [{}] : [],
     });
@@ -125,6 +132,37 @@ describe("session-bound CDP passport upload", () => {
     expect(await uploadSessionDocument("session-1", CALL, chrome.connect)).toBe("uploaded");
     const selected = values.indexOf(true) >= 0 ? values.indexOf(true) : 0;
     expect(chrome.inputs[selected].files).toEqual([path]);
+  });
+
+  const EVOA_INPUTS: MockInput[] = [
+    { id: "initial_file", visible: true },
+    { id: "path_attachment", className: "file-attachment" },
+    { id: "path_attachment_crop" },
+    { id: "passport-attachment", className: "file-attachment-pasport" },
+    { id: "picture", label: "Passport photo" },
+  ];
+
+  it("picks the passport input among the five e-VOA file inputs, even hidden in a modal", async () => {
+    const chrome = mockChrome(EVOA_INPUTS);
+    expect(await uploadSessionDocument("session-1", CALL, chrome.connect)).toBe("uploaded");
+    expect(chrome.inputs[3].files).toEqual([path]);
+    expect(chrome.inputs.filter((input) => input.files.length > 0)).toHaveLength(1);
+  });
+
+  it("prefers the visible passport input when several match, and refuses an unresolved tie", async () => {
+    const two = mockChrome([{ name: "passport_scan" }, { name: "passport_scan_2", visible: true }]);
+    expect(await uploadSessionDocument("session-1", CALL, two.connect)).toBe("uploaded");
+    expect(two.inputs[1].files).toEqual([path]);
+    bindSessionDocument("session-1", path);
+    const tie = mockChrome([{ id: "passport_a" }, { id: "passport_b" }]);
+    expect(await uploadSessionDocument("session-1", CALL, tie.connect)).toBe("no file input found");
+    expect(tie.send.mock.calls.some(([method]) => method === "DOM.setFileInputFiles")).toBe(false);
+  });
+
+  it("never drops the passport into a photo, picture or disabled input", async () => {
+    const chrome = mockChrome([{ id: "picture", label: "Passport photo", visible: true }, { id: "passport-attachment", disabled: true }]);
+    expect(await uploadSessionDocument("session-1", CALL, chrome.connect)).toBe("no file input found");
+    expect(chrome.send.mock.calls.some(([method]) => method === "DOM.setFileInputFiles")).toBe(false);
   });
 
   it("dispatches input and change only when CDP did not already fire them", async () => {
