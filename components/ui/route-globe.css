@@ -1,0 +1,51 @@
+.rg {
+  position: relative;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+}
+.rg__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+.rg[data-dragging] .rg__canvas {
+  cursor: grabbing;
+}
+.rg[data-pointing] .rg__canvas {
+  cursor: pointer;
+}
+.rg__tip {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #151a33;
+  font-size: 12px;
+  line-height: 1.3;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 14px));
+  box-shadow: 0 12px 32px -12px rgb(21 26 51 / 0.25), 0 1px 2px rgb(21 26 51 / 0.06);
+}
+.rg__tip strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.rg__tip span {
+  color: var(--rg-muted);
+}
+.rg__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
