@@ -88,10 +88,8 @@ agent_chrome_running() {
   pid="$(lsof -nP -iTCP:"$PORT" -sTCP:LISTEN -t 2> /dev/null | sed -n 1p || true)"
   [ -n "$pid" ] || return 1
   args="$(ps -o args= -p "$pid" 2> /dev/null || true)"
-  case " $args " in
-    *" --remote-debugging-port=$PORT "*" --user-data-dir=$PROFILE "* | \
-      *" --user-data-dir=$PROFILE "*" --remote-debugging-port=$PORT "*) return 0 ;;
-  esac
+  case " $args " in *" --remote-debugging-port=$PORT "*) ;; *) return 1 ;; esac
+  case " $args " in *" --user-data-dir=$PROFILE "*) return 0 ;; esac
   return 1
 }
 
@@ -171,11 +169,11 @@ INFO
 
 # --- 3. Nami
 cd "$ROOT"
-if home="$(curl -fsS --max-time 5 http://localhost:3000 2> /dev/null)"; then
-  case "$home" in
-    *"Nami prepares your trip"*) ;;
-    *) die "Port 3000 is used by another app. Stop it, then run the script again." ;;
-  esac
+# Any HTTP answer means the port is taken; -L follows the /access redirect of a protected Nami.
+status="$(curl -sSL --max-time 5 -o "$LOG_DIR/port-3000.html" -w '%{http_code}' http://localhost:3000 2> /dev/null || true)"
+if [ -n "$status" ] && [ "$status" != "000" ]; then
+  grep -qF "Nami prepares your trip" "$LOG_DIR/port-3000.html" ||
+    die "Port 3000 is used by another app. Stop it, then run the script again."
   say "Nami already runs on http://localhost:3000: keeping only the H bridge alive. Ctrl+C to stop it."
   wait "$BRIDGE_PID" || exit 1
   exit 0
