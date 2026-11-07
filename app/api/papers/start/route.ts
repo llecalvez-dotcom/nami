@@ -49,9 +49,12 @@ async function start(request: Request): Promise<Response> {
   const filePaths = input.data.document_id === undefined
     ? input.data.file_paths
     : [...new Set([...input.data.file_paths, ...documentPaths])];
-  try {
-    if (await getAvailableSessionSlots() <= 0) return fail(H_SLOTS_BUSY, 429);
-  } catch {}
+  // A keyed retry may belong to a session that already holds the last slot: let H return it.
+  if (input.data.idempotency_key === undefined) {
+    try {
+      if (await getAvailableSessionSlots() <= 0) return fail(H_SLOTS_BUSY, 429);
+    } catch {}
+  }
   try {
     const session = await createSession({
       task: buildPilotTask({ ...input.data, file_paths: filePaths }),

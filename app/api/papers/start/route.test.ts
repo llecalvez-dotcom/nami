@@ -102,7 +102,16 @@ describe("quota and idempotency", () => {
     const response = await start({ ...BODY, idempotency_key: key });
     expect(response.status).toBe(429);
     expect(await response.json()).toEqual({ error: "All H agent slots are busy. Stop another agent or wait, then try again." });
-    expect(fetch).toHaveBeenCalledTimes(4);
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch.mock.calls.some(([url]) => String(url).endsWith("/quota"))).toBe(false);
+  });
+
+  it("lets a keyed retry reach H even when no slot is free, so H can return the original session", async () => {
+    fetch.mockImplementation(async (url: string) => url.endsWith("/quota") ? Response.json({ available: 0 })
+      : Response.json({ id: "s-1", status: { status: "running" } }, { status: 201 }));
+    const response = await start({ ...BODY, idempotency_key: key });
+    expect(response.status).toBe(201);
+    expect((await response.json()).session_id).toBe("s-1");
   });
 });
 
