@@ -21,7 +21,7 @@ export type BaliPaper = {
 export const BALI_PAPERS: readonly BaliPaper[] = [
   {
     id: "evoa",
-    name: "e-VOA — B1 Tourist Visa On Arrival",
+    name: "e-VOA: B1 Tourist Visa On Arrival",
     short_name: "Visa (e-VOA)",
     official_cost: "IDR 500,000",
     official_url: "https://evisa.imigrasi.go.id/web/visa-selection",

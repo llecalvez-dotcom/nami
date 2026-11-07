@@ -21,6 +21,34 @@ describe("TripRequest", () => {
     expect(TripRequestSchema.safeParse(tripWithoutCountry).success).toBe(false);
     expect(TripRequestSchema.safeParse({ ...SAMPLE_TRIP, country_iso2: null }).success).toBe(false);
   });
+
+  it("accepts an unknown return_date", () => {
+    const withoutReturn: Partial<TripRequest> = { ...SAMPLE_TRIP };
+    delete withoutReturn.return_date;
+    expect(TripRequestSchema.parse({ ...SAMPLE_TRIP, return_date: null }).return_date).toBeNull();
+    expect(TripRequestSchema.parse(withoutReturn).return_date).toBeNull();
+  });
+
+  it('defaults status to "planning"', () => {
+    const withoutStatus: Partial<TripRequest> = { ...SAMPLE_TRIP };
+    delete withoutStatus.status;
+    expect(TripRequestSchema.parse(withoutStatus).status).toBe("planning");
+    expect(TripRequestSchema.parse({ ...SAMPLE_TRIP, status: null }).status).toBe("planning");
+    expect(TripRequestSchema.parse({ ...SAMPLE_TRIP, status: "booked" }).status).toBe("booked");
+    expect(TripRequestSchema.safeParse({ ...SAMPLE_TRIP, status: "" }).success).toBe(false);
+  });
+
+  it("turns a complete draft without return_date nor status into a strict request", () => {
+    const draft = TripRequestDraftSchema.parse({
+      ...SAMPLE_DRAFT,
+      arrival_at: SAMPLE_TRIP.arrival_at,
+      return_date: null,
+      status: null,
+    });
+    const strict = TripRequestSchema.safeParse(draft);
+    expect(strict.success).toBe(true);
+    expect(strict.data).toMatchObject({ return_date: null, status: "planning" });
+  });
 });
 
 describe("TripRequestDraft", () => {

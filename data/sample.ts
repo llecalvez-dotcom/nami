@@ -71,7 +71,7 @@ export const SAMPLE_AGENT_RUN: AgentRun = {
 
 export const SAMPLE_AGENT_STEPS: string[] = [
   "Opened evisa.imigrasi.go.id",
-  "Selected B1 — Tourist (Visa On Arrival)",
+  "Selected B1: Tourist (Visa On Arrival)",
   "Uploaded passport scan and photo",
   "Filled in identity from the passport",
   "Filled in arrival date from your request",

@@ -24,9 +24,17 @@ type TripFieldKey = keyof typeof tripFields;
 
 export const TRIP_FIELDS = Object.keys(tripFields) as TripFieldKey[];
 
+export const DEFAULT_TRIP_STATUS = "planning";
+
 export const TripRequestSchema = z.object({
   raw_text: z.string().min(1),
   ...tripFields,
+  // Not asked by the agent, so it may stay unknown. The "passport valid 6 months" rule uses
+  // return_date when known, otherwise arrival_at + 30 days (length of the e-VOA stay).
+  return_date: tripFields.return_date.nullable().default(null),
+  status: tripFields.status
+    .nullish()
+    .transform((status) => status ?? DEFAULT_TRIP_STATUS),
 });
 export type TripRequest = z.infer<typeof TripRequestSchema>;
 

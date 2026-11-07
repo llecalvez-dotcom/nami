@@ -165,7 +165,7 @@ export function answerQuestion(trip: Trip, itemId: string, value: string, label:
         pending_question: undefined,
         result: { summary: "Reached the payment screen. Nothing clicked on it.", filled_fields: SAMPLE_FILLED_FIELDS },
       },
-      agent_steps: [...answered.agent_steps, "Typed the contact e-mail", "Reached the payment screen — stopped, nothing clicked"],
+      agent_steps: [...answered.agent_steps, "Typed the contact e-mail", "Reached the payment screen, stopped, nothing clicked"],
       formalities: answered.formalities.map((f) => (f.id === "evoa" ? { ...f, status: "pending_approval" } : f)),
       modules: setModule(answered.modules, "flights", "suggested"),
     },

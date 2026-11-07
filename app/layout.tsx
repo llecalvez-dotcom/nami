@@ -20,7 +20,7 @@ const editorial = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "Nami — Don't just plan my trip. Make it happen.",
+  title: "Nami · Don't just plan my trip. Make it happen.",
   description: "Nami prepares your trip: entry papers, flights, hotels. You check, you validate.",
 };
 
