@@ -473,9 +473,12 @@ export function askUserFromAgent(trip: Trip, call: ToolRequest, secrets: readonl
   if (shown || isToolHandled(trip, call)) return trip;
   const question = redact(typeof call.args.question === "string" && call.args.question.trim() ? call.args.question : "The agent needs your help in Chrome.", secrets);
   const field = typeof call.args.field === "string" ? call.args.field : "";
+  // Stored in localStorage: string args are masked like the question. The raw call stays in memory (use-agent-run).
+  const args = Object.fromEntries(Object.entries(call.args).map(([k, v]) => [k, typeof v === "string" ? redact(v, secrets) : v]));
   return push(withRun(trip, { pending_question: { tool_req: key, question, field } }), {
     kind: "agent_question",
-    tool_req: call,
+    // id kept as the raw key, so the masked copy still matches the call H sent.
+    tool_req: { ...call, args, id: key },
     question,
     field,
     answer: null,

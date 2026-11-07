@@ -1,3 +1,4 @@
+import { toolCallKey } from "@/lib/agent-changes";
 import { describe, expect, it } from "vitest";
 import { freshToolCalls, redact, toAgentChanges, type AgentChanges } from "@/lib/agent-changes";
 import { TripRequestDraftSchema } from "@/lib/contracts";
@@ -111,6 +112,16 @@ describe("ask_user", () => {
     expect(answered.agent_run?.pending_question).toBeUndefined();
     expect(answerAgentQuestion(answered, cards[0].id, "other@example.com")).toBe(answered);
     expect(askUserFromAgent(answered, ASK, SECRETS)).toBe(answered);
+  });
+
+  it("never stores the raw passport number in the saved tool call", () => {
+    const call = { tool_name: "ask_user", args: { question: "Is 24AB12345 your passport number?", field: "passport" }, id: null };
+    const trip = askUserFromAgent(liveTrip(), call, SECRETS);
+    expect(JSON.stringify(trip)).not.toContain("24AB12345");
+    const card = trip.conversation.findLast((i) => i.kind === "agent_question")!;
+    expect(card.kind === "agent_question" && card.tool_req.id).toBe(toolCallKey(call));
+    expect(trip.agent_run?.pending_question?.tool_req).toBe(toolCallKey(call));
+    expect(askUserFromAgent(trip, call, SECRETS)).toBe(trip);
   });
 
   it("reopens the card when the answer could not be sent", () => {

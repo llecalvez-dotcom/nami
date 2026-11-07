@@ -42,8 +42,18 @@ function toolRequests(value: unknown): ToolRequest[] {
     : [];
 }
 
+// FNV-1a: calls without an id are keyed by a digest, so a stored key never carries the args (passport data).
+function digest(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
 export function toolCallKey(call: ToolRequest): string {
-  return call.id ?? `${call.tool_name}:${JSON.stringify(call.args)}`;
+  return call.id ?? `${call.tool_name}:${digest(JSON.stringify(call.args))}`;
 }
 
 function uniqueCalls(calls: ToolRequest[]): ToolRequest[] {

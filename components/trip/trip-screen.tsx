@@ -12,7 +12,7 @@ import { Dossier } from "@/components/trip/dossier";
 import { useLivePapers } from "@/components/trip/live-papers";
 import { PassportCard } from "@/components/trip/passport-card";
 import { TryAnotherCountry } from "@/components/trip/try-another-country";
-import { cancelAgent, sendAgentAnswer, useAgentRun } from "@/components/trip/use-agent-run";
+import { cancelAgent, rawToolReq, sendAgentAnswer, useAgentRun } from "@/components/trip/use-agent-run";
 import { SAMPLE_TRIP_ID } from "@/data/sample";
 import { requestTripParse } from "@/lib/trip-parse-client";
 import type { PassportFields } from "@/lib/contracts";
@@ -117,7 +117,7 @@ export function TripScreen({ id }: { id: string }) {
     if (answered === current || item?.kind !== "agent_question" || !current.agent_run) return;
     update(answered);
     try {
-      await sendAgentAnswer(current.agent_run.session_id, item.tool_req, value);
+      await sendAgentAnswer(current.agent_run.session_id, rawToolReq(item.tool_req), value);
     } catch {
       update(reopenAgentQuestion(latest(), itemId));
     }
