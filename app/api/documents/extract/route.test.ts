@@ -13,12 +13,16 @@ const SPECIMEN = {
   confidence: { surname: 0.9 },
 };
 
-function form(image: Blob | null, extra: Record<string, string> = {}, consentProvider: string | null = "h") {
+async function form(image: Blob | null, extra: Record<string, string> = {}, consentProvider: string | null = "h") {
   const body = new FormData();
   if (image) body.set("image", image, "specimen.jpg");
   if (consentProvider !== null) body.set("consent_provider", consentProvider);
   for (const [k, v] of Object.entries(extra)) body.set(k, v);
-  return POST(new Request("http://localhost/api/documents/extract", { method: "POST", body }));
+  const source = new Request("http://localhost/api/documents/extract", { method: "POST", body });
+  const bytes = await source.arrayBuffer();
+  const headers = new Headers(source.headers);
+  headers.set("content-length", String(bytes.byteLength));
+  return POST(new Request(source.url, { method: "POST", headers, body: bytes }));
 }
 
 const jpeg = (bytes = 16) => new Blob([new Uint8Array(bytes)], { type: "image/jpeg" });
@@ -112,6 +116,18 @@ describe("POST /api/documents/extract (route 12)", () => {
     vi.stubGlobal("fetch", fetch);
     expect((await form(image)).status).toBe(status);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("requires a content length for multipart uploads", async () => {
+    const request = new Request("http://localhost/api/documents/extract", {
+      method: "POST",
+      headers: { "content-type": "multipart/form-data; boundary=test" },
+      body: "--test--",
+    });
+    expect(request.headers.has("content-length")).toBe(false);
+    const response = await POST(request);
+    expect(response.status).toBe(411);
+    expect(await response.json()).toEqual({ error: "Length required." });
   });
 
   it("answers 503 when passport reading is off by default", async () => {

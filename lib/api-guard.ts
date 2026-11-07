@@ -53,6 +53,9 @@ function clientKey(request: Request, route: ApiRoute): string {
 
 export function guard(request: Request, route: ApiRoute, now: () => number = Date.now): GuardResult {
   const contentLength = request.headers.get("content-length");
+  if (contentLength === null && (route === "extract" || route === "transcribe")) {
+    return Response.json({ error: "Length required." }, { status: 411 });
+  }
   if (contentLength !== null && (!/^\d+$/.test(contentLength) || Number(contentLength) > API_LIMITS[route])) return tooLarge();
 
   const timestamp = now();
@@ -86,13 +89,45 @@ export function guard(request: Request, route: ApiRoute, now: () => number = Dat
 }
 
 export async function readJsonLimited(request: Request, maxBytes: number): Promise<{ value: unknown } | Response> {
-  let text: string;
+  const stream = request.body;
+  if (!stream) return { value: null };
+
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
   try {
-    text = await request.text();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        try {
+          await reader.cancel();
+        } catch {
+          // Ignore stream cancellation errors; the request is already rejected.
+        }
+        return tooLarge();
+      }
+      chunks.push(value);
+    }
   } catch {
+    try {
+      await reader.cancel();
+    } catch {
+      // Ignore stream cancellation errors; the request body is unusable.
+    }
     return { value: null };
+  } finally {
+    reader.releaseLock();
   }
-  if (new TextEncoder().encode(text).byteLength > maxBytes) return tooLarge();
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  const text = new TextDecoder().decode(bytes);
   try {
     return { value: JSON.parse(text) as unknown };
   } catch {

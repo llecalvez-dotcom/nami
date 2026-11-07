@@ -20,9 +20,49 @@ describe("api guard size limits", () => {
   });
 
   it("checks the actual JSON text size", async () => {
-    const result = await readJsonLimited(new Request("http://localhost", { method: "POST", body: "1234" }), 3);
+    const chunks = Array.from({ length: 9 }, () => new Uint8Array(2048));
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        const chunk = chunks.shift();
+        if (chunk) controller.enqueue(chunk);
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+    const streamed = new Request("http://localhost", {
+      method: "POST",
+      body,
+      duplex: "half",
+    } as RequestInit);
+    const result = await readJsonLimited(streamed, API_LIMITS.parse);
     expect(result).toBeInstanceOf(Response);
     expect((result as Response).status).toBe(413);
+    expect(cancelled).toBe(true);
+  });
+
+  it("parses a small streamed JSON body and treats a null body as null", async () => {
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"ok":'));
+        controller.enqueue(new TextEncoder().encode("true}"));
+        controller.close();
+      },
+    });
+    const streamed = new Request("http://localhost", {
+      method: "POST",
+      body,
+      duplex: "half",
+    } as RequestInit);
+    expect(await readJsonLimited(streamed, 32)).toEqual({ value: { ok: true } });
+    expect(await readJsonLimited(new Request("http://localhost"), 32)).toEqual({ value: null });
+  });
+
+  it("requires content length on multipart routes", () => {
+    const requestWithoutLength = request({ "content-type": "multipart/form-data; boundary=test" });
+    expect(guard(requestWithoutLength, "extract")).toBeInstanceOf(Response);
+    expect((guard(requestWithoutLength, "transcribe") as Response).status).toBe(411);
   });
 });
 
