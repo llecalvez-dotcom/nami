@@ -32,6 +32,11 @@ Lis la note `docs/specs/2026-11-07-cadrage-devin.md`, sections 2 (module Papiers
    - Quand `ask_user` arrive : la question s'affiche dans la conversation et passe par `VoiceAnswer` (ticket 04) ; la réponse part par la route `answer` ; un même `id` d'appel n'est jamais répondu deux fois.
    - Quand `report_ready` arrive : répondre `"ok"`, l'e-VOA passe en « Pending approval » et l'agent écrit « Visa pre-filled in Chrome, stopped before payment. Check every field, then pay yourself. » avec `filled_fields`.
 5. **Données sensibles** (section 4.9) : la consigne ne contient le numéro de passeport que pour l'agent ; l'interface en mode `?demo=1` le masque ; rien n'est écrit dans les journaux du serveur (pas de `console.log` de la consigne, du passeport ni des réponses de l'agent).
+6. **Garde-fous techniques côté serveur** (en plus des consignes, qui ne bloquent rien à elles seules) :
+   - **Arrêt hors du domaine officiel** : à chaque lot d'événements reçu par la route `changes`, le serveur lit l'adresse de la page où se trouve l'agent. Si son hôte n'est ni le domaine officiel du papier ni l'un de ses sous-domaines, il appelle aussitôt `cancelSession` et l'interface affiche « Agent stopped: it left the official site ([hôte]). » Lire dans la doc de l'API H quel événement porte l'adresse de la page ; si aucun ne la porte, le dire dans la PR au lieu de deviner.
+   - **« Stop agent » arrête vraiment la session H** (`DELETE /sessions/{id}`), pas seulement l'état local, et l'état renvoyé ensuite par `changes` le confirme.
+   - On ne peut pas bloquer un clic avant qu'il parte (c'est l'agent qui clique) : l'arrêt avant paiement repose sur la consigne, l'arrêt hors domaine et la main humaine sur « Stop agent ».
+   - Les nouvelles routes sont sous `/api`, donc derrière le code d'accès de `proxy.ts` (PR #12). Si `lib/api-guard.ts` est fusionné, l'appliquer à `papers/start` (quota bas, une session à la fois) mais pas à `changes`, interrogée en boucle pendant toute la session.
 
 ## Tests (vitest, API H simulée, aucun appel réseau)
 
@@ -39,13 +44,15 @@ Lis la note `docs/specs/2026-11-07-cadrage-devin.md`, sections 2 (module Papiers
 - `changes` : 204 géré ; `answer` reçue après l'état terminal ; `pending_tool_calls` avec un `id` déjà traité ignoré.
 - `answer` et `cancel` : appels conformes.
 - La consigne contient les boutons interdits et la condition d'arrêt du papier.
+- Un événement dont l'adresse est hors du domaine officiel (exemple : `https://pay.example.com/checkout` pendant l'e-VOA) déclenche `cancelSession` une seule fois ; un sous-domaine du domaine officiel ne la déclenche pas.
+- `cancel` appelle bien `DELETE /sessions/{id}`.
 
 ## Test réel (Clément, sur son portable, avec l'accord écrit du titulaire du passeport)
 
 1. Chrome dédié lancé avec un profil à part (section 4.6), puis `holo local browser` ; copier l'identifiant dans « Local browser session ».
 2. Fichiers du passeport et de la photo dans `private/` ; chemins dans « Files ».
 3. Demande « Je pars à Bali lundi… », réponses aux questions, « Prepare my entry papers », « Create my visa ».
-4. Vérifier : l'agent remplit l'e-VOA étape par étape dans le Chrome visible, dépose les fichiers (sinon il demande à l'humain de les choisir, test F8), pose une question à l'oral, et **s'arrête sur l'écran de paiement sans rien cliquer**. Garder la main sur « Stop agent ».
+4. Vérifier : l'agent remplit l'e-VOA étape par étape dans le Chrome visible, dépose les fichiers (sinon il demande à l'humain de les choisir, test F8), pose une question à l'oral, et **s'arrête sur l'écran de paiement sans rien cliquer**. Garder la main sur « Stop agent ». Une fois sur trois, cliquer « Stop agent » en cours de route et vérifier que l'agent s'arrête vraiment dans Chrome.
 5. 3 passages sur 3, durée et coût notés dans `docs/tests/f1-evoa.md`.
 
 ## Critère de fin
