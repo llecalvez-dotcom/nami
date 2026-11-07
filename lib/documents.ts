@@ -11,17 +11,21 @@ export type FoundDocument = {
   score: number;
 };
 
-export type DocumentKind = "passport" | "photo";
+export type DocumentKind = "passport" | "photo" | "return_ticket";
+export const DOCUMENT_KINDS: readonly DocumentKind[] = ["passport", "photo", "return_ticket"];
 type Entry = { root: string; path: string; kind: DocumentKind };
 const shared = globalThis as typeof globalThis & { namiDocuments?: Map<string, Entry> };
 const store = () => shared.namiDocuments ??= new Map<string, Entry>();
 const TYPES = new Set([".jpg", ".jpeg", ".png", ".heic", ".pdf"]);
 // The identity photo goes straight to the official site, which accepts images only.
 const PHOTO_TYPES = new Set([".jpg", ".jpeg", ".png"]);
+// The e-VOA return ticket field accepts application/pdf only: an image is never offered there.
+const RETURN_TICKET_TYPES = new Set([".pdf"]);
+const TYPES_BY_KIND: Record<DocumentKind, Set<string>> = { passport: TYPES, photo: PHOTO_TYPES, return_ticket: RETURN_TICKET_TYPES };
 const MAX_BYTES = 10 * 1024 * 1024;
 
 export function isDocumentKind(value: string | null): value is DocumentKind {
-  return value === "passport" || value === "photo";
+  return DOCUMENT_KINDS.includes(value as DocumentKind);
 }
 
 export function documentsEnabled(env: Record<string, string | undefined> = process.env): boolean {
@@ -35,6 +39,10 @@ function inside(root: string, path: string): boolean {
 
 function scoreName(name: string, kind: DocumentKind): number {
   const normalized = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (kind === "return_ticket") {
+    return (/billet|ticket|retour|return|flight|vol[-_.]|[-_]vol\b|boarding|itinerai?r/.test(normalized) ? 100 : 0)
+      - (/passport|passeport|pasaporte|reisepass|photo/.test(normalized) ? 50 : 0);
+  }
   if (kind === "photo") {
     return (/photo|portrait|identite|identity/.test(normalized) ? 100 : 0)
       + (/\bid\b|id[-_.]|[-_]id/.test(normalized) ? 10 : 0)
@@ -49,7 +57,7 @@ export async function findDocuments(kind: DocumentKind = "passport"): Promise<Fo
   const current = store();
   for (const [id, entry] of current) if (entry.kind === kind) current.delete(id);
   if (!documentsEnabled()) return [];
-  const types = kind === "photo" ? PHOTO_TYPES : TYPES;
+  const types = TYPES_BY_KIND[kind];
   const root = await realpath(process.env.NAMI_DOCUMENTS_DIR!);
   const candidates: (Omit<FoundDocument, "id"> & { path: string })[] = [];
   async function scan(directory: string, depth: number) {
@@ -87,6 +95,10 @@ export async function findDocuments(kind: DocumentKind = "passport"): Promise<Fo
     current.set(id, { root, path, kind });
     return { id, ...file };
   });
+}
+
+export function allowedDocumentType(path: string, kind: DocumentKind): boolean {
+  return TYPES_BY_KIND[kind].has(extname(path).toLowerCase());
 }
 
 // Without a kind (previews), any token resolves; the start route asks for the kind it binds.

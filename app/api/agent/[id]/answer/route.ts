@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { sendToolResult } from "@/lib/h-agent";
-import { fail, hErrorResponse, SESSION_ID } from "@/lib/paper-agent";
+import { fail, hErrorResponse, SESSION_ID, UPLOAD_PURPOSES } from "@/lib/paper-agent";
 import { uploadSessionDocument } from "@/lib/agent-passport-upload";
 
 const AnswerSchema = z.object({
@@ -19,7 +19,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/agent/[id]/
   const input = AnswerSchema.safeParse(await request.json().catch(() => null));
   if (!input.success) return fail("Invalid answer.", 400);
   if (input.data.tool_req.tool_name === "upload_file"
-    && !z.object({ purpose: z.enum(["passport", "photo"]) }).strict().safeParse(input.data.tool_req.args).success) {
+    && !z.object({ purpose: z.enum(UPLOAD_PURPOSES) }).strict().safeParse(input.data.tool_req.args).success) {
     return fail("Invalid upload request.", 400);
   }
   try {

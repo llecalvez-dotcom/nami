@@ -21,6 +21,10 @@ export function foundPhotoText(document: FoundDocument): string {
   return `I also found your ID photo (${document.name}). Shall I use it for the visa?`;
 }
 
+export function foundReturnTicketText(document: FoundDocument): string {
+  return `I also found a PDF that looks like your return ticket (${document.name}). Shall I give it to the official site? It is required.`;
+}
+
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 function monthYear(isoDate: string): string {

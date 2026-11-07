@@ -1,24 +1,30 @@
 import { getBaliPaper } from "@/lib/bali-papers";
-import { documentsEnabled, validateDocumentPath } from "@/lib/documents";
+import { allowedDocumentType, documentsEnabled, validateDocumentPath } from "@/lib/documents";
 import { agentChromePort, connectChrome, type CdpConnection } from "@/lib/chrome-cdp";
 import { toolCallKey } from "@/lib/agent-changes";
 import { prepareUploadFile } from "@/lib/upload-scan";
 import type { ToolRequest } from "@/lib/h-agent";
 
-type UploadResult = "uploaded" | "no official tab" | "no file input found" | "several official tabs open; call ask_user" | typeof ASK_USER;
+type UploadResult = "uploaded" | "no official tab" | "no file input found" | "several official tabs open; call ask_user" | typeof ASK_USER | typeof NO_RETURN_TICKET;
 const ASK_USER = "Upload unavailable. Call ask_user so the user can upload the file themselves.";
+// No confirmed PDF ticket: the agent asks the human and never drops the passport or the photo in the Return Ticket field.
+export const NO_RETURN_TICKET = "No return ticket is confirmed in Nami. Call ask_user so the user uploads their return flight ticket (PDF) in the Return Ticket field themselves; never upload another file in its place.";
 const TTL_MS = 60 * 60 * 1000;
-export type UploadPurpose = "passport" | "photo";
-type SessionDocument = { path: string; photo?: string; expires: number; uploads: Map<string, Promise<UploadResult>> };
+export type UploadPurpose = "passport" | "photo" | "return_ticket";
+type SessionDocument = { path: string; photo?: string; returnTicket?: string; expires: number; uploads: Map<string, Promise<UploadResult>> };
 const shared = globalThis as typeof globalThis & { namiAgentDocuments?: Map<string, SessionDocument> };
 const sessions = () => shared.namiAgentDocuments ??= new Map<string, SessionDocument>();
 
-export function bindSessionDocument(sessionId: string, path: string, photo?: string): void {
+export function bindSessionDocument(sessionId: string, path: string, photo?: string, returnTicket?: string): void {
   const store = sessions();
   for (const [id, entry] of store) if (entry.expires <= Date.now()) store.delete(id);
   if (store.size >= 1000) store.delete(store.keys().next().value!);
-  store.set(sessionId, { path, ...(photo ? { photo } : {}), expires: Date.now() + TTL_MS, uploads: new Map() });
+  store.set(sessionId, {
+    path, ...(photo ? { photo } : {}), ...(returnTicket ? { returnTicket } : {}), expires: Date.now() + TTL_MS, uploads: new Map(),
+  });
 }
+
+const PURPOSES: readonly UploadPurpose[] = ["passport", "photo", "return_ticket"];
 
 function official(url: string, domain: string): boolean {
   try {
@@ -38,10 +44,11 @@ export async function uploadSessionDocument(
   connect: (port: number) => Promise<CdpConnection> = connectChrome,
 ): Promise<UploadResult> {
   const entry = sessions().get(sessionId);
-  const purpose = call.args.purpose;
-  if (!documentsEnabled() || call.tool_name !== "upload_file" || (purpose !== "passport" && purpose !== "photo")
+  const purpose = call.args.purpose as UploadPurpose;
+  if (!documentsEnabled() || call.tool_name !== "upload_file" || !PURPOSES.includes(purpose)
     || Object.keys(call.args).some((key) => key !== "purpose") || !entry || entry.expires <= Date.now()) return ASK_USER;
-  const confirmedPath = purpose === "photo" ? entry.photo : entry.path;
+  if (purpose === "return_ticket" && !entry.returnTicket) return NO_RETURN_TICKET;
+  const confirmedPath = purpose === "photo" ? entry.photo : purpose === "return_ticket" ? entry.returnTicket : entry.path;
   if (!confirmedPath) return ASK_USER;
   const key = toolCallKey(call);
   const previous = entry.uploads.get(key);
@@ -57,7 +64,8 @@ async function uploadDocument(confirmedPath: string, purpose: UploadPurpose, con
   let prepared: Awaited<ReturnType<typeof prepareUploadFile>> | undefined;
   try {
     const confirmed = await validateDocumentPath(confirmedPath);
-    if (!confirmed) return ASK_USER;
+    if (!confirmed) return purpose === "return_ticket" ? NO_RETURN_TICKET : ASK_USER;
+    if (purpose === "return_ticket" && !allowedDocumentType(confirmed, "return_ticket")) return NO_RETURN_TICKET;
     prepared = await prepareUploadFile(confirmed);
     const path = prepared.path;
     const port = agentChromePort();
@@ -91,10 +99,16 @@ async function uploadDocument(confirmedPath: string, purpose: UploadPurpose, con
           input.getAttribute && input.getAttribute("aria-label"), input.getAttribute && input.getAttribute("data-name"),
           ...[...(input.labels || [])].map(label => label.textContent),
         ].filter(Boolean).map(String).join(" ").toLowerCase();
+        // The return ticket goes to the field named return_ticket (attachment[return_ticket], id attachment-return_ticket) only.
+        if (purpose === "return_ticket") {
+          const ticketInputs = inputs.filter(input => /return[-_ ]?ticket/.test(String(input.name || "") + " " + String(input.id || "")) && !input.disabled);
+          const shownTickets = ticketInputs.filter(isVisible);
+          return shownTickets.length === 1 ? shownTickets[0] : ticketInputs.length === 1 ? ticketInputs[0] : null;
+        }
         const photoLike = input => /photo|picture|selfie|face|foto/.test(describe(input));
         const candidates = purpose === "photo"
           ? inputs.filter(input => photoLike(input) && !/crop/.test(describe(input)))
-          : inputs.filter(input => !photoLike(input) && !/crop/.test(describe(input)));
+          : inputs.filter(input => !photoLike(input) && !/crop|return[-_ ]?ticket/.test(describe(input)));
         const named = purpose === "photo" ? candidates : candidates.filter(input => /pas+por/.test(describe(input)));
         const pool = (named.length > 0 ? named : candidates).filter(input => !input.disabled);
         const shown = pool.filter(isVisible);

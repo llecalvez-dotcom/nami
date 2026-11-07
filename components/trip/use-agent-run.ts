@@ -39,8 +39,9 @@ export async function sendAgentAnswer(sessionId: string, toolReq: ToolRequest, r
   return body.upload_result ?? null;
 }
 
-async function pickInChrome(sessionId: string, toolReq: ToolRequest): Promise<void> {
-  const response = await fetch(`/api/agent/${encodeURIComponent(sessionId)}/pick`, {
+// pick_option and fill_field act in the traveller's Chrome through Nami's server (routes pick and fill).
+async function actInChrome(sessionId: string, toolReq: ToolRequest, route: "pick" | "fill"): Promise<void> {
+  const response = await fetch(`/api/agent/${encodeURIComponent(sessionId)}/${route}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tool_req: toolReq }),
@@ -86,12 +87,13 @@ export async function handleToolCall(tripId: string, sessionId: string, call: To
     saveTrip(askUserFromAgent(trip, call, secrets));
     return;
   }
-  if (call.tool_name === "pick_option") {
+  if (call.tool_name === "pick_option" || call.tool_name === "fill_field") {
+    const picking = call.tool_name === "pick_option";
     try {
-      await pickInChrome(sessionId, call);
+      await actInChrome(sessionId, call, picking ? "pick" : "fill");
     } catch (error) {
       const latest = getTrip(tripId);
-      if (latest) saveTrip(pushAgentMessage(latest, `Could not pick in the list, retrying: ${(error as Error).message}`));
+      if (latest) saveTrip(pushAgentMessage(latest, `Could not ${picking ? "pick in the list" : "fill the field"}, retrying: ${(error as Error).message}`));
       await sleep(RETRY_MS);
       return;
     }

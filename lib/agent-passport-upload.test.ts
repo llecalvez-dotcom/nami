@@ -2,12 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { bindSessionDocument, uploadSessionDocument } from "@/lib/agent-passport-upload";
+import { bindSessionDocument, NO_RETURN_TICKET, uploadSessionDocument } from "@/lib/agent-passport-upload";
 import { findDocuments } from "@/lib/documents";
 import type { ToolRequest } from "@/lib/h-agent";
 
 const CALL: ToolRequest = { tool_name: "upload_file", args: { purpose: "passport" }, id: "upload-1" };
 const PHOTO_CALL: ToolRequest = { tool_name: "upload_file", args: { purpose: "photo" }, id: "upload-2" };
+const TICKET_CALL: ToolRequest = { tool_name: "upload_file", args: { purpose: "return_ticket" }, id: "upload-3" };
 const DOMAIN = "evisa.imigrasi.go.id";
 let root: string;
 let path: string;
@@ -29,7 +30,7 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-type MockInput = boolean | { visible?: boolean; id?: string; name?: string; className?: string; label?: string; disabled?: boolean };
+type MockInput = boolean | { visible?: boolean; id?: string; name?: string; className?: string; label?: string; disabled?: boolean; accept?: string };
 
 function mockChrome(specs: MockInput[], nativeEvents = true, hostname = DOMAIN) {
   const objects = new Map<string, unknown>();
@@ -40,7 +41,7 @@ function mockChrome(specs: MockInput[], nativeEvents = true, hostname = DOMAIN) 
       visible, disabled: meta.disabled ?? false, isConnected: true, files: [] as string[],
       id: meta.id ?? "", name: meta.name ?? "", className: meta.className ?? "",
       labels: meta.label ? [{ textContent: meta.label }] : [],
-      getAttribute: () => null,
+      getAttribute: (attribute: string) => attribute === "accept" ? meta.accept ?? null : null,
       matches: (selector: string) => selector === 'input[type="file"]',
       getClientRects: () => visible ? [{}] : [],
     });
@@ -184,6 +185,64 @@ describe("session-bound CDP passport upload", () => {
     const noPhotoInput = mockChrome([{ id: "passport-attachment", visible: true }]);
     expect(await uploadSessionDocument("session-1", PHOTO_CALL, noPhotoInput.connect)).toBe("no file input found");
     expect(noPhotoInput.send.mock.calls.some(([method]) => method === "DOM.setFileInputFiles")).toBe(false);
+  });
+
+  // The e-VOA step 2 file inputs, as relevéd on the real page (ticket 17): the return ticket and the passport PDF
+  // sit next to the step 1 inputs in the DOM.
+  const EVOA_STEP2_INPUTS: MockInput[] = [
+    ...EVOA_INPUTS,
+    { id: "attachment-return_ticket", name: "attachment[return_ticket]", accept: "application/pdf", visible: true },
+    { id: "support-paspor", name: "support[paspor]", accept: "application/pdf", visible: true },
+    { id: "file-attachment-passport-second", visible: true },
+    { id: "file-attachment-permanent-residence", visible: true },
+  ];
+
+  describe("return ticket (ticket 17)", () => {
+    it("drops the confirmed PDF ticket into the input named return_ticket only", async () => {
+      const ticketPath = join(root, "billet-retour.pdf");
+      await writeFile(ticketPath, "fictitious pdf");
+      bindSessionDocument("session-1", path, undefined, ticketPath);
+      const chrome = mockChrome(EVOA_STEP2_INPUTS);
+      expect(await uploadSessionDocument("session-1", TICKET_CALL, chrome.connect)).toBe("uploaded");
+      expect(chrome.inputs[5].files).toEqual([ticketPath]);
+      expect(chrome.inputs.filter((input) => input.files.length > 0)).toHaveLength(1);
+    });
+
+    it("tells the agent to ask the user when no ticket is confirmed, without connecting nor uploading anything else", async () => {
+      const chrome = mockChrome(EVOA_STEP2_INPUTS);
+      expect(await uploadSessionDocument("session-1", TICKET_CALL, chrome.connect)).toBe(NO_RETURN_TICKET);
+      expect(NO_RETURN_TICKET).toContain("ask_user");
+      expect(chrome.connect).not.toHaveBeenCalled();
+      expect(chrome.inputs.every((input) => input.files.length === 0)).toBe(true);
+    });
+
+    it("refuses an image bound as the ticket: the field accepts PDF only", async () => {
+      const imagePath = join(root, "billet-retour.jpg");
+      await writeFile(imagePath, "fictitious image");
+      bindSessionDocument("session-1", path, undefined, imagePath);
+      const chrome = mockChrome(EVOA_STEP2_INPUTS);
+      expect(await uploadSessionDocument("session-1", TICKET_CALL, chrome.connect)).toBe(NO_RETURN_TICKET);
+      expect(chrome.send.mock.calls.some(([method]) => method === "DOM.setFileInputFiles")).toBe(false);
+    });
+
+    it("never falls back to another file input when the return_ticket field is missing", async () => {
+      const ticketPath = join(root, "billet-retour.pdf");
+      await writeFile(ticketPath, "fictitious pdf");
+      bindSessionDocument("session-1", path, undefined, ticketPath);
+      const chrome = mockChrome([{ id: "support-paspor", name: "support[paspor]", accept: "application/pdf", visible: true }]);
+      expect(await uploadSessionDocument("session-1", TICKET_CALL, chrome.connect)).toBe("no file input found");
+      expect(chrome.send.mock.calls.some(([method]) => method === "DOM.setFileInputFiles")).toBe(false);
+    });
+
+    it("keeps the passport away from the return ticket field on step 2", async () => {
+      const chrome = mockChrome([
+        { id: "attachment-return_ticket", name: "attachment[return_ticket]", accept: "application/pdf", visible: true },
+        { id: "support-paspor", name: "support[paspor]", accept: "application/pdf", visible: true },
+      ]);
+      expect(await uploadSessionDocument("session-1", CALL, chrome.connect)).toBe("uploaded");
+      expect(chrome.inputs[1].files).toEqual([path]);
+      expect(chrome.inputs[0].files).toEqual([]);
+    });
   });
 
   it("hands over the photo when none was confirmed, without connecting", async () => {

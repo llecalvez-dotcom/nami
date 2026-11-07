@@ -22,12 +22,14 @@ import { getTrip, saveTrip } from "@/lib/trip-store";
 
 // An empty local session lets the server use NAMI_LOCAL_SESSION_ID (the side panel shows no settings).
 // photoDocumentId: the ID photo confirmed in the side panel, resolved on the server like the passport (ticket 16).
+// returnTicketDocumentId: the PDF return ticket confirmed the same way (ticket 17).
 async function startVisaSession(
   trip: Trip,
   passport: PassportFields,
   documentId: string | null,
   photoDocumentId: string | null,
   paperId: "evoa" | "arrival_card" = "evoa",
+  returnTicketDocumentId: string | null = null,
 ): Promise<string> {
   const settings = readAgentSettings();
   const attempt = createVisaStartAttempt({
@@ -39,6 +41,7 @@ async function startVisaSession(
     ...(documentId ? { document_id: documentId } : {}),
     // The server binds the photo to the session together with the passport document only.
     ...(documentId && photoDocumentId ? { photo_document_id: photoDocumentId } : {}),
+    ...(documentId && returnTicketDocumentId ? { return_ticket_document_id: returnTicketDocumentId } : {}),
   }, { scope: trip.id });
   return attempt();
 }
@@ -58,6 +61,7 @@ export function useTripActions({
   passport,
   documentId,
   photoDocumentId = null,
+  returnTicketDocumentId = null,
   onNeedPassport,
   onStarted,
 }: {
@@ -65,6 +69,7 @@ export function useTripActions({
   passport: PassportFields | null;
   documentId: string | null;
   photoDocumentId?: string | null;
+  returnTicketDocumentId?: string | null;
   // documentsAvailable: the local document search can look for the passport.
   onNeedPassport: (documentsAvailable: boolean) => void;
   onStarted?: (trip: Trip) => void;
@@ -77,7 +82,7 @@ export function useTripActions({
   // paperId: the e-VOA, or the arrival card that comes after it (same passport, same tab).
   const createVisa = async (
     itemId: string,
-    confirmed?: { passport: PassportFields; documentId: string | null; photoDocumentId?: string | null },
+    confirmed?: { passport: PassportFields; documentId: string | null; photoDocumentId?: string | null; returnTicketDocumentId?: string | null },
     paperId: "evoa" | "arrival_card" = "evoa",
   ) => {
     const current = latest();
@@ -96,7 +101,9 @@ export function useTripActions({
     }
     setStarting(true);
     try {
-      const sessionId = await startVisaSession(current, fields, passportDocument, confirmed?.photoDocumentId ?? photoDocumentId, paperId);
+      const sessionId = await startVisaSession(
+        current, fields, passportDocument, confirmed?.photoDocumentId ?? photoDocumentId, paperId, confirmed?.returnTicketDocumentId ?? returnTicketDocumentId,
+      );
       const started = startVisaRun(latest() ?? current, itemId, sessionId, new Date(), passportDocument !== null);
       update(started);
       onStarted?.(started);

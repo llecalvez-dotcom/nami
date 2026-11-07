@@ -40,13 +40,18 @@ const TEXTS = {
     empty: "No photo found. The agent will ask you to upload it on the official site.",
     failed: "I could not search your documents. The agent will ask you to upload the photo on the official site.",
   },
+  return_ticket: {
+    prompt: "The e-VOA also needs your return flight ticket as a PDF. Shall I look for it in your documents?",
+    empty: "No PDF ticket found. The agent will ask you to upload it on the official site.",
+    failed: "I could not search your documents. The agent will ask you to upload the ticket on the official site.",
+  },
 } as const;
 
 export function DocumentFinder({ onConfirm, demo = false, focusOnMount = false, kind = "passport" }: {
   onConfirm: (document: DocumentChoice) => void;
   demo?: boolean;
   focusOnMount?: boolean;
-  kind?: "passport" | "photo";
+  kind?: "passport" | "photo" | "return_ticket";
 }) {
   const texts = TEXTS[kind];
   const [enabled, setEnabled] = useState(false);
