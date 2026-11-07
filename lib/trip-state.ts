@@ -1,3 +1,4 @@
+import { INVALID_AGENT_ANSWER, parseAgentAnswer } from "@/lib/agent-answer";
 import {
   SAMPLE_AGENT_RUN,
   SAMPLE_AGENT_STEPS,
@@ -437,7 +438,16 @@ export function applyAgentChanges(
   const steps = changes.steps
     .map((s) => redact(s, secrets))
     .filter((s, i, all) => s !== (i === 0 ? trip.agent_steps.at(-1) : all[i - 1]));
-  const answer = changes.answer ? redact(changes.answer, secrets) : null;
+  const hasFinalAnswer = state === "completed" && (changes.answer !== null || (changes.no_change && !run.result?.answer));
+  const finalAnswer = hasFinalAnswer ? parseAgentAnswer(changes.answer) : null;
+  const answer = hasFinalAnswer ? (finalAnswer ? redact(finalAnswer.summary, secrets) : INVALID_AGENT_ANSWER) : null;
+  const finalResult = finalAnswer ? {
+    ...finalAnswer,
+    summary: redact(finalAnswer.summary, secrets),
+    filled_fields: finalAnswer.filled_fields?.map((field) => redact(field, secrets)),
+    missing_fields: finalAnswer.missing_fields?.map((field) => redact(field, secrets)),
+    blocked_reason: finalAnswer.blocked_reason ? redact(finalAnswer.blocked_reason, secrets) : finalAnswer.blocked_reason,
+  } : null;
 
   if (stoppedHere && hTerminal) steps.push("H confirmed the session is stopped");
 
@@ -451,7 +461,7 @@ export function applyAgentChanges(
       next_index: changes.next_index,
       metrics: changes.metrics ?? run.metrics,
       drained: hTerminal && changes.no_change,
-      result: answer ? { ...run.result, answer } : run.result,
+      result: answer ? { ...run.result, answer, final_answer: finalResult, answer_validation_failed: !finalAnswer } : run.result,
       error: changes.error_code ?? run.error,
     },
   };
@@ -465,13 +475,18 @@ export function applyAgentChanges(
         next,
         `Agent stopped: it left the official site (${host}).${changes.cancel_failed ? " Run holo local stop in a terminal to stop it." : ""}`,
       );
-    } else if (state === "failed" || state === "timed_out") {
+    } else if ((state === "failed" || state === "timed_out") && changes.error_code !== "answer_validation") {
       next = pushAgentMessage(next, `The agent stopped before the end (${changes.error_code ?? state}). Nothing was submitted.`);
     } else if (state === "completed" && !reachedPayment) {
       next = pushAgentMessage(next, "The agent finished without reaching the payment screen. Nothing was submitted.");
     } else if (state === "interrupted") {
       next = pushAgentMessage(next, "The agent session was closed. Nothing was submitted.");
     }
+  }
+
+  if (!run.result?.answer_validation_failed && run.error !== "answer_validation"
+    && ((hasFinalAnswer && !finalAnswer) || changes.error_code === "answer_validation")) {
+    next = pushAgentMessage(next, INVALID_AGENT_ANSWER);
   }
 
   const toolCalls = terminal ? [] : freshToolCalls(changes.pending_tool_calls, run.handled_tool_ids ?? []);
