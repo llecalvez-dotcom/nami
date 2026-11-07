@@ -21,21 +21,24 @@ export function MicButton({ voice, className }: { voice: VoiceInput; className?:
       aria-pressed={status === "recording"}
       title={status === "recording" ? `Recording, ${MAX_RECORDING_SECONDS - seconds} s left. Click to stop.` : LABELS[status]}
       className={cn(
-        "relative grid shrink-0 place-items-center rounded-xl bg-accent text-accent-foreground transition-colors outline-none hover:bg-primary hover:text-primary-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-70",
+        "relative flex min-h-11 min-w-11 shrink-0 flex-col items-center justify-center gap-0.5 rounded-xl bg-accent text-accent-foreground transition-colors outline-none hover:bg-primary hover:text-primary-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-70",
         status === "recording" && "bg-attention text-white hover:bg-attention",
         className,
       )}
     >
       {status === "recording" ? (
         <>
-          <span aria-hidden className="absolute inset-0 animate-ping rounded-[inherit] bg-attention/40" />
-          <Square className="relative size-1/3 fill-current" />
+          <span aria-hidden className="absolute inset-2 animate-ping rounded-[inherit] bg-attention/15" />
+          <Square className="relative size-4 fill-current" />
         </>
       ) : status === "transcribing" ? (
-        <Loader2 className="size-2/5 animate-spin" />
+        <Loader2 className="size-4 animate-spin" />
       ) : (
-        <Mic className="size-2/5" />
+        <Mic className="size-4" />
       )}
+      <span role="status" className="relative text-[8px] leading-none">
+        {status === "recording" ? "Listening…" : status === "transcribing" ? "Reading…" : "Speak"}
+      </span>
     </button>
   );
 }

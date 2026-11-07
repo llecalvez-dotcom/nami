@@ -96,7 +96,9 @@ describe("browser preflight", () => {
 
   it.each([503, 404])("keeps the active record when its status cannot be verified: %s", async (status) => {
     await started();
-    fetch.mockResolvedValueOnce(new Response("private details", { status }));
+    for (let attempt = 0; attempt < (status === 503 ? 3 : 1); attempt++) {
+      fetch.mockResolvedValueOnce(new Response("private details", { status, headers: { "Retry-After": "0" } }));
+    }
     await expect(preflightBrowser("bridge-1", connect)).rejects.toMatchObject({ status: 503, message: expect.stringContaining("Could not check") });
     await expect(preflightBrowser("bridge-1", connect)).rejects.toMatchObject({ status: 409 });
     expect(connect).toHaveBeenCalledTimes(1);

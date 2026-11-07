@@ -81,10 +81,22 @@ find_chrome() {
   done
 }
 
+# Only reuse a Chrome started with the agent's own profile, never a personal one.
+# Checks the process that actually owns the port, not just any Chrome with these args.
+agent_chrome_running() {
+  local pid args
+  command -v lsof > /dev/null 2>&1 || die "lsof not found: cannot check which browser owns port $PORT"
+  pid="$(lsof -nP -iTCP:"$PORT" -sTCP:LISTEN -t 2> /dev/null | sed -n 1p || true)"
+  [ -n "$pid" ] || return 1
+  args="$(ps -o args= -p "$pid" 2> /dev/null || true)"
+  case " $args " in *" --remote-debugging-port=$PORT "*) ;; *) return 1 ;; esac
+  case " $args " in *" --user-data-dir=$PROFILE "*) return 0 ;; esac
+  return 1
+}
+
 if chrome_up; then
-  PROFILE="(Chrome already running)"
-  say "A Chrome already listens on port $PORT: reusing it."
-  say "If it was not started by this script, quit it and run the script again (it needs the no-sleep flags)."
+  agent_chrome_running || die "Port $PORT is used by a browser that is not the agent's Chrome (profile $PROFILE). Quit it, or use --port."
+  say "The agent's Chrome already listens on port $PORT: reusing it."
 else
   CHROME="$(find_chrome)"
   [ -n "$CHROME" ] || die "Chrome not found (set CHROME_BIN)"
@@ -116,6 +128,7 @@ BRIDGE_LOG="$LOG_DIR/holo-local-browser.log"
     if [ "$quick" -ge 3 ]; then
       say "The H bridge keeps failing (code $code), giving up. Last lines of $BRIDGE_LOG:" >&2
       tail -n 5 "$BRIDGE_LOG" >&2
+      kill -TERM $$ 2> /dev/null
       exit 1
     fi
     say "H bridge stopped (code $code), restarting in 2 s with the same session id."
@@ -124,12 +137,18 @@ BRIDGE_LOG="$LOG_DIR/holo-local-browser.log"
 ) &
 BRIDGE_PID=$!
 
+# npm run dev starts next as a grandchild: stop the whole tree, not just npm.
+kill_tree() {
+  local child
+  for child in $(pgrep -P "$1" 2> /dev/null); do kill_tree "$child"; done
+  kill -TERM "$1" 2> /dev/null || true
+}
+
+NAMI_PID=""
 cleanup() {
   trap - EXIT INT TERM
-  if kill -0 "$BRIDGE_PID" 2> /dev/null; then
-    pkill -P "$BRIDGE_PID" 2> /dev/null || true
-    kill "$BRIDGE_PID" 2> /dev/null || true
-  fi
+  [ -n "$NAMI_PID" ] && kill_tree "$NAMI_PID"
+  kill_tree "$BRIDGE_PID"
   say "H bridge stopped. The agent's Chrome stays open (port $PORT)."
 }
 trap cleanup EXIT INT TERM
@@ -151,7 +170,11 @@ INFO
 
 # --- 3. Nami
 cd "$ROOT"
-if curl -fsS --max-time 2 -o /dev/null http://localhost:3000; then
+# Any HTTP answer means the port is taken; -L follows the /access redirect of a protected Nami.
+status="$(curl -sSL --max-time 5 -o "$LOG_DIR/port-3000.html" -w '%{http_code}' http://localhost:3000 2> /dev/null || true)"
+if [ -n "$status" ] && [ "$status" != "000" ]; then
+  grep -qF "Nami prepares your trip" "$LOG_DIR/port-3000.html" ||
+    die "Port 3000 is used by another app. Stop it, then run the script again."
   say "Nami already runs on http://localhost:3000: keeping only the H bridge alive. Ctrl+C to stop it."
   say "That Nami must use Chrome port $PORT: put NAMI_AGENT_CHROME_PORT=$PORT in .env.local and restart it, or stop it and run this script again."
   wait "$BRIDGE_PID" || exit 1
@@ -162,4 +185,7 @@ if ! command -v npm > /dev/null 2>&1 && [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; 
   . "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
 fi
 command -v npm > /dev/null 2>&1 || die "npm not found"
-npm run dev
+# In the background so that a bridge that gives up stops the whole demo (it signals this script).
+npm run dev &
+NAMI_PID=$!
+wait "$NAMI_PID"

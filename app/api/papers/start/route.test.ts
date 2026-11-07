@@ -59,7 +59,9 @@ beforeEach(() => {
   });
   vi.stubEnv("HAI_API_KEY", "h-key");
   vi.stubEnv("HAI_AGENT_NAME", "nami-agent");
-  fetch = vi.fn(async () => Response.json({ id: "s-1", status: { status: "pending" } }, { status: 201 }));
+  fetch = vi.fn(async (url: string) => url.endsWith("/quota")
+    ? Response.json({ scope: "organization", limit: 3, active: 0, available: 3 })
+    : Response.json({ id: "s-1", status: { status: "pending" } }, { status: 201 }));
   vi.stubGlobal("fetch", fetch);
 });
 
@@ -69,7 +71,82 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-const sentBody = () => JSON.parse((fetch.mock.calls[0] as unknown as [string, RequestInit])[1].body as string);
+const sentBody = () => JSON.parse((fetch.mock.calls.find(([, init]) => init.method === "POST") as unknown as [string, RequestInit])[1].body as string);
+
+describe("quota and idempotency", () => {
+  const key = "00000000-0000-4000-8000-000000000001";
+
+  it.each([0, -1])("refuses creation when available slots are %s", async (available) => {
+    fetch.mockResolvedValue(Response.json({ scope: "organization", limit: 3, active: 3, available }));
+    const response = await start(BODY);
+    expect(response.status).toBe(429);
+    expect(await response.json()).toEqual({ error: "All H agent slots are busy. Stop another agent or wait, then try again." });
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch.mock.calls[0][0]).toBe("https://agp.eu.hcompany.ai/api/v2/sessions/quota");
+  });
+
+  it("proceeds if quota is unavailable, without logging its body", async () => {
+    const log = vi.spyOn(console, "error");
+    fetch.mockResolvedValueOnce(new Response("private quota details", { status: 404 }));
+    expect((await start(BODY)).status).toBe(201);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it("forwards a validated UUID as a header and preserves legacy requests without one", async () => {
+    expect((await start({ ...BODY, idempotency_key: key })).status).toBe(201);
+    const calls = fetch.mock.calls.filter(([, init]) => init.method === "POST");
+    expect(new Headers(calls[0][1].headers).get("Idempotency-Key")).toBe(key);
+    expect(sentBody()).not.toHaveProperty("idempotency_key");
+    expect(sentBody().agent.answer_format).toMatchObject({ type: "object", required: ["summary"] });
+    fetch.mockResolvedValueOnce(Response.json({ status: "completed" }));
+    expect((await start(BODY)).status).toBe(201);
+    const legacy = fetch.mock.calls.filter(([, init]) => init.method === "POST")[1];
+    expect(new Headers(legacy[1].headers).has("Idempotency-Key")).toBe(false);
+  });
+
+  it.each(["not-a-uuid", "", "x".repeat(256)])("rejects invalid UUID %s before calling H", async (idempotency_key) => {
+    expect((await start({ ...BODY, idempotency_key })).status).toBe(400);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("maps a create-time quota race to the same busy message after bounded retries", async () => {
+    fetch.mockImplementation(async (url: string) => url.endsWith("/quota") ? Response.json({ available: 1 })
+      : new Response("private task echo", { status: 429, headers: { "Retry-After": "0" } }));
+    const response = await start({ ...BODY, idempotency_key: key });
+    expect(response.status).toBe(429);
+    expect(await response.json()).toEqual({ error: "All H agent slots are busy. Stop another agent or wait, then try again." });
+    expect(fetch).toHaveBeenCalledTimes(4);
+  });
+
+  it("lets a resumed keyed start reach H even when no slot is free, so H can return the original session", async () => {
+    fetch.mockImplementation(async (url: string) => url.endsWith("/quota") ? Response.json({ available: 0 })
+      : Response.json({ id: "s-1", status: { status: "running" } }, { status: 201 }));
+    const response = await start({ ...BODY, idempotency_key: key, resume: true });
+    expect(response.status).toBe(201);
+    expect((await response.json()).session_id).toBe("s-1");
+    fetch.mockResolvedValueOnce(Response.json({ status: "completed" }));
+    expect((await start({ ...BODY, idempotency_key: key })).status).toBe(429);
+  });
+
+  it("recovers the same active keyed session without a quota check but refuses another attempt", async () => {
+    expect((await start({ ...BODY, idempotency_key: key })).status).toBe(201);
+    fetch.mockClear();
+    expect((await start({ ...BODY, idempotency_key: key, resume: true })).status).toBe(201);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(fetch.mock.calls[0][1].method).toBe("POST");
+    expect(new Headers(fetch.mock.calls[0][1].headers).get("Idempotency-Key")).toBe(key);
+    fetch.mockResolvedValueOnce(Response.json({ status: "running" }));
+    expect((await start({ ...BODY, idempotency_key: "00000000-0000-4000-8000-000000000002", resume: true })).status).toBe(409);
+  });
+
+  it("releases the local reservation after a quota refusal and checks Chrome before quota", async () => {
+    fetch.mockResolvedValueOnce(Response.json({ available: 0 }));
+    expect((await start(BODY)).status).toBe(429);
+    expect(vi.mocked(connectChrome).mock.invocationCallOrder[0]).toBeLessThan(fetch.mock.invocationCallOrder[0]);
+    expect((await start(BODY)).status).toBe(201);
+  });
+});
 
 describe("passport document handoff", () => {
   let root: string;
@@ -238,14 +315,14 @@ describe("POST /api/papers/start (route 5)", () => {
     for (let i = 0; i < 5; i += 1) expect((await start(BODY)).status).toBe(201);
     const response = await start(BODY);
     expect(response.status).toBe(429);
-    expect(fetch).toHaveBeenCalledTimes(5);
+    expect(fetch).toHaveBeenCalledTimes(10);
   });
 
   it("answers 429 when another H session runs", async () => {
-    fetch.mockImplementation(async () => new Response("quota", { status: 429 }));
+    fetch.mockImplementation(async () => new Response("quota", { status: 429, headers: { "Retry-After": "0" } }));
     const response = await start(BODY);
     expect(response.status).toBe(429);
-    expect((await response.json()).error).toContain("Another H agent session");
+    expect((await response.json()).error).toContain("All H agent slots are busy");
   });
 
   it("answers 502 without the H body on a refused session", async () => {
@@ -287,16 +364,18 @@ describe("local browser preflight", () => {
     expect(await blocked.json()).toEqual({ error: expect.stringContaining("Use Stop agent in its trip") });
     expect(fetch.mock.calls.filter(([, init]) => init.method === "POST")).toHaveLength(1);
     fetch.mockResolvedValueOnce(Response.json({ status: "interrupted" }))
+      .mockResolvedValueOnce(Response.json({ available: 3 }))
       .mockResolvedValueOnce(Response.json({ id: "s-2", status: { status: "pending" } }, { status: 201 }));
     expect((await start(BODY)).status).toBe(201);
     expect(fetch.mock.calls.filter(([, init]) => init.method === "POST")).toHaveLength(2);
   });
 
   it("releases the reservation when H refuses creation so a corrected attempt can proceed", async () => {
-    fetch.mockResolvedValueOnce(new Response(null, { status: 422 }));
+    fetch.mockResolvedValueOnce(Response.json({ available: 3 }))
+      .mockResolvedValueOnce(new Response(null, { status: 422 }));
     expect((await start(BODY)).status).toBe(502);
     expect((await start(BODY)).status).toBe(201);
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(4);
   });
 
   it("leaves production starts unchanged, without probing local Chrome or storing active sessions", async () => {
@@ -305,6 +384,6 @@ describe("local browser preflight", () => {
     expect((await start(BODY)).status).toBe(201);
     expect((await start(BODY)).status).toBe(201);
     expect(connectChrome).not.toHaveBeenCalled();
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(4);
   });
 });

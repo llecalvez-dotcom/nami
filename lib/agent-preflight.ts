@@ -2,9 +2,9 @@ import { agentChromePort, connectChrome, type CdpConnection } from "@/lib/chrome
 import { getBaliPaper } from "@/lib/bali-papers";
 import { getSessionStatus, isTerminalStatus } from "@/lib/h-agent";
 
-type ActiveSession = { browserId: string; sessionId: string };
+type ActiveSession = { browserId: string; sessionId: string; idempotencyKey?: string };
 type Store = { active: Map<number, ActiveSession>; pending: Set<string> };
-type BrowserLease = { commit(sessionId: string): void; release(): void };
+type BrowserLease = { commit(sessionId: string, idempotencyKey?: string): void; release(): void };
 const shared = globalThis as typeof globalThis & { namiBrowserPreflight?: Store };
 const store = () => shared.namiBrowserPreflight ??= { active: new Map(), pending: new Set() };
 
@@ -21,7 +21,7 @@ export function resetBrowserPreflight(): void {
 
 const BUSY = "Another Nami agent is using this browser. Use Stop agent in its trip, then try again.";
 
-export async function preflightBrowser(browserId: string, connect: (port: number) => Promise<CdpConnection> = connectChrome): Promise<BrowserLease> {
+export async function preflightBrowser(browserId: string, connect: (port: number) => Promise<CdpConnection> = connectChrome, resumeKey?: string): Promise<BrowserLease> {
   if (process.env.NODE_ENV === "production") return { commit: () => {}, release: () => {} };
   const port = agentChromePort();
   if (port === null) throw new AgentPreflightError("Set NAMI_AGENT_CHROME_PORT to a port from 1 to 65535, then try again.", 503);
@@ -33,6 +33,7 @@ export async function preflightBrowser(browserId: string, connect: (port: number
   try {
     for (const [activePort, entry] of current.active) {
       if (activePort !== port && entry.browserId !== browserId) continue;
+      if (resumeKey && entry.idempotencyKey === resumeKey && activePort === port && entry.browserId === browserId) continue;
       let status: string;
       try {
         status = await getSessionStatus(entry.sessionId);
@@ -65,7 +66,7 @@ export async function preflightBrowser(browserId: string, connect: (port: number
       client?.close();
     }
     return {
-      commit: (sessionId: string) => current.active.set(port, { browserId, sessionId }),
+      commit: (sessionId: string, idempotencyKey?: string) => current.active.set(port, { browserId, sessionId, idempotencyKey }),
       release,
     };
   } catch (error) {

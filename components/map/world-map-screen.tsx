@@ -175,9 +175,10 @@ export function WorldMapScreen() {
                 type="submit"
                 disabled={!wish.trim()}
                 aria-label="Add"
-                className="glass grid size-11 shrink-0 place-items-center disabled:opacity-40"
+                className="glass inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 px-3 text-sm font-medium disabled:opacity-40"
               >
                 <Plus className="size-5" />
+                <span>Add</span>
               </button>
             </form>
             {wishError ? <p className="mt-2 text-sm text-attention-foreground">{wishError}</p> : null}

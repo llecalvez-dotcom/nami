@@ -1,4 +1,5 @@
 import { offDomainHost, toAgentChanges } from "@/lib/agent-changes";
+import { captureAgentScreen, finishAgentScreen } from "@/lib/agent-screen";
 import { getBaliPaper } from "@/lib/bali-papers";
 import { cancelSession, getChanges, isTerminalStatus } from "@/lib/h-agent";
 import { fail, hErrorResponse, PILOT_PAPER_ID, SESSION_ID } from "@/lib/paper-agent";
@@ -13,6 +14,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/agent/[id]/c
   if (!Number.isInteger(fromIndex) || fromIndex < 0) return fail("Invalid from_index.", 400);
   try {
     const changes = await getChanges(id, fromIndex);
+    captureAgentScreen(id, changes);
     const summary = toAgentChanges(changes, fromIndex);
     const running = changes !== null && !(changes.status !== null && isTerminalStatus(changes.status));
     const left = running ? offDomainHost(changes.new_events, getBaliPaper(PILOT_PAPER_ID).domain) : null;
@@ -21,7 +23,10 @@ export async function GET(request: Request, ctx: RouteContext<"/api/agent/[id]/c
       () => true,
       () => false,
     );
-    if (cancelled) return Response.json({ ...summary, left_official_site: left, cancel_failed: false });
+    if (cancelled) {
+      finishAgentScreen(id);
+      return Response.json({ ...summary, left_official_site: left, cancel_failed: false });
+    }
     // Cancel refused: the index does not move, so the next poll reads the same page again and retries the cancel.
     return Response.json({ ...summary, next_index: fromIndex, steps: [], left_official_site: left, cancel_failed: true });
   } catch (error) {

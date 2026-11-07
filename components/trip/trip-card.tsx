@@ -36,7 +36,7 @@ export function TripCard({ trip, className }: { trip: TripCardData; className?: 
       </div>
       <div className="px-3 pt-5 pb-3">
         <p className="truncate text-[26px] leading-none font-medium tracking-[-0.04em]">{title}</p>
-        <p className="label-mono mt-4 flex items-center gap-2 text-muted-foreground">
+        <p className="label-mono mt-4 flex items-center gap-2 text-muted-foreground/80">
           {request.origin_country ?? "?"}
           <span className="h-px flex-1 bg-border" aria-hidden />
           <span aria-hidden>→</span>
@@ -45,7 +45,7 @@ export function TripCard({ trip, className }: { trip: TripCardData; className?: 
         </p>
       </div>
       <div className="mt-auto flex items-end justify-between gap-3 border-t border-border/70 px-3 pt-4 pb-2">
-        <div className="space-y-1.5 text-[15px] font-medium">
+        <div className="space-y-1.5 text-sm text-muted-foreground">
           <p className="flex items-center gap-2">
             <ChevronRight className="size-3.5 text-muted-foreground" />
             {request.departure_date ? formatDate(request.departure_date) : "Dates to confirm"}
@@ -58,7 +58,7 @@ export function TripCard({ trip, className }: { trip: TripCardData; className?: 
           ) : null}
         </div>
         <span className="label-mono rounded-full border border-border px-4 py-1.5 transition-colors group-hover:border-primary group-hover:bg-primary group-hover:text-primary-foreground">
-          Details
+          Open trip
         </span>
       </div>
     </Link>

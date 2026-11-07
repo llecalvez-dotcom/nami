@@ -144,13 +144,16 @@ describe("GET /api/agent/[id]/changes (route 6)", () => {
 
   it("keeps the index when the off-domain cancel failed, so the next poll retries it", async () => {
     fetch.mockResolvedValueOnce(batch("running", ["https://imigrasi.go.id.evil.example/x"], 3));
-    fetch.mockResolvedValueOnce(new Response("boom", { status: 500 }));
+    for (let attempt = 0; attempt < 3; attempt++) {
+      fetch.mockResolvedValueOnce(new Response("boom", { status: 500, headers: { "Retry-After": "0" } }));
+    }
     const body = await (await get("s-1", "3")).json();
     expect(body).toMatchObject({ left_official_site: "imigrasi.go.id.evil.example", cancel_failed: true, next_index: 3, steps: [] });
+    expect(fetch.mock.calls.map(([, init]) => init.method)).toEqual(["GET", "DELETE", "DELETE", "DELETE"]);
     fetch.mockResolvedValueOnce(batch("running", ["https://imigrasi.go.id.evil.example/x"], 3));
     fetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
     const retried = await (await get("s-1", "3")).json();
-    expect(call(3)[1].method).toBe("DELETE");
+    expect(call(5)[1].method).toBe("DELETE");
     expect(retried).toMatchObject({ cancel_failed: false, next_index: 4 });
   });
 
