@@ -132,6 +132,8 @@ describe("POST /api/trip/parse", () => {
     ["eight o'clock", "08:00"],
     ["eight o’clock", "08:00"],
     ["huit heures", "08:00"],
+    ["j'atterris mardi 18 heures", "18:00"],
+    ["à 7 heure", "07:00"],
     ["vers midi", "12:00"],
     ["à minuit", "00:00"],
     ...["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"]
@@ -158,6 +160,18 @@ describe("POST /api/trip/parse", () => {
     })).json();
     expect(body.request.arrival_at).toBe(arrival_at);
     expect(body.changed).toEqual(["nationality"]);
+  });
+
+  it("clears a known landing time when only the landing day changes", async () => {
+    complete.mockResolvedValue(JSON.stringify({ ...nulls, arrival_at: "2026-11-11T00:00+08:00" }));
+    const body = await (await call({
+      transcript: "Actually I land on Wednesday",
+      today: "2026-11-07",
+      current_request: { ...nulls, raw_text: "Bali on Monday, landing at 7pm", arrival_at: "2026-11-09T19:00+08:00" },
+    })).json();
+    expect(body.request.arrival_at).toBeNull();
+    expect(body.missing).toContain("arrival_at");
+    expect(body.changed).toContain("arrival_at");
   });
 
   it("refuses an invalid body", async () => {

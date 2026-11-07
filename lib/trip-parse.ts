@@ -63,7 +63,7 @@ function statesTimeOfDay(transcript: string): boolean {
     "i",
   );
   return /\b(?:[01]?\d|2[0-3])[:h][0-5]\d(?:\s*[ap]\.?\s*m\.?)?\b/.test(text)
-    || /\b(?:[01]?\d|2[0-3])\s*h\b/.test(text)
+    || /\b(?:[01]?\d|2[0-3])\s*h(?:eures?)?\b/.test(text)
     || /\b(?:0?[1-9]|1[0-2])\s*[ap]\.?\s*m\.?\b/.test(text)
     || /\b(?:at|around|vers)\s+(?:[01]?\d|2[0-3])\b/.test(text)
     || /(?:^|\s)à\s+(?:[01]?\d|2[0-3])\b/i.test(transcript)
@@ -80,7 +80,9 @@ export async function parseTrip(input: ParseInput, complete: CompleteJson): Prom
   } catch (error) {
     throw new ModelOutputError(`The model did not return a valid trip request: ${(error as Error).message}`);
   }
-  if (!statesTimeOfDay(input.transcript)) output.arrival_at = null;
+  const timeStated = statesTimeOfDay(input.transcript);
+  const proposedArrival = output.arrival_at;
+  if (!timeStated) output.arrival_at = null;
 
   const current = input.current_request ?? TripRequestDraftSchema.parse({ raw_text: input.transcript });
   const request: TripRequestDraft = { ...current };
@@ -89,6 +91,10 @@ export async function parseTrip(input: ParseInput, complete: CompleteJson): Prom
     if (value === null || value === current[key]) continue;
     (request as Record<string, unknown>)[key] = value;
     changed.push(key);
+  }
+  if (!timeStated && proposedArrival && current.arrival_at && proposedArrival.slice(0, 10) !== current.arrival_at.slice(0, 10)) {
+    request.arrival_at = null;
+    changed.push("arrival_at");
   }
   return { request, missing: missingFields(request), changed };
 }
