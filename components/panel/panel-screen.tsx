@@ -11,7 +11,6 @@ import { MicButton, VoiceStatusLine } from "@/components/voice/mic-button";
 import { MuteToggle } from "@/components/voice/mute-toggle";
 import { useVoiceInput } from "@/components/voice/use-voice-input";
 import type { PassportFields } from "@/lib/contracts";
-import { agentOfficialUrl, showOfficialSite } from "@/lib/official-tab";
 import { requestTripParse } from "@/lib/trip-parse-client";
 import { createTripFromRequest, isAgentActive, needsPassportReconfirm, pushAgentMessage, type Trip } from "@/lib/trip-state";
 import { saveTrip, useTrips } from "@/lib/trip-store";
@@ -143,11 +142,9 @@ function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
     passport,
     documentId,
     onNeedPassport: () => setSearchRequest((request) => request + 1),
-    onStarted: (started) => {
-      saveTrip(pushAgentMessage(started, WATCH_MESSAGE));
-      const url = agentOfficialUrl(started);
-      if (url) void showOfficialSite(url);
-    },
+    // No tab is opened here: the agent drives the tab already open next to the panel. Opening the official site
+    // before the agent reaches it would create a second official tab, and upload_file refuses to choose between two.
+    onStarted: (started) => saveTrip(pushAgentMessage(started, WATCH_MESSAGE)),
   });
 
   const decide = (itemId: string, accepted: boolean) => {
