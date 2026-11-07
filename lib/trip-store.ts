@@ -27,7 +27,7 @@ function writeTrips(trips: Trip[]) {
   listeners.forEach((listener) => listener());
 }
 
-function subscribe(listener: () => void) {
+export function subscribeTrips(listener: () => void) {
   listeners.add(listener);
   window.addEventListener("storage", listener);
   return () => {
@@ -37,7 +37,7 @@ function subscribe(listener: () => void) {
 }
 
 export function useTrips(): Trip[] | null {
-  return useSyncExternalStore(subscribe, readTrips, () => null);
+  return useSyncExternalStore(subscribeTrips, readTrips, () => null);
 }
 
 // Latest saved version, for async loops that must not work on a stale render.

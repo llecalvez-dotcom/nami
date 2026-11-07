@@ -3,7 +3,8 @@
 import { useEffect, useRef } from "react";
 import type { AgentChanges } from "@/lib/agent-changes";
 import type { ToolRequest } from "@/lib/h-agent";
-import { getTrip, saveTrip } from "@/lib/trip-store";
+import { getTrip, saveTrip, subscribeTrips } from "@/lib/trip-store";
+import { agentStateMessage, postAgentState } from "@/lib/agent-overlay";
 import { toolCallKey } from "@/lib/agent-changes";
 import { applyAgentChanges, askUserFromAgent, markToolHandled, pushAgentMessage, reportReady, recordPassportUpload } from "@/lib/trip-state";
 
@@ -121,6 +122,27 @@ export function useAgentRun(tripId: string, sessionId: string | null, enabled: b
   useEffect(() => {
     secretsRef.current = secrets;
   }, [secrets]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || window.parent === window) return;
+    let previous = "";
+    const publish = () => {
+      const trip = getTrip(tripId);
+      const run = trip?.agent_run?.session_id === sessionId ? trip.agent_run : null;
+      const message = agentStateMessage(run, trip?.agent_steps ?? [], secretsRef.current);
+      if (!enabled) message.active = false;
+      const signature = JSON.stringify([message, run?.state, trip?.agent_steps.length]);
+      if (signature === previous) return;
+      previous = signature;
+      postAgentState(message);
+    };
+    publish();
+    const unsubscribe = subscribeTrips(publish);
+    return () => {
+      unsubscribe();
+      postAgentState({ type: "nami:agent-state", active: false, step: "" });
+    };
+  }, [tripId, sessionId, enabled]);
 
   useEffect(() => {
     if (!enabled || !sessionId) return;

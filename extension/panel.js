@@ -1,4 +1,7 @@
 import { namiUrl } from "./settings.js";
+import { relayAgentState } from "./agent-state.js";
+
+chrome.runtime.connect({ name: "nami-panel" });
 
 const frame = document.getElementById("nami");
 const origin = await namiUrl();
@@ -32,6 +35,10 @@ async function bringToFront(url) {
 
 window.addEventListener("message", async (event) => {
   if (event.source !== frame.contentWindow || event.origin !== origin) return;
+  if (event.data?.type === "nami:agent-state") {
+    if (typeof event.data.active === "boolean" && typeof event.data.step === "string") await relayAgentState(event.data);
+    return;
+  }
   const { type, url } = event.data ?? {};
   if (type !== "nami:focus-official" || typeof url !== "string") return;
   let target;

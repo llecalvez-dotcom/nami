@@ -1,6 +1,6 @@
 # Extension Chrome Nami (ticket 08)
 
-Nami vit dans le panneau latéral de Chrome, l'agent H clique dans l'onglet. L'extension n'a **aucune logique d'agent** : elle affiche l'écran épuré de Nami (`http://localhost:3000/panel` par défaut, ticket 14) dans une `iframe` plein cadre, c'est tout. Sans réglage visible : la session du navigateur local vient de `NAMI_LOCAL_SESSION_ID` dans le `.env.local` de Nami.
+Nami vit dans le panneau latéral de Chrome, l'agent H clique dans l'onglet. L'extension n'a **aucune logique d'agent** : elle affiche l'écran épuré de Nami (`http://localhost:3000/panel` par défaut, ticket 14) dans une `iframe` plein cadre et rend ses gestes visibles dans les onglets officiels (ticket 13). Sans réglage visible : la session du navigateur local vient de `NAMI_LOCAL_SESSION_ID` dans le `.env.local` de Nami.
 
 ## Installation
 
@@ -29,6 +29,31 @@ Clic droit sur l'icône, **Options** :
 | `panel.html`, `panel.js` | L'`iframe` vers Nami (`allow="microphone; autoplay"`) ; remet l'onglet du site officiel au premier plan quand Nami le demande |
 | `options.html`, `options.js` | Adresse de Nami, autorisation du micro |
 | `settings.js` | Adresse par défaut et lecture de l'adresse enregistrée |
+| `agent-overlay.js` | Curseur, onde, contour du champ, cadre et bulle dans un Shadow DOM fermé, sans intercepter les gestes |
+| `agent-state.js` | Relais partagé vers les trois hôtes officiels, utilisé par le panneau et le service worker module |
+
+## Voir l'agent travailler (ticket 13)
+
+Le script est injecté à `document_idle`, uniquement dans le cadre principal des trois hôtes HTTPS : `evisa.imigrasi.go.id`, `allindonesia.imigrasi.go.id` et `lovebali.baliprov.go.id`, issus de `lib/official-sites.ts`. Il suit seulement les événements réels (`isTrusted`) en capture : `pointermove`, `pointerdown`, `click`, `input`, `focusin`.
+
+La flèche violette de 24 px glisse en 300 ms et disparaît après 1,5 s ; l'onde dure 400 ms et le contour du champ 800 ms. Le cadre de 3 px porte « Nami is filling this in ». La bulle de 320 px maximum reste en bas à gauche. Toute la couche, y compris ses enfants et pseudo-éléments, a `pointer-events: none`. Elle ne lit ni champs ni texte de la page : seulement les coordonnées des gestes et les dimensions de la cible. Aucun réseau, stockage ou journal dans la couche.
+
+`useAgentRun` observe les changements du voyage et envoie au parent `{ type: "nami:agent-state", active, step }`, seulement dans une iframe. Le dernier texte d'Agent Activity est déjà masqué ; les secrets sont masqués à nouveau avant l'envoi. Aucun objet passeport ni résultat brut n'est transmis. Le cadre reste actif dans tous les états non terminaux, y compris pendant un outil et en pause. Il s'éteint quand une question attend l'utilisateur, quand la session est drainée et à la fin ; quitter le panneau envoie aussi l'état inactif.
+
+`panel.js` n'accepte cet état que de l'iframe Nami et de son origine configurée, comme pour `nami:focus-official`. Il transmet le message aux seuls onglets HTTPS des trois hôtes, via `chrome.tabs.sendMessage`, sans ouvrir ni activer d'onglet. La couche accepte uniquement les messages de l'extension et pose la bulle avec `textContent`, jamais du HTML.
+
+Le panneau ouvre aussi un port `nami-panel` vers le service worker. À sa déconnexion, le service worker envoie l'état inactif aux mêmes onglets officiels. Fermer le panneau efface donc le cadre et la bulle même quand Chrome détruit l'iframe sans exécuter le nettoyage React.
+
+Test manuel : recharger l'extension puis l'onglet officiel. Déplacer la souris, cliquer dans un champ et saisir du texte pour voir flèche, onde et contour. Depuis la console du panneau, envoyer un état fictif :
+
+```js
+const tabs = await chrome.tabs.query({ url: "https://evisa.imigrasi.go.id/*" });
+await chrome.tabs.sendMessage(tabs[0].id, {
+  type: "nami:agent-state", active: true, step: "Choosing FRANCE"
+});
+```
+
+Vérifier le cadre et la bulle, puis envoyer `active: false`. Vérifier qu'un clic sur un élément situé sous la couche l'active toujours. Lancer le Chrome de l'agent avec `--force-device-scale-factor=1` sur écran Retina. Le passage réel de l'agent H sur les cinq menus et la vidéo de 20 s restent à faire avec le ticket 15 avant validation finale.
 
 ## « Open the official site »
 
