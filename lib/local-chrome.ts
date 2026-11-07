@@ -6,9 +6,11 @@ import { agentChromePort } from "@/lib/chrome-cdp";
 
 type CdpTab = { type: string; url: string; webSocketDebuggerUrl?: string };
 
-export const SCREENSHOT_GUIDANCE = "Do not reload or refresh the page or navigate away; take a screenshot and continue with the next field.";
+export const SCREENSHOT_GUIDANCE = "Do not reload or refresh the page or navigate away; look at the page with wait_web (1 second) and continue with the next field.";
 // After a pick the agent needs no new look: the next list can be picked off screen (2026-11-08, one step less per list).
-export const PICK_GUIDANCE = "Do not reload or refresh the page or navigate away; continue with the next field (pick_option also works on lists that are not on screen).";
+// 2026-11-08: after four picks with no new look, the agent once "took a screenshot" with refresh_web, which erased the
+// form: the result names the safe way to look.
+export const PICK_GUIDANCE = "Do not reload or refresh the page or navigate away; continue with the next field (pick_option also works on lists that are not on screen). To look at the page, use wait_web with 1 second, never refresh_web.";
 // The page's postal code lookup is an AJAX call: fill_field waits this long before reading the fields it filled.
 export const FILL_SETTLE_MS = 2500;
 
@@ -125,7 +127,7 @@ export function fillExpression(field: string, value: string, settleMs = FILL_SET
 }
 
 const NO_OFFICIAL_TAB = "The official site is not open in Chrome.";
-export const NOT_ON_OFFICIAL_SITE = "The tab is no longer on the official site; nothing was changed. Take a screenshot and go back to the official form.";
+export const NOT_ON_OFFICIAL_SITE = "The tab is no longer on the official site; nothing was changed. Look at the page with wait_web (1 second) and go back to the official form.";
 
 export const AGENT_POINT_EVENT = "nami-agent-point";
 

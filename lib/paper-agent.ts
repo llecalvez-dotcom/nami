@@ -73,7 +73,7 @@ export const PICK_OPTION_TOOL: ToolSpec = {
 export const FILL_FIELD_TOOL: ToolSpec = {
   name: "fill_field",
   description:
-    "Write a value in a text field of the current page and fire the events the page listens to (input, change, keyup). Use it for the Postal Code, whose lookup only runs on keyup: the page then fills Province, City, District and Village. The result tells the value read back and the fields the page filled. Do not reload or refresh the page or navigate away; take a screenshot and continue with the next field.",
+    "Write a value in a text field of the current page and fire the events the page listens to (input, change, keyup). Use it for the Postal Code, whose lookup only runs on keyup: the page then fills Province, City, District and Village. The result tells the value read back and the fields the page filled. Do not reload or refresh the page or navigate away; look at the page with wait_web (1 second) and continue with the next field.",
   input_schema: {
     type: "object",
     properties: {

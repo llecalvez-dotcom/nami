@@ -152,7 +152,8 @@ describe("agent tasks", () => {
     expect(instructions).not.toContain("take a screenshot to verify that the page shows the file");
     expect(instructions).toContain("Never reload or refresh the e-VOA page, including with refresh_web: it erases filled fields.");
     expect(instructions).toContain("Only reload or refresh if the page is visibly broken.");
-    expect(instructions).toContain("Re-observe by taking a screenshot, not by reloading, refreshing or navigating.");
+    expect(instructions).toContain("To look at the page again, call wait_web with 1 second: never refresh_web");
+    expect(instructions).not.toContain("take a screenshot");
     expect(instructions).not.toContain("fresh look");
     expect(instructions).toContain("If a captcha, an account creation or an e-mail code appears, stop and call ask_user");
     expect(instructions).toContain("Do not invent any information");
@@ -171,7 +172,7 @@ describe("agent tasks", () => {
     expect(task).toContain("After 2 failed attempts on the same field, stop trying and call ask_user with field set to that field");
     expect(task).toContain("asking the human to pick the required value themselves in Chrome");
     expect(task).toContain("Say which value to pick");
-    expect(task).toContain("Wait for the human's answer before continuing, then take a screenshot and continue from the updated form without reloading, refreshing or navigating");
+    expect(task).toContain("Wait for the human's answer before continuing, then look at the page with wait_web (1 second) and continue from the updated form without reloading, refreshing or navigating");
     expect(task).toContain("If the result does not confirm a successful upload, call ask_user");
     expect(task).toContain("pick_option also works on a list that is not on screen: call it for the next list right away, without scrolling to it first");
   });
