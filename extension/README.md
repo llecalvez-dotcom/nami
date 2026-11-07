@@ -1,6 +1,6 @@
 # Extension Chrome Nami (ticket 08)
 
-Nami vit dans le panneau latéral de Chrome, l'agent H clique dans l'onglet. L'extension n'a **aucune logique d'agent** : elle affiche Nami (`http://localhost:3000` par défaut) dans une `iframe` plein cadre, c'est tout.
+Nami vit dans le panneau latéral de Chrome, l'agent H clique dans l'onglet. L'extension n'a **aucune logique d'agent** : elle affiche l'écran épuré de Nami (`http://localhost:3000/panel` par défaut, ticket 14) dans une `iframe` plein cadre, c'est tout. Sans réglage visible : la session du navigateur local vient de `NAMI_LOCAL_SESSION_ID` dans le `.env.local` de Nami.
 
 ## Installation
 
