@@ -12,6 +12,7 @@ import { Conversation } from "@/components/trip/conversation";
 import { Dossier } from "@/components/trip/dossier";
 import { useLivePapers } from "@/components/trip/live-papers";
 import { PassportCard } from "@/components/trip/passport-card";
+import { PhotoCard } from "@/components/trip/photo-card";
 import { TryAnotherCountry } from "@/components/trip/try-another-country";
 import { useAgentRun } from "@/components/trip/use-agent-run";
 import { useTripActions } from "@/components/trip/use-trip-actions";
@@ -42,6 +43,7 @@ export function TripScreen({ id }: { id: string }) {
   const { destination, country_iso2, arrival_at } = found?.request ?? {};
   const [passport, setPassport] = useState<PassportFields | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(null);
+  const [photoDocumentId, setPhotoDocumentId] = useState<string | null>(null);
   const [passportSearchRequest, setPassportSearchRequest] = useState(0);
   const passportCard = useRef<HTMLDivElement>(null);
   const secrets = useMemo(() => [passport?.passport_number, passport?.birth_date], [passport]);
@@ -59,6 +61,7 @@ export function TripScreen({ id }: { id: string }) {
     trip: current,
     passport,
     documentId,
+    photoDocumentId,
     onNeedPassport: (documentsAvailable) => {
       if (documentsAvailable) {
         setPassportSearchRequest((request) => request + 1);
@@ -179,6 +182,7 @@ export function TripScreen({ id }: { id: string }) {
                     onDocumentConfirmed={setDocumentId}
                     searchRequest={passportSearchRequest}
                   />
+                  {documentId ? <div className="mt-4"><PhotoCard demo={demo} onConfirm={setPhotoDocumentId} /></div> : null}
                 </div>
               ) : null}
               {demo && !trip.sample ? <AgentSettingsCard /> : null}

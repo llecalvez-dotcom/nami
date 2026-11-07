@@ -221,6 +221,29 @@ describe("passport document handoff", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("binds the confirmed identity photo too, and rejects a photo id that is not a photo token", async () => {
+    await writeFile(join(root, "photo-identite.jpg"), "fictitious photo bytes");
+    const [photo] = await findDocuments("photo");
+    const wrongKind = await start({ ...BODY, document_id: documentId, photo_document_id: documentId });
+    expect(wrongKind.status).toBe(400);
+    expect((await wrongKind.json()).error).toContain("Search for your photo again.");
+    expect(fetch).not.toHaveBeenCalled();
+    expect((await start({ ...BODY, document_id: documentId, photo_document_id: photo.id })).status).toBe(201);
+    expect(JSON.stringify(sentBody())).not.toContain("photo-identite");
+    const send = vi.fn(async (method: string) => {
+      if (method === "Target.getTargets") return {
+        targetInfos: [{ type: "page", targetId: "official", url: "https://evisa.imigrasi.go.id/form" }],
+      };
+      if (method === "Target.attachToTarget") return { sessionId: "target" };
+      if (method === "Runtime.evaluate") return { result: { value: "no official tab" } };
+      return {};
+    });
+    vi.mocked(connectChrome).mockResolvedValue({ send, close: vi.fn() });
+    const result = await uploadSessionDocument("s-1", { tool_name: "upload_file", args: { purpose: "photo" }, id: "u-photo" });
+    expect(result).toBe("no official tab");
+    expect(send).toHaveBeenCalledWith("Target.attachToTarget", expect.anything());
+  });
+
   it("rejects an expired id after another search without calling H", async () => {
     await findDocuments();
     const response = await start({ ...BODY, document_id: documentId });

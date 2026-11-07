@@ -85,6 +85,25 @@ describe("local documents", () => {
     expect(documents[0].id).toMatch(/^[a-f0-9]{48}$/);
   });
 
+  it("finds the identity photo by name, images only, without dropping the passport token", async () => {
+    for (const name of ["photo-identite.jpg", "photo.pdf", "passeport-scan.jpg", "id-card.png"]) {
+      await writeFile(join(root, name), "fictitious");
+    }
+    const [passport] = await findDocuments();
+    const response = await find(request("find?kind=photo"));
+    expect(response.status).toBe(200);
+    const { documents } = await response.json();
+    expect(documents.map((file: { name: string }) => file.name)).toEqual(["photo-identite.jpg", "id-card.png", "passeport-scan.jpg"]);
+    expect(documents[0].score).toBe(110);
+    expect(await resolveDocumentPath(passport.id)).toBe(join(root, "passeport-scan.jpg"));
+    expect(await resolveDocumentPath(documents[0].id, "photo")).toBe(join(root, "photo-identite.jpg"));
+    expect(await resolveDocumentPath(documents[0].id)).toBeNull();
+    expect(await resolveDocumentPath(passport.id, "photo")).toBeNull();
+    await findDocuments("photo");
+    expect(await resolveDocumentPath(documents[0].id, "photo")).toBeNull();
+    expect(await resolveDocumentPath(passport.id)).toBe(join(root, "passeport-scan.jpg"));
+  });
+
   it("includes two subfolder levels, excludes deeper files, and caps results at five", async () => {
     const second = join(root, "one", "two");
     await mkdir(join(second, "three"), { recursive: true });

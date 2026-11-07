@@ -21,7 +21,7 @@ import {
 import { getTrip, saveTrip } from "@/lib/trip-store";
 
 // An empty local session lets the server use NAMI_LOCAL_SESSION_ID (the side panel shows no settings).
-async function startVisaSession(trip: Trip, passport: PassportFields, documentId: string | null): Promise<string> {
+async function startVisaSession(trip: Trip, passport: PassportFields, documentId: string | null, photoDocumentId: string | null): Promise<string> {
   const settings = readAgentSettings();
   const attempt = createVisaStartAttempt({
     request: trip.request,
@@ -30,6 +30,7 @@ async function startVisaSession(trip: Trip, passport: PassportFields, documentId
     local_session_id: settings.local_session_id.trim(),
     file_paths: filePaths(settings.files),
     ...(documentId ? { document_id: documentId } : {}),
+    ...(documentId && photoDocumentId ? { photo_document_id: photoDocumentId } : {}),
   }, { scope: trip.id });
   return attempt();
 }
@@ -48,12 +49,14 @@ export function useTripActions({
   trip,
   passport,
   documentId,
+  photoDocumentId = null,
   onNeedPassport,
   onStarted,
 }: {
   trip: Trip | null;
   passport: PassportFields | null;
   documentId: string | null;
+  photoDocumentId?: string | null;
   // documentsAvailable: the local document search can look for the passport.
   onNeedPassport: (documentsAvailable: boolean) => void;
   onStarted?: (trip: Trip) => void;
@@ -79,7 +82,7 @@ export function useTripActions({
     }
     setStarting(true);
     try {
-      const sessionId = await startVisaSession(current, fields, documentId);
+      const sessionId = await startVisaSession(current, fields, documentId, photoDocumentId);
       const started = startVisaRun(latest() ?? current, itemId, sessionId, new Date(), documentId !== null);
       update(started);
       onStarted?.(started);

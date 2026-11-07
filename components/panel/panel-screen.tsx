@@ -5,6 +5,7 @@ import { ArrowRight, Check, Plus, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Conversation } from "@/components/trip/conversation";
 import { PassportCard } from "@/components/trip/passport-card";
+import { PhotoCard } from "@/components/trip/photo-card";
 import { useAgentRun } from "@/components/trip/use-agent-run";
 import { useTripActions } from "@/components/trip/use-trip-actions";
 import { MicButton, VoiceStatusLine } from "@/components/voice/mic-button";
@@ -129,6 +130,7 @@ function StartView({ onTrip }: { onTrip: (trip: Trip) => void }) {
 function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
   const [passport, setPassport] = useState<PassportFields | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(null);
+  const [photoDocumentId, setPhotoDocumentId] = useState<string | null>(null);
   const [searchRequest, setSearchRequest] = useState(0);
   const [editing, setEditing] = useState(false);
   // The visa proposal the traveller accepted before the passport was there: it starts once the passport is confirmed.
@@ -142,6 +144,7 @@ function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
     trip,
     passport,
     documentId,
+    photoDocumentId,
     onNeedPassport: () => setSearchRequest((request) => request + 1),
     onStarted: (started) => {
       saveTrip(pushAgentMessage(started, WATCH_MESSAGE));
@@ -216,6 +219,7 @@ function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
                   if (itemId) void actions.createVisa(itemId, fields);
                 }}
               />
+              {documentId ? <div className="mt-4"><PhotoCard demo onConfirm={setPhotoDocumentId} /></div> : null}
             </div>
           </section>
         ) : null}

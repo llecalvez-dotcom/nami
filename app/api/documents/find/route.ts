@@ -1,4 +1,4 @@
-import { documentsEnabled, findDocuments } from "@/lib/documents";
+import { documentsEnabled, findDocuments, isDocumentKind } from "@/lib/documents";
 import { guard } from "@/lib/api-guard";
 
 const headers = { "Cache-Control": "no-store" };
@@ -13,8 +13,8 @@ export async function GET(request: Request) {
   try {
     const kind = new URL(request.url).searchParams.get("kind");
     if (kind === null) return Response.json({ enabled: true }, { headers });
-    if (kind !== "passport") return Response.json({ error: "Unsupported document kind." }, { status: 400, headers });
-    return Response.json({ documents: await findDocuments() }, { headers });
+    if (!isDocumentKind(kind)) return Response.json({ error: "Unsupported document kind." }, { status: 400, headers });
+    return Response.json({ documents: await findDocuments(kind) }, { headers });
   } catch {
     return Response.json({ error: "Documents could not be searched. You can upload a file instead." }, { status: 500, headers });
   } finally {

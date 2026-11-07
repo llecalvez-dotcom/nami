@@ -7,6 +7,7 @@ import { findDocuments } from "@/lib/documents";
 import type { ToolRequest } from "@/lib/h-agent";
 
 const CALL: ToolRequest = { tool_name: "upload_file", args: { purpose: "passport" }, id: "upload-1" };
+const PHOTO_CALL: ToolRequest = { tool_name: "upload_file", args: { purpose: "photo" }, id: "upload-2" };
 const DOMAIN = "evisa.imigrasi.go.id";
 let root: string;
 let path: string;
@@ -171,6 +172,26 @@ describe("session-bound CDP passport upload", () => {
     expect(chrome.send.mock.calls.some(([method]) => method === "DOM.setFileInputFiles")).toBe(false);
   });
 
+  it("drops the confirmed identity photo into the picture input only, never into a passport input", async () => {
+    const photoPath = join(root, "photo-identite.jpg");
+    await writeFile(photoPath, "fictitious photo");
+    bindSessionDocument("session-1", path, photoPath);
+    const chrome = mockChrome(EVOA_INPUTS);
+    expect(await uploadSessionDocument("session-1", PHOTO_CALL, chrome.connect)).toBe("uploaded");
+    expect(chrome.inputs[4].files).toEqual([photoPath]);
+    expect(chrome.inputs.filter((input) => input.files.length > 0)).toHaveLength(1);
+    bindSessionDocument("session-1", path, photoPath);
+    const noPhotoInput = mockChrome([{ id: "passport-attachment", visible: true }]);
+    expect(await uploadSessionDocument("session-1", PHOTO_CALL, noPhotoInput.connect)).toBe("no file input found");
+    expect(noPhotoInput.send.mock.calls.some(([method]) => method === "DOM.setFileInputFiles")).toBe(false);
+  });
+
+  it("hands over the photo when none was confirmed, without connecting", async () => {
+    const chrome = mockChrome(EVOA_INPUTS);
+    expect(await uploadSessionDocument("session-1", PHOTO_CALL, chrome.connect)).toContain("ask_user");
+    expect(chrome.connect).not.toHaveBeenCalled();
+  });
+
   it("dispatches input and change only when CDP did not already fire them", async () => {
     const chrome = mockChrome([true], false);
     expect(await uploadSessionDocument("session-1", CALL, chrome.connect)).toBe("uploaded");
@@ -196,7 +217,7 @@ describe("session-bound CDP passport upload", () => {
     let call = CALL;
     if (reason === "production") vi.stubEnv("NODE_ENV", "production");
     if (reason === "disabled") vi.stubEnv("NAMI_DOCUMENTS_DIR", "");
-    if (reason === "photo") call = { ...CALL, args: { purpose: "photo" } };
+    if (reason === "photo") call = { ...CALL, args: { purpose: "photo", extra: true } };
     if (reason === "path") call = { ...CALL, args: { purpose: "passport", path: "/not-confirmed.jpg" } };
     if (reason === "missing") await rm(path);
     expect(await uploadSessionDocument(reason === "unknown" ? "unknown" : "session-1", call, chrome.connect))
