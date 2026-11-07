@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, Keyboard, MessagesSquare, Plus, X } from "lucide-react";
 import { FocusStage, Sentence, STAGE_TEXTS, VoiceHint, WaveMic, waveState, type AgentView, type StageVisual, type Translate } from "@/components/panel/focus-stage";
+import { Backdrop } from "@/components/panel/backdrop";
 import { Wave } from "@/components/panel/wave";
 import { PassportCard } from "@/components/trip/passport-card";
 import { PhotoCard } from "@/components/trip/photo-card";
@@ -15,7 +16,7 @@ import { useSpokenLanguage } from "@/lib/voice/language";
 import { requestTranslations, translated, useTranslatedConversation, useTranslationsVersion } from "@/lib/voice/translations";
 import type { DocumentExtraction, PassportFields } from "@/lib/contracts";
 import { bestFirst, foundPassportText, foundPhotoText, readSummary, type Reader } from "@/lib/panel-documents";
-import { agentChecklist, CHECKLIST_LABELS, focusItem, paperInFocus, readyPaper } from "@/lib/panel-focus";
+import { agentChecklist, CHECKLIST_LABELS, focusItem, paperInFocus, readyPaper, sceneFor } from "@/lib/panel-focus";
 import { requestTripParse } from "@/lib/trip-parse-client";
 import {
   acceptProposal,
@@ -223,7 +224,7 @@ function StartView({ onTrip, t }: { onTrip: (trip: Trip) => void; t: Translate }
 
   return (
     <>
-      <section className="flex min-h-0 flex-1 flex-col justify-center px-7 pb-6">
+      <section className="flex min-h-0 flex-1 flex-col px-7 pt-[6vh] pb-6">
         <Sentence text={busy ? t("Reading your trip…") : t("Tell me where you're going. I'll take care of the papers.")} size="xl" />
         <p className="mt-4 text-[15px] leading-snug text-[var(--np-ink-soft)]">{t("Speak, in any language. You keep the last word.")}</p>
         <ul className="mt-7 flex flex-col gap-1.5">
@@ -506,9 +507,12 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
 
   const showCard = manual || reconfirm;
   const compact = passport !== null && !editing;
+  const paper = agent?.paper ?? ready ?? paperInFocus(trip, focus);
+  const scene = sceneFor({ started: true, paper, visaReady: marks[2].done, cardReady: marks[3].done });
 
   return (
-    <div className="nami-panel relative flex h-dvh flex-col" data-paper={agent?.paper ?? ready ?? paperInFocus(trip, focus)}>
+    <div className="nami-panel relative flex h-dvh flex-col" data-paper={paper} data-scene={scene}>
+      <Backdrop scene={scene} />
       <header className="flex items-center justify-between gap-2 px-5 pt-4 pb-2">
         <div className="flex min-w-0 items-baseline gap-2.5">
           <Wordmark />
@@ -611,7 +615,8 @@ export function PanelScreen() {
       {trip ? (
         <TripView key={trip.id} trip={trip} t={t} language={language} onNewTrip={() => choose(null)} />
       ) : (
-        <div className="nami-panel relative flex h-dvh flex-col">
+        <div className="nami-panel relative flex h-dvh flex-col" data-scene="aube">
+          <Backdrop scene="aube" />
           <header className="px-5 pt-4 pb-2">
             <Wordmark />
           </header>

@@ -577,9 +577,35 @@
   --np-ease: cubic-bezier(0.23, 1, 0.32, 1);
   --np-serif: "Gambetta", Georgia, "Times New Roman", serif;
   color: var(--np-ink);
-  background:
-    var(--np-dawn-image, none) center top / cover no-repeat,
-    linear-gradient(180deg, #cde3ea 0%, #dfe9e6 30%, #f3e4d4 66%, #f2d3c0 100%);
+  isolation: isolate;
+  background: linear-gradient(180deg, #cde3ea 0%, #dfe9e6 30%, #f3e4d4 66%, #f2d3c0 100%);
+}
+/* The painting behind everything; the sand stays opaque so the answers always read. */
+.nami-panel .np-backdrop { position: absolute; inset: 0; z-index: -1; overflow: hidden; }
+.nami-panel .np-scene {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center bottom;
+  opacity: 0;
+  transition: opacity 1600ms var(--np-ease);
+}
+.nami-panel .np-scene[data-on="true"] { opacity: 1; }
+/* Morning: the sky is a deep blue, the destination keeps the ink color. */
+.nami-panel[data-scene="matin"] .np-sentence em { color: var(--np-ink); }
+/* Night: light text on the sky; the sand keeps dark text. */
+.nami-panel[data-scene="nuit"] {
+  --np-ink: #f7efe3;
+  --np-ink-soft: rgb(247 239 227 / 0.82);
+  --np-line: rgb(247 239 227 / 0.2);
+}
+.nami-panel[data-scene="nuit"] .np-sentence em { color: #f4c27a; }
+.nami-panel[data-scene="nuit"] .np-glass { background: rgb(14 30 58 / 0.55); }
+.nami-panel[data-scene="nuit"] .np-sand {
+  --np-ink: #13303a;
+  --np-ink-soft: rgb(19 48 58 / 0.76);
+  --np-line: rgb(19 48 58 / 0.12);
+  color: var(--np-ink);
 }
 .nami-panel[data-paper="arrival_card"] {
   --paper: var(--np-coral);
@@ -616,8 +642,8 @@
 }
 .nami-panel .np-press:active { transform: scale(0.97); }
 .nami-panel .np-glass {
-  background: rgb(253 248 240 / 0.72);
-  backdrop-filter: blur(18px) saturate(1.2);
+  background: rgb(253 248 240 / 0.88);
+  backdrop-filter: blur(24px) saturate(1.2);
   box-shadow: 0 1px 0 rgb(255 255 255 / 0.6) inset, 0 12px 32px rgb(19 48 58 / 0.1);
 }
 
@@ -652,6 +678,7 @@
 /* The same height on every screen: the wave and the microphone never jump from one step to the next. */
 .nami-panel .np-sand { background: var(--np-sand); min-height: 128px; }
 @media (prefers-reduced-motion: reduce) {
+  .nami-panel .np-scene,
   .nami-panel .np-swells > svg,
   .nami-panel .np-enter { animation: none !important; }
 }

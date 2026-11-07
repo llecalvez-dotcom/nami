@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentChecklist, focusItem, pivotParts, readyPaper, sentenceSize } from "@/lib/panel-focus";
+import { agentChecklist, focusItem, pivotParts, readyPaper, sceneFor, sentenceSize } from "@/lib/panel-focus";
 import { ARRIVAL_CARD_READY_MESSAGE, VISA_READY_MESSAGE, type ConversationItem } from "@/lib/trip-state";
 
 const said = (id: string, text: string): ConversationItem => ({ id, kind: "agent", text });
@@ -63,5 +63,16 @@ describe("the sentence", () => {
     expect(pivotParts("For bali you need an e-VOA.", "Bali")).toEqual(["For ", "bali", " you need an e-VOA."]);
     expect(pivotParts("No destination here.", "Bali")).toEqual(["No destination here.", "", ""]);
     expect(pivotParts("Anything.", null)).toEqual(["Anything.", "", ""]);
+  });
+});
+
+describe("the time of day behind the panel", () => {
+  it("goes from dawn to night as the papers get done", () => {
+    const base = { started: true, paper: "visa" as const, visaReady: false, cardReady: false };
+    expect(sceneFor({ ...base, started: false })).toBe("aube");
+    expect(sceneFor(base)).toBe("matin");
+    expect(sceneFor({ ...base, visaReady: true })).toBe("dore");
+    expect(sceneFor({ ...base, paper: "arrival_card" })).toBe("dore");
+    expect(sceneFor({ ...base, visaReady: true, cardReady: true })).toBe("nuit");
   });
 });

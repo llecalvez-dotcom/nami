@@ -194,7 +194,7 @@ function Sky(props: Props) {
         <ReadyMark paper={ready} />
         <Sentence text={t(READY_TITLE[ready])} size="xl" />
         <p className="mt-2 text-[15px] text-[var(--np-ink-soft)]">{t("Check it in the tab, then send it yourself.")}</p>
-        <p className="mt-10 text-[16px] leading-snug text-[var(--np-ink-soft)]">{sentenceOf(item)}</p>
+        <p className="mt-5 text-[16px] leading-snug text-[var(--np-ink-soft)]">{sentenceOf(item)}</p>
       </>
     );
   } else {
@@ -216,7 +216,8 @@ function Sky(props: Props) {
     );
   }
   return (
-    <section aria-live="polite" className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-7 pt-2 pb-6">
+    // Pinned high: the sentence sits in the open sky of the painting, above the gate.
+    <section aria-live="polite" className="flex min-h-0 flex-1 flex-col overflow-y-auto px-7 pt-[6vh] pb-6">
       <div key={key} className="np-enter">
         {body}
       </div>
