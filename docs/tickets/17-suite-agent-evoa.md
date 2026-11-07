@@ -1,5 +1,7 @@
 # Ticket 17 : retour des passages réels du ticket 15, ce qu'il reste pour atteindre l'écran de paiement
 
+> **État au samedi 7 novembre, 23 h : ticket fermé avec la borne de Nathan (PR #59).** Depuis 21 h, la démo s'arrête à l'étape 1 du formulaire, une fois le passeport et la photo déposés, sans jamais cliquer sur Next : les étapes suivantes envoient les données du voyageur au gouvernement, et l'équipe ne veut faire aucune déclaration réelle. Avec cette borne, l'agent H fait tout le parcours seul, 3 passages sur 3 dont un coupé par « Stop » (passages 9, 10 et 11 de `docs/tests/f1-evoa.md`). Tout ce qui est écrit plus bas sur « l'écran de paiement » était l'objectif d'origine et n'est plus celui de la démo ; le code de l'étape 2 livré par cette PR (billet retour, `fill_field`, libellé du bloc) reste dans le dépôt, couvert par les tests unitaires, mais n'a pas été vu en réel et ne le sera pas tant que la borne tient. Mode d'emploi du banc et des passages : `docs/tests/f1-evoa.md`, section « Mode d'emploi ».
+
 Responsable humain : **Clément** (passages réels, relecture), avec **Ali** pour le point 2 (ticket 16).
 Branche : `feat/17-suite-agent-evoa` depuis `main`, une fois la PR des correctifs du ticket 15 (`devin/1794079157-pick-option-select2`) fusionnée. Une PR.
 
@@ -16,15 +18,17 @@ Trois passages réels sur le Mac de Clément (densité 1, 0,44 $ au total) : l'a
 
 ## Ce qu'il faut faire
 
-État au 7 novembre (branche `feat/17-suite-agent-evoa`, code et tests seulement, aucun passage réel) :
+État au 7 novembre, 23 h (branche `feat/17-suite-agent-evoa`, code, tests et 8 passages réels sur le Mac de Clément, relevés dans `docs/tests/f1-evoa.md`) :
 
 - [x] 1 côté Nami : `upload_file { purpose: "return_ticket" }` (recherche PDF, confirmation, champ `return_ticket`, `ask_user` sans billet).
-- [ ] 1 démo : vrai billet retour en PDF dans `private/` (Clément, sur son Mac).
-- [x] 2 : la photo et le scan du ticket 16 étaient déjà sur `main` (PR #50, #51, #53) ; rien refait ici, dépôt réel à voir au passage.
+- [ ] 1 démo : vrai billet retour en PDF dans `private/` : **sans objet** tant que la démo s'arrête à l'étape 1 (PR #59) ; jamais de faux billet.
+- [x] 2 : la photo et le scan du ticket 16 étaient déjà sur `main` (PR #50, #51, #53) ; **vu en réel** : `upload_file` dépose le passeport (passages 5, 7, 9, 10) et la photo (9, 10) sans aide, quand le panneau transmet `photo_document_id`.
 - [x] 3 : `pickExpression` lit le libellé du bloc `.form-group` sans l'astérisque et préfère le libellé exact.
 - [x] 4 : outil `fill_field`, route `/api/agent/[id]/fill`, consigne pour le code postal.
 - [x] 5 : nom et prénoms lus par Nami transmis tels quels dans la tâche, avec la consigne de les écrire tels quels.
-- [ ] 6, 7, 8 : passages réels, relevés et nettoyage, sur le Mac de Clément.
+- [x] 7 : passages réels avec la borne de l'étape 1 : 9 et 10 complets et autonomes, 11 coupé par « Stop » (`docs/tests/f1-evoa.md`).
+- [ ] 6 : étapes 3 et suivantes : **sans objet** avec la borne de l'étape 1.
+- [ ] 8 : nettoyage du Mac après la démo (`~/nami-runs`, `private/passeport-scan.jpg`).
 - [x] Tests vitest des trois points, `npm test`, `npm run lint`, `npm run build`.
 
 1. **Billet retour (bloquant).** Le champ Return Ticket (PDF) est obligatoire à l'étape 2.
@@ -52,4 +56,6 @@ Trois passages réels sur le Mac de Clément (densité 1, 0,44 $ au total) : l'a
 
 ## Critère de fin
 
-Celui du ticket 15 : écran de résumé ou de paiement atteint sans aide humaine, 3 passages sur 3, dont un arrêté par « Stop ». `npm test`, `npm run lint` et `npm run build` passent.
+Révisé le 7 novembre à 21 h (PR #59, décision de Nathan) : depuis la page de choix du visa, l'agent choisit le visa, ouvre le formulaire, dépose le passeport et la photo par `upload_file`, puis s'arrête (`report_ready`) sans cliquer sur Next, sans aide humaine, 3 passages sur 3, dont un arrêté par « Stop ». **Atteint le 7 novembre à 22 h 45** (passages 9, 10 et 11). `npm test` (739 tests), `npm run lint`, `npx tsc --noEmit` et `npm run build` passent.
+
+L'ancien critère (écran de résumé ou de paiement) n'est plus visé par la démo. Si l'équipe le reprend un jour : il faut un vrai billet retour en PDF, enlever la borne de `stop_condition` dans `lib/bali-papers.ts`, et refaire les points 6 et 7 ci-dessus.
