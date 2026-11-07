@@ -147,9 +147,17 @@ describe("applyAgentChanges", () => {
     expect(again.toolCalls).toEqual([]);
   });
 
-  it("says why the agent stopped when it fails", () => {
+  it("says why the agent stopped when it fails, then offers to try the same paper again", () => {
     const { trip } = applyAgentChanges(liveTrip(), changes({ status: "failed", error_code: "environment_error" }), SECRETS);
-    expect(trip.conversation.at(-1)).toMatchObject({ kind: "agent", text: expect.stringContaining("environment_error") });
+    expect(trip.conversation.at(-2)).toMatchObject({ kind: "agent", text: expect.stringContaining("environment_error") });
+    expect(trip.conversation.at(-1)).toMatchObject({ kind: "proposal", action: "create_visa", accept_label: "Try again", decision: null });
+  });
+
+  it("offers the arrival card again when its run ends without reaching the end of the page", () => {
+    const live = liveTrip();
+    const card = { ...live, agent_run: { ...live.agent_run!, paper_id: "arrival_card" as const } };
+    const { trip } = applyAgentChanges(card, changes({ status: "completed", answer: JSON.stringify({ summary: "Blocked: the browser connection has been lost." }) }), SECRETS);
+    expect(trip.conversation.at(-1)).toMatchObject({ kind: "proposal", action: "create_arrival_card", decision: null });
   });
 });
 
@@ -204,7 +212,8 @@ describe("ask_user", () => {
     );
     expect(toolCalls).toEqual([]);
     expect(trip.agent_run).toMatchObject({ state: "interrupted", drained: false });
-    expect(trip.conversation.at(-1)).toMatchObject({ kind: "agent", text: "Agent stopped: it left the official site (pay.example.com)." });
+    expect(trip.conversation.at(-2)).toMatchObject({ kind: "agent", text: "Agent stopped: it left the official site (pay.example.com)." });
+    expect(trip.conversation.at(-1)).toMatchObject({ kind: "proposal", action: "create_visa", decision: null });
   });
 
   it("after Stop agent, keeps polling until H confirms the session is stopped", () => {

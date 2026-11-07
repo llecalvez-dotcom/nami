@@ -132,6 +132,19 @@ const ARRIVAL_CARD_PROPOSAL: NewConversationItem = {
   decision: null,
 };
 
+// After a run that did not reach its end, the same paper is proposed again: on 2026-11-07 the arrival card never opened
+// because the local browser bridge was restarting, and the only way back was to redo the whole trip.
+function retryProposal(paperId: "evoa" | "arrival_card"): NewConversationItem {
+  return {
+    kind: "proposal",
+    action: paperId === "arrival_card" ? "create_arrival_card" : "create_visa",
+    text: "It did not work this time. Shall I try again?",
+    accept_label: "Try again",
+    decline_label: "Not now",
+    decision: null,
+  };
+}
+
 const CREATE_VISA_PROPOSAL: NewConversationItem = {
   kind: "proposal",
   action: "create_visa",
@@ -520,16 +533,18 @@ export function applyAgentChanges(
   if (terminal && !wasTerminal) {
     next = { ...closeAgentQuestions(next, "Agent stopped"), agent_run: { ...next.agent_run!, pending_question: undefined } };
     const reachedPayment = typeof run.result?.summary === "string";
+    const retry = retryProposal(run.paper_id ?? "evoa");
     if (changes.left_official_site) {
       const host = redact(changes.left_official_site, secrets);
-      next = pushAgentMessage(
+      next = push(
         next,
-        `Agent stopped: it left the official site (${host}).${changes.cancel_failed ? " Run holo local stop in a terminal to stop it." : ""}`,
+        { kind: "agent", text: `Agent stopped: it left the official site (${host}).${changes.cancel_failed ? " Run holo local stop in a terminal to stop it." : ""}` },
+        retry,
       );
     } else if ((state === "failed" || state === "timed_out") && changes.error_code !== "answer_validation") {
-      next = pushAgentMessage(next, `The agent stopped before the end (${changes.error_code ?? state}). Nothing was submitted.`);
+      next = push(next, { kind: "agent", text: `The agent stopped before the end (${changes.error_code ?? state}). Nothing was submitted.` }, retry);
     } else if (state === "completed" && !reachedPayment) {
-      next = pushAgentMessage(next, "The agent finished without reaching the payment screen. Nothing was submitted.");
+      next = push(next, { kind: "agent", text: "The agent stopped before the end of the page. Nothing was submitted." }, retry);
     } else if (state === "interrupted") {
       next = pushAgentMessage(next, "The agent session was closed. Nothing was submitted.");
     }
