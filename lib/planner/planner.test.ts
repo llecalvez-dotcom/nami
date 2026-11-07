@@ -102,11 +102,11 @@ describe("suggestModules", () => {
     ["a business trip to Tanzania", { destination: "Tanzania", country_iso2: "TZ", purpose: "business" }],
     ["a departure from Brussels to Bali", { origin_country: "BE" }],
     ["a non-French passport", { nationality: "BE" }],
-  ])("is not supported yet for %s, and the request is kept", (_, request) => {
+  ])("is not supported yet for %s, and the papers are checked live", (_, request) => {
     const suggestion = papers(request);
     expect(suggestion?.state).toBe("not_supported_yet");
-    expect(suggestion?.message).toContain("is saved");
-    expect(suggestion?.message).toContain("Bali is the first");
+    expect(suggestion?.message).toContain("Let me check live");
+    expect(suggestion?.message).toContain(request.destination ?? "Bali");
   });
 
   it("prepares one file at a time for two travellers", () => {

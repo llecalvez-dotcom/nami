@@ -8,6 +8,7 @@ import { PassportCard } from "@/components/trip/passport-card";
 import { PhotoCard } from "@/components/trip/photo-card";
 import { ReturnTicketCard } from "@/components/trip/return-ticket-card";
 import { useAgentRun } from "@/components/trip/use-agent-run";
+import { usePapersCheck } from "@/components/trip/use-papers-check";
 import { useTripActions } from "@/components/trip/use-trip-actions";
 import { MuteToggle } from "@/components/voice/mute-toggle";
 import { useVoiceInput } from "@/components/voice/use-voice-input";
@@ -301,6 +302,7 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
   const run = trip.agent_run;
   const reconfirm = needsPassportReconfirm(run, passport !== null);
   useAgentRun(trip.id, run?.session_id ?? null, run !== null && !run.drained && !reconfirm, secrets);
+  usePapersCheck(trip);
 
   // Nami answers in the language the traveller speaks (detected by Gladia), the agent's steps included.
   const shownItems = useTranslatedConversation(trip.conversation, language);

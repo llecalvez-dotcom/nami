@@ -65,7 +65,7 @@ function papersSuggestion(request: TripRequest): ModuleSuggestion {
   return {
     module: "papers",
     state: "not_supported_yet",
-    message: `Your trip to ${request.destination} is saved. ${FILLING_COUNTRY_BY_COUNTRY}`,
+    message: `Let me check live, on the official sites, which entry papers you need for ${request.destination}.`,
   };
 }
 

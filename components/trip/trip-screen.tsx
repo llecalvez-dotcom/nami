@@ -10,12 +10,12 @@ import { CountryStatusPill, SampleBadge } from "@/components/status-badge";
 import { AgentSettingsCard } from "@/components/trip/agent-settings";
 import { Conversation } from "@/components/trip/conversation";
 import { Dossier } from "@/components/trip/dossier";
-import { useLivePapers } from "@/components/trip/live-papers";
 import { PassportCard } from "@/components/trip/passport-card";
 import { PhotoCard } from "@/components/trip/photo-card";
 import { ReturnTicketCard } from "@/components/trip/return-ticket-card";
 import { TryAnotherCountry } from "@/components/trip/try-another-country";
 import { useAgentRun } from "@/components/trip/use-agent-run";
+import { usePapersCheck } from "@/components/trip/use-papers-check";
 import { useTripActions } from "@/components/trip/use-trip-actions";
 import { VisaProgress } from "@/components/trip/visa-progress";
 import { SAMPLE_TRIP_ID } from "@/data/sample";
@@ -41,7 +41,6 @@ export function TripScreen({ id }: { id: string }) {
   const trips = useTrips();
   const demo = useSearchParams().get("demo") === "1";
   const found = trips?.find((t) => t.id === id) ?? null;
-  const { destination, country_iso2, arrival_at } = found?.request ?? {};
   const [passport, setPassport] = useState<PassportFields | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [photoDocumentId, setPhotoDocumentId] = useState<string | null>(null);
@@ -52,11 +51,7 @@ export function TripScreen({ id }: { id: string }) {
   const liveRun = found && !found.sample ? found.agent_run : null;
   const reconfirm = needsPassportReconfirm(liveRun, passport !== null);
   useAgentRun(id, liveRun?.session_id ?? null, liveRun !== null && !liveRun.drained && !reconfirm, secrets);
-  const livePapers = useLivePapers(
-    found && !found.sample && found.formalities.length > 0 && destination && country_iso2
-      ? { destination, country_iso2, arrival_at }
-      : null,
-  );
+  const livePapers = usePapersCheck(found);
 
   const current = found ?? (trips !== null && id === SAMPLE_TRIP_ID ? createSampleTrip(new Date()) : null);
   const actions = useTripActions({

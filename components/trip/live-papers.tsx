@@ -8,7 +8,13 @@ import { formatDate, formatDateTime } from "@/lib/format";
 import type { FormalitiesResult, LiveFormality } from "@/lib/formalities";
 import { hostOf } from "@/lib/official-sites";
 
-export type PapersQuery = { destination: string; country_iso2: string; arrival_at?: string | null };
+export type PapersQuery = {
+  destination: string;
+  country_iso2: string;
+  arrival_at?: string | null;
+  nationality?: string | null;
+  origin_country?: string | null;
+};
 export type LivePapersState =
   | { state: "loading"; query: PapersQuery }
   | { state: "done"; query: PapersQuery; result: FormalitiesResult }
@@ -26,7 +32,9 @@ export async function fetchFormalities(query: PapersQuery): Promise<FormalitiesR
 
 // Searches the papers live once per query; null query = nothing to search.
 export function useLivePapers(query: PapersQuery | null): LivePapersState | null {
-  const key = query ? `${query.destination}|${query.country_iso2}|${query.arrival_at ?? ""}` : null;
+  const key = query
+    ? `${query.destination}|${query.country_iso2}|${query.arrival_at ?? ""}|${query.nationality ?? ""}|${query.origin_country ?? ""}`
+    : null;
   const [state, setState] = useState<{ key: string; value: LivePapersState } | null>(null);
   useEffect(() => {
     if (!query || !key) return;

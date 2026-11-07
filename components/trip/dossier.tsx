@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ModuleStateBadge, SampleBadge, StatusBadge } from "@/components/status-badge";
 import { getBaliPaper, type BaliPaperId } from "@/lib/bali-papers";
 import type { Formality, ModuleKind, ModuleSuggestion, TripRequestDraft } from "@/lib/contracts";
-import { formatDate, formatDateTime, formatTime } from "@/lib/format";
+import { formatDate, formatDateTime, formatLocalDateTime, formatTime } from "@/lib/format";
 import { LivePapersList, type LivePapersState } from "@/components/trip/live-papers";
 import { isAgentActive, type Trip } from "@/lib/trip-state";
 import { agentOfficialUrl, showOfficialSite } from "@/lib/official-tab";
@@ -24,7 +24,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 function Summary({ request }: { request: TripRequestDraft }) {
   const rows: [string, string | null][] = [
     ["Departure", request.departure_date ? formatDate(request.departure_date) : null],
-    ["Landing", request.arrival_at ? `${formatDateTime(request.arrival_at)} (Bali time)` : null],
+    ["Landing", request.arrival_at ? `${formatLocalDateTime(request.arrival_at)} (local time)` : null],
     ["Return", request.return_date ? formatDate(request.return_date) : null],
     ["Purpose", request.purpose],
     ["Passport", request.nationality],

@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import { buildFlightsTask, buildPaperInstructions, buildPaperTask, UNTRUSTED_CONTENT_RULE } from "@/lib/agent-task";
 import { getBaliPaper } from "@/lib/bali-papers";
 import { TripRequestDraftSchema, TripRequestSchema } from "@/lib/contracts";
+import type { FormalitiesResult } from "@/lib/formalities";
 import { buildPilotTask, describeTraveller } from "@/lib/paper-agent";
 import {
   answerQuestion,
   answerQuestionWithText,
+  applyLivePapers,
   createSampleTrip,
   createTripFromRequest,
   decideProposal,
@@ -125,6 +127,96 @@ describe("parsed request flow", () => {
     expect(trip.modules.find((m) => m.module === "papers")?.state).toBe("none_needed");
     expect(trip.conversation.at(-2)).toMatchObject({ kind: "agent" });
     expect(open(trip, "proposal")).toMatchObject({ action: "flights" });
+  });
+
+  const london = (): Trip =>
+    createTripFromRequest(
+      "t4",
+      {
+        ...bali,
+        raw_text: "London next Monday",
+        destination: "London",
+        country_iso2: "GB",
+        departure_date: "2026-11-09",
+        nationality: "FR",
+        arrival_at: "2026-11-09T10:00+00:00",
+        purpose: "tourism",
+      },
+      now,
+    );
+
+  const liveResult = (formalities: FormalitiesResult["formalities"], mode: FormalitiesResult["mode"] = "live"): FormalitiesResult => ({
+    mode,
+    destination: "London",
+    country_iso2: "GB",
+    country_name: "United Kingdom",
+    checked_at: "2026-11-08T12:00:00.000Z",
+    duration_ms: 1200,
+    searched_domains: ["gov.uk"],
+    formalities,
+    sources: [],
+    fillable: false,
+    differs_from_last_check: false,
+    missing_from_live: [],
+    verified_by_hand_on: null,
+    error: mode === "unavailable" ? "LINKUP_API_KEY is not set" : null,
+    notice: "",
+  });
+
+  const eta: FormalitiesResult["formalities"][number] = {
+    id: "live-1",
+    name: "UK Electronic Travel Authorisation (ETA)",
+    required: true,
+    official_url: "https://www.gov.uk/guidance/apply-for-an-electronic-travel-authorisation-eta",
+    official_cost: "GBP 16",
+    opens_at: null,
+    closes_at: null,
+    sources: [{ url: "https://www.gov.uk/guidance/apply-for-an-electronic-travel-authorisation-eta", official: true }],
+    status: "checked",
+    checked_at: "2026-11-08T12:00:00.000Z",
+    kind: "travel_authorization",
+    window_note: "Apply before travel",
+    link_official: true,
+    link_replaced: false,
+    found_on: "gov.uk",
+    differs: [],
+  };
+
+  it("waits for the live papers for London before offering the flight", () => {
+    const trip = london();
+    expect(trip.papers_check).toBe("pending");
+    expect(trip.conversation.at(-1)).toMatchObject({ kind: "agent", text: expect.stringContaining("London") });
+    expect(trip.conversation.some((i) => i.kind === "proposal")).toBe(false);
+    expect(trip.modules.some((m) => m.module === "flights")).toBe(false);
+  });
+
+  it("puts the live papers in the folder, says them once, then offers the flight", () => {
+    const trip = applyLivePapers(london(), liveResult([eta]));
+    expect(trip.papers_check).toBe("done");
+    expect(trip.formalities).toHaveLength(1);
+    expect(trip.formalities[0]).toMatchObject({ id: "live-1", official_url: eta.official_url, status: "checked" });
+    expect(trip.conversation.at(-2)).toMatchObject({
+      kind: "agent",
+      text: expect.stringContaining("you need 1 entry paper"),
+      list: [expect.stringContaining("gov.uk")],
+    });
+    expect(open(trip, "proposal")).toMatchObject({ action: "flights" });
+    expect(applyLivePapers(trip, liveResult([eta]))).toBe(trip);
+  });
+
+  it("says nothing is needed when the live search finds no mandatory paper", () => {
+    const trip = applyLivePapers(london(), liveResult([{ ...eta, required: false }]));
+    expect(trip.modules.find((m) => m.module === "papers")?.state).toBe("none_needed");
+    expect(trip.conversation.at(-2)).toMatchObject({ kind: "agent", text: expect.stringContaining("No mandatory entry paper") });
+    expect(open(trip, "proposal")).toMatchObject({ action: "flights" });
+  });
+
+  it("says the check failed when the live search is unavailable", () => {
+    const trip = applyLivePapers(london(), liveResult([], "unavailable"));
+    expect(trip.papers_check).toBe("done");
+    expect(trip.formalities).toHaveLength(0);
+    expect(trip.conversation.at(-2)).toMatchObject({ kind: "agent", text: expect.stringContaining("could not check") });
+    expect(applyLivePapers(london(), null).conversation.at(-2)).toMatchObject({ kind: "agent", text: expect.stringContaining("could not check") });
   });
 });
 
