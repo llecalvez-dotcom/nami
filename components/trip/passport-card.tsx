@@ -203,7 +203,7 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
                   value={displayedValues[key]}
                   placeholder={masked ? undefined : placeholder}
                   aria-label={label}
-                  aria-invalid={!displayedValues[key].trim() || undefined}
+                  aria-invalid={(!displayedValues[key].trim() && (edited.includes(key) || extraction !== null)) || undefined}
                   onChange={(e) => {
                     setConfirmed(false);
                     setEdited((keys) => keys.includes(key) ? keys : [...keys, key]);
