@@ -165,6 +165,12 @@ describe("session-bound CDP passport upload", () => {
     expect(chrome.send.mock.calls.some(([method]) => method === "DOM.setFileInputFiles")).toBe(false);
   });
 
+  it("does not fall back to another attachment when the passport input exists but is disabled", async () => {
+    const chrome = mockChrome(EVOA_INPUTS.map((input) => typeof input === "object" && input.id === "passport-attachment" ? { ...input, disabled: true } : input));
+    expect(await uploadSessionDocument("session-1", CALL, chrome.connect)).toBe("no file input found");
+    expect(chrome.send.mock.calls.some(([method]) => method === "DOM.setFileInputFiles")).toBe(false);
+  });
+
   it("dispatches input and change only when CDP did not already fire them", async () => {
     const chrome = mockChrome([true], false);
     expect(await uploadSessionDocument("session-1", CALL, chrome.connect)).toBe("uploaded");
