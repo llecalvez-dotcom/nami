@@ -26,7 +26,10 @@ export async function POST(request: Request, ctx: RouteContext<"/api/agent/[id]/
     const uploadResult = input.data.tool_req.tool_name === "upload_file"
       ? await uploadSessionDocument(id, input.data.tool_req)
       : undefined;
-    await sendToolResult(id, input.data.tool_req, uploadResult ?? input.data.result);
+    const result = uploadResult === "uploaded"
+      ? "uploaded. Do not reload or refresh the page or navigate away; take a screenshot to verify the file is shown, then continue with the next field."
+      : uploadResult ?? input.data.result;
+    await sendToolResult(id, input.data.tool_req, result);
     return Response.json({ ok: true, ...(uploadResult ? { upload_result: uploadResult } : {}) }, { status: 202 });
   } catch (error) {
     return hErrorResponse(error);

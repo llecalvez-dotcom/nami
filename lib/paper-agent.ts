@@ -43,7 +43,7 @@ export const REPORT_READY_TOOL: ToolSpec = {
 export const PICK_OPTION_TOOL: ToolSpec = {
   name: "pick_option",
   description:
-    "Pick a value in a dropdown list of the current page without opening it. Use it for every dropdown, instead of clicking it. Then take a fresh look at the page.",
+    "Pick a value in a dropdown list of the current page without opening it. Use it for every dropdown, instead of clicking it. The page already shows the selection. Do not reload or refresh the page or navigate away; take a screenshot and continue with the next field.",
   input_schema: {
     type: "object",
     properties: {
@@ -56,7 +56,7 @@ export const PICK_OPTION_TOOL: ToolSpec = {
 
 export const UPLOAD_FILE_TOOL: ToolSpec = {
   name: "upload_file",
-  description: "Ask Nami to give the confirmed passport file to the official form. Never open the OS file picker. If unavailable, call ask_user for a manual upload.",
+  description: "Ask Nami to give the confirmed passport file to the official form. Never open the OS file picker. After success, take a screenshot to verify the file is shown; do not reload or refresh the page or navigate away. If unavailable, call ask_user for a manual upload.",
   input_schema: {
     type: "object",
     properties: { purpose: { type: "string", enum: ["passport", "photo"] } },

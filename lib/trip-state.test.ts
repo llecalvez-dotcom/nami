@@ -141,7 +141,11 @@ describe("agent tasks", () => {
     expect(instructions).toContain("Never tick a final declaration on honour");
     expect(instructions).toContain("Never click or open the OS file picker");
     expect(instructions).toContain('call upload_file with purpose "passport" or "photo"');
-    expect(instructions).toContain("check on a fresh screenshot that the page shows the file");
+    expect(instructions).toContain("take a screenshot to verify that the page shows the file");
+    expect(instructions).toContain("Never reload or refresh the e-VOA page, including with refresh_web: it erases filled fields.");
+    expect(instructions).toContain("Only reload or refresh if the page is visibly broken.");
+    expect(instructions).toContain("Re-observe by taking a screenshot, not by reloading, refreshing or navigating.");
+    expect(instructions).not.toContain("fresh look");
     expect(instructions).toContain("If a captcha, an account creation or an e-mail code appears, stop and call ask_user");
     expect(instructions).toContain("Do not invent any information");
     expect(instructions).toContain("call report_ready as your last action. After calling it the session ends. Do not take any further action.");
@@ -159,8 +163,9 @@ describe("agent tasks", () => {
     expect(task).toContain("After 2 failed attempts on the same field, stop trying and call ask_user with field set to that field");
     expect(task).toContain("asking the human to pick the required value themselves in Chrome");
     expect(task).toContain("Say which value to pick");
-    expect(task).toContain("Wait for the human's answer before continuing, then take a fresh look and continue from the updated form");
-    expect(task).toContain("If the result is not \"uploaded\", call ask_user");
+    expect(task).toContain("Wait for the human's answer before continuing, then take a screenshot and continue from the updated form without reloading, refreshing or navigating");
+    expect(task).toContain("If the result does not confirm a successful upload, call ask_user");
+    expect(task).toContain("wait for any dependent lists to update, then take a screenshot and continue with the next field");
   });
 
   it("keeps the per-session task focused on the traveller and trip with only a safety reminder", () => {
