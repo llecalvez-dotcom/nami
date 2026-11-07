@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Check, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { VoiceAnswer } from "@/components/voice/voice-answer";
