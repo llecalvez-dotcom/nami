@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
 import { NextRequest } from "next/server";
-import { documentsEnabled, findDocuments, resolveDocumentPath } from "@/lib/documents";
+import { allowedDocumentType, documentsEnabled, findDocuments, resolveDocumentPath } from "@/lib/documents";
 import { GET as find } from "@/app/api/documents/find/route";
 import { GET as preview } from "@/app/api/documents/preview/route";
 import { resetGuards } from "@/lib/api-guard";
@@ -124,6 +124,25 @@ describe("local documents", () => {
     await findDocuments("photo");
     expect(await resolveDocumentPath(documents[0].id, "photo")).toBeNull();
     expect(await resolveDocumentPath(passport.id)).toBe(join(root, "passeport-scan.jpg"));
+  });
+
+  it("finds the return ticket by name, PDF only, and keeps the other tokens (ticket 17)", async () => {
+    for (const name of ["billet-retour-bali.pdf", "ticket-return.png", "passeport-scan.pdf", "facture.pdf", "passeport-scan.jpg"]) {
+      await writeFile(join(root, name), "fictitious");
+    }
+    const [passport] = await findDocuments();
+    const response = await find(request("find?kind=return_ticket"));
+    expect(response.status).toBe(200);
+    const { documents } = await response.json();
+    expect(documents.map((file: { name: string }) => file.name)).toEqual(["billet-retour-bali.pdf", "facture.pdf", "passeport-scan.pdf"]);
+    expect(documents[0].score).toBe(100);
+    expect(documents[2].score).toBe(-50);
+    expect(await resolveDocumentPath(documents[0].id, "return_ticket")).toBe(join(root, "billet-retour-bali.pdf"));
+    expect(await resolveDocumentPath(documents[0].id, "passport")).toBeNull();
+    expect(await resolveDocumentPath(passport.id, "return_ticket")).toBeNull();
+    expect(await resolveDocumentPath(passport.id)).toBe(join(root, "passeport-scan.jpg"));
+    expect(allowedDocumentType(join(root, "billet.PDF"), "return_ticket")).toBe(true);
+    expect(allowedDocumentType(join(root, "billet.jpg"), "return_ticket")).toBe(false);
   });
 
   it("includes two subfolder levels, excludes deeper files, and caps results at five", async () => {

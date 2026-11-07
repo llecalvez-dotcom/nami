@@ -25,7 +25,7 @@ import {
   type QuestionField,
 } from "@/lib/planner";
 
-// read_passport, confirm_passport, use_photo: the side panel's spoken steps before the visa agent starts.
+// read_passport, confirm_passport, use_photo, use_return_ticket: the side panel's spoken steps before the visa agent starts.
 export type ProposalAction =
   | "papers"
   | "create_visa"
@@ -33,7 +33,8 @@ export type ProposalAction =
   | "flights"
   | "read_passport"
   | "confirm_passport"
-  | "use_photo";
+  | "use_photo"
+  | "use_return_ticket";
 
 export type ConversationItem =
   | { id: string; kind: "user"; text: string }
@@ -384,6 +385,7 @@ export function decideProposal(trip: Trip, itemId: string, accepted: boolean, no
     case "read_passport":
     case "confirm_passport":
     case "use_photo":
+    case "use_return_ticket":
       return decided;
     case "flights":
       return push(
@@ -616,7 +618,8 @@ export function markToolHandled(trip: Trip, call: ToolRequest): Trip {
 export function recordPassportUpload(trip: Trip, call: ToolRequest, result: string | null): Trip {
   if (!trip.agent_run || (trip.agent_run.handled_tool_ids ?? []).includes(toolCallKey(call))) return trip;
   const next = markToolHandled(trip, call);
+  const given = call.args.purpose === "photo" ? "the photo" : call.args.purpose === "return_ticket" ? "the return ticket" : "the passport";
   return result === "uploaded"
-    ? { ...next, agent_steps: [...next.agent_steps, "Nami gave the passport to the agent"] }
+    ? { ...next, agent_steps: [...next.agent_steps, `Nami gave ${given} to the agent`] }
     : next;
 }

@@ -2,9 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST as answer } from "@/app/api/agent/[id]/answer/route";
 import { POST as cancel } from "@/app/api/agent/[id]/cancel/route";
 import { GET as changes } from "@/app/api/agent/[id]/changes/route";
+import { POST as fill } from "@/app/api/agent/[id]/fill/route";
 import { uploadSessionDocument } from "@/lib/agent-passport-upload";
+import { fillField } from "@/lib/local-chrome";
 
 vi.mock("@/lib/agent-passport-upload", () => ({ uploadSessionDocument: vi.fn() }));
+vi.mock("@/lib/local-chrome", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/local-chrome")>()), fillField: vi.fn() }));
 
 const API = "https://agp.eu.hcompany.ai/api/v2";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -45,10 +48,65 @@ describe("upload_file answer", () => {
     expect(uploadSessionDocument).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
+
+  it("accepts the return ticket purpose and forwards the no-ticket result that sends the agent to ask_user", async () => {
+    const noTicket = "No return ticket is confirmed in Nami. Call ask_user so the user uploads their return flight ticket (PDF) in the Return Ticket field themselves; never upload another file in its place.";
+    vi.mocked(uploadSessionDocument).mockResolvedValue(noTicket);
+    fetch.mockResolvedValue(new Response(null, { status: 204 }));
+    const ticketReq = { ...tool_req, args: { purpose: "return_ticket" } };
+    const response = await post({ tool_req: ticketReq, result: "upload" });
+    expect(response.status).toBe(202);
+    expect(uploadSessionDocument).toHaveBeenCalledWith("s-1", ticketReq);
+    expect(JSON.parse(call()[1].body as string).result).toBe(noTicket);
+    expect((await post({ tool_req: { ...tool_req, args: { purpose: "visa" } }, result: "upload" })).status).toBe(400);
+  });
+});
+
+describe("POST /api/agent/[id]/fill (route 7c)", () => {
+  const tool_req = { tool_name: "fill_field", args: { field: "Postal Code", value: "80361" }, id: "fill-1" };
+  const post = (body: unknown, id = "s-1") => fill(new Request(`http://localhost/api/agent/${id}/fill`, {
+    method: "POST", body: JSON.stringify(body),
+  }), ctx(id));
+
+  it("fills the field in Chrome on the official domains only, then sends the page's answer to H", async () => {
+    vi.mocked(fillField).mockResolvedValue("Filled postal code with 80361. The page then filled: province: BALI.");
+    fetch.mockResolvedValue(new Response(null, { status: 204 }));
+    const response = await post({ tool_req });
+    expect(response.status).toBe(202);
+    expect(fillField).toHaveBeenCalledTimes(1);
+    const [field, value, domains] = vi.mocked(fillField).mock.calls[0];
+    expect([field, value]).toEqual(["Postal Code", "80361"]);
+    expect(domains).toContain("evisa.imigrasi.go.id");
+    expect(domains).not.toContain("evil.example");
+    expect(call()[0]).toBe(`${API}/sessions/s-1/tool_results`);
+    expect(JSON.parse(call()[1].body as string)).toEqual({ kind: "tool_result", tool_req, result: "Filled postal code with 80361. The page then filled: province: BALI." });
+  });
+
+  it("turns a Chrome failure into an ask_user hint instead of an error", async () => {
+    vi.mocked(fillField).mockRejectedValue(new Error("Chrome did not answer."));
+    fetch.mockResolvedValue(new Response(null, { status: 204 }));
+    expect((await post({ tool_req })).status).toBe(202);
+    expect(JSON.parse(call()[1].body as string).result).toBe("Chrome did not answer. Call ask_user so that the human types the value of Postal Code in Chrome.");
+  });
+
+  it("refuses another tool, an empty value or a bad session id without touching Chrome or H", async () => {
+    expect((await post({ tool_req: { ...tool_req, tool_name: "pick_option" } })).status).toBe(400);
+    expect((await post({ tool_req: { ...tool_req, args: { field: "Postal Code", value: " " } } })).status).toBe(400);
+    expect((await post({ tool_req }, "bad id")).status).toBe(400);
+    expect(fillField).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("is not available in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    expect((await post({ tool_req })).status).toBe(404);
+    expect(fillField).not.toHaveBeenCalled();
+  });
 });
 
 beforeEach(() => {
   vi.mocked(uploadSessionDocument).mockReset();
+  vi.mocked(fillField).mockReset();
   vi.stubEnv("HAI_API_KEY", "h-key");
   fetch = vi.fn();
   vi.stubGlobal("fetch", fetch);

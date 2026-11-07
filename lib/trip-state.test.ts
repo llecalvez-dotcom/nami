@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { buildFlightsTask, buildPaperInstructions, buildPaperTask, UNTRUSTED_CONTENT_RULE } from "@/lib/agent-task";
 import { getBaliPaper } from "@/lib/bali-papers";
-import { TripRequestDraftSchema } from "@/lib/contracts";
+import { TripRequestDraftSchema, TripRequestSchema } from "@/lib/contracts";
+import { buildPilotTask, describeTraveller } from "@/lib/paper-agent";
 import {
   answerQuestion,
   answerQuestionWithText,
@@ -143,7 +144,10 @@ describe("agent tasks", () => {
     expect(instructions).toContain(UNTRUSTED_CONTENT_RULE);
     expect(instructions).toContain("Never tick a final declaration on honour");
     expect(instructions).toContain("Never click or open the OS file picker");
-    expect(instructions).toContain('call upload_file with purpose "passport" or "photo"');
+    expect(instructions).toContain('call upload_file with purpose "passport", "photo" or "return_ticket"');
+    expect(instructions).toContain("no return ticket means ask_user, not the passport");
+    expect(instructions).toContain("never drop a word of a surname such as LE CALVEZ");
+    expect(instructions).toContain("call fill_field with the label of the field and the value instead of typing it");
     expect(instructions).toContain("take a screenshot to verify that the page shows the file");
     expect(instructions).toContain("Never reload or refresh the e-VOA page, including with refresh_web: it erases filled fields.");
     expect(instructions).toContain("Only reload or refresh if the page is visibly broken.");
@@ -190,6 +194,28 @@ describe("agent tasks", () => {
     expect(lines[1]).toBe("Pick FRANCE, then Tourism.");
     expect(lines).toHaveLength(5);
     expect(buildPaperTask(input).split("\n")).toHaveLength(4);
+  });
+
+  it("passes the surname and given names read by Nami as they are, with the order to write every word (ticket 17)", () => {
+    const passport = {
+      surname: "LE CALVEZ", given_names: "JEAN MARIE", nationality: "FRA", birth_date: "1990-01-02",
+      passport_number: "24AB12345", issue_date: "2020-01-01", expiry_date: "2030-01-01",
+    };
+    const traveller = describeTraveller(passport);
+    expect(traveller).toContain("Surname (Last Name), to write exactly as given, every word, nothing removed: LE CALVEZ.");
+    expect(traveller).toContain("Given names (First Name), to write exactly as given: JEAN MARIE.");
+    const task = buildPilotTask({
+      passport,
+      request: TripRequestSchema.parse({
+        raw_text: "Bali", destination: "Bali", country_iso2: "ID", nationality: "FR", purpose: "tourism", origin_country: "FR", departure_date: "2026-11-10",
+        arrival_at: "2026-11-10T14:30+08:00", travellers: 1,
+      }),
+    });
+    expect(task).toContain("LE CALVEZ");
+    expect(task).toContain("Traveller: Surname (Last Name), to write exactly as given");
+    expect(task).toContain("Last Name to every word of the passport surname (for example LE CALVEZ, not CALVEZ)");
+    expect(task).toContain("write the Postal Code with fill_field");
+    expect(task).toContain("Return Ticket is a required PDF: call upload_file with purpose return_ticket");
   });
 
   it("builds the flights task", () => {

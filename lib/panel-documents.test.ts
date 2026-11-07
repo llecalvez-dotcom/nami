@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DocumentExtraction } from "@/lib/contracts";
-import { bestFirst, foundPassportText, foundPhotoText, readSummary } from "@/lib/panel-documents";
+import { bestFirst, foundPassportText, foundPhotoText, foundReturnTicketText, readSummary } from "@/lib/panel-documents";
 import { acceptProposal, createTripFromRequest, decideProposal, pushProposal, startVisaRun, type Trip } from "@/lib/trip-state";
 
 const FIELDS = {
@@ -28,6 +28,7 @@ describe("spoken passport steps of the side panel", () => {
       "I found your passport on this computer (passeport.jpg). Shall I read it? It is sent to H Company to be read, never stored.",
     );
     expect(foundPhotoText({ id: "p", name: "photo-identite.jpg", score: 3 })).toContain("ID photo (photo-identite.jpg)");
+    expect(foundReturnTicketText({ id: "t", name: "billet-retour.pdf", score: 100 })).toContain("return ticket (billet-retour.pdf)");
   });
 
   it("reads the name aloud but never the passport number nor the birth date", () => {
