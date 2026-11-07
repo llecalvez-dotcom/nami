@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Globe2, RotateCcw } from "lucide-react";
 import { AppNav } from "@/components/app-nav";
 import { CountryStatusPill, SampleBadge } from "@/components/status-badge";
@@ -71,6 +71,7 @@ export function TripScreen({ id }: { id: string }) {
   const found = trips?.find((t) => t.id === id) ?? null;
   const { destination, country_iso2, arrival_at } = found?.request ?? {};
   const [passport, setPassport] = useState<PassportFields | null>(null);
+  const passportCard = useRef<HTMLDivElement>(null);
   const [starting, setStarting] = useState(false);
   const secrets = useMemo(() => [passport?.passport_number, passport?.birth_date], [passport]);
   const liveRun = found && !found.sample ? found.agent_run : null;
@@ -107,12 +108,33 @@ export function TripScreen({ id }: { id: string }) {
 
   const createVisa = async (itemId: string) => {
     if (starting) return;
-    if (!readAgentSettings().local_session_id.trim()) {
-      update(pushAgentMessage(trip, "Open this page with ?demo=1 and fill in Local browser session (the id printed by holo local browser) first."));
+    if (!passport) {
+      let readerAvailable = false;
+      try {
+        const response = await fetch("/api/documents/extract");
+        if (response.ok) {
+          const result = await response.json() as { reader?: string };
+          readerAvailable = result.reader === "h" || result.reader === "anthropic";
+        }
+      } catch {
+        // Manual entry remains available if reader discovery fails.
+      }
+      const reminder = readerAvailable
+        ? "Upload a photo or enter your passport details in the passport card, then confirm the fields before I create your visa."
+        : "Enter your passport details in the passport card, then confirm the fields before I create your visa.";
+      const current = latest();
+      const lastMessage = [...current.conversation].reverse().find((item) => item.kind === "agent");
+      if (lastMessage?.text !== reminder) update(pushAgentMessage(current, reminder));
+      requestAnimationFrame(() => {
+        const card = passportCard.current;
+        card?.scrollIntoView({ behavior: "smooth", block: "center" });
+        const field = card?.querySelector<HTMLInputElement>('input:not([type="checkbox"]):not([type="file"])');
+        (field ?? card)?.focus({ preventScroll: true });
+      });
       return;
     }
-    if (!passport) {
-      update(pushAgentMessage(trip, "Send me a photo of your passport and confirm its fields first: the agent needs them."));
+    if (!readAgentSettings().local_session_id.trim()) {
+      update(pushAgentMessage(trip, "Open this page with ?demo=1 and fill in Local browser session (the id printed by holo local browser) first."));
       return;
     }
     setStarting(true);
@@ -243,12 +265,14 @@ export function TripScreen({ id }: { id: string }) {
                 </p>
               ) : null}
               {trip.formalities.length > 0 || demo || reconfirm ? (
-                <PassportCard
-                  demo={demo}
-                  returnDate={trip.request.return_date}
-                  arrivalAt={trip.request.arrival_at}
-                  onConfirm={setPassport}
-                />
+                <div ref={passportCard} tabIndex={-1} className="scroll-mt-24">
+                  <PassportCard
+                    demo={demo}
+                    returnDate={trip.request.return_date}
+                    arrivalAt={trip.request.arrival_at}
+                    onConfirm={setPassport}
+                  />
+                </div>
               ) : null}
               {demo && !trip.sample ? <AgentSettingsCard /> : null}
               {demo ? <TryAnotherCountry /> : null}
