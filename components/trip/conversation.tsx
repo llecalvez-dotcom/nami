@@ -8,6 +8,7 @@ import type { ConversationItem } from "@/lib/trip-state";
 
 type Handlers = {
   onAnswer: (itemId: string, value: string, label: string) => void;
+  onAnswerText: (itemId: string, text: string) => Promise<void>;
   onDecide: (itemId: string, accepted: boolean) => void;
 };
 
@@ -46,7 +47,53 @@ function EmailAnswer({ onSubmit }: { onSubmit: (value: string) => void }) {
   );
 }
 
-function QuestionCard({ item, onAnswer }: { item: Extract<ConversationItem, { kind: "question" }> } & Pick<Handlers, "onAnswer">) {
+function TextAnswer({ onSubmit }: { onSubmit: (value: string) => Promise<void> }) {
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <form
+      className="mt-3"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const text = value.trim();
+        if (!text || busy) return;
+        setBusy(true);
+        setError(null);
+        try {
+          await onSubmit(text);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
+          setBusy(false);
+        }
+      }}
+    >
+      <div className="flex gap-2">
+        <input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="Type your answer"
+          aria-label="Your answer"
+          className="h-10 min-w-0 flex-1 rounded-lg border bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+        />
+        <Button type="submit" size="lg" className="h-10 rounded-lg px-4" disabled={!value.trim() || busy}>
+          {busy ? "Reading…" : "Send"}
+        </Button>
+      </div>
+      {error ? (
+        <p role="alert" className="mt-2 text-sm text-[#8a5a24]">
+          {error}
+        </p>
+      ) : null}
+    </form>
+  );
+}
+
+function QuestionCard({
+  item,
+  onAnswer,
+  onAnswerText,
+}: { item: Extract<ConversationItem, { kind: "question" }> } & Pick<Handlers, "onAnswer" | "onAnswerText">) {
   return (
     <div
       className={cn(
@@ -63,19 +110,24 @@ function QuestionCard({ item, onAnswer }: { item: Extract<ConversationItem, { ki
       ) : item.input === "email" ? (
         <EmailAnswer onSubmit={(value) => onAnswer(item.id, value, value)} />
       ) : (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {item.options.map((option) => (
-            <Button
-              key={option.value}
-              variant="outline"
-              size="lg"
-              className="h-10 rounded-full px-4"
-              onClick={() => onAnswer(item.id, option.value, option.label)}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
+        <>
+          {item.options.length > 0 ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {item.options.map((option) => (
+                <Button
+                  key={option.value}
+                  variant="outline"
+                  size="lg"
+                  className="h-10 rounded-full px-4"
+                  onClick={() => onAnswer(item.id, option.value, option.label)}
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+          {item.input === "text" ? <TextAnswer onSubmit={(text) => onAnswerText(item.id, text)} /> : null}
+        </>
       )}
     </div>
   );
@@ -125,7 +177,7 @@ export function Conversation({ items, ...handlers }: { items: ConversationItem[]
               <p className="text-[15px] leading-relaxed">{item.text}</p>
             </div>
           ) : item.kind === "question" ? (
-            <QuestionCard item={item} onAnswer={handlers.onAnswer} />
+            <QuestionCard item={item} onAnswer={handlers.onAnswer} onAnswerText={handlers.onAnswerText} />
           ) : (
             <ProposalCard item={item} onDecide={handlers.onDecide} />
           )}
