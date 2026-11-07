@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentChecklist, focusItem, pivotParts, readyPaper, sceneFor, sentenceSize } from "@/lib/panel-focus";
+import { agentChecklist, focusItem, readyPaper, sceneFor, sentenceSize } from "@/lib/panel-focus";
 import { ARRIVAL_CARD_READY_MESSAGE, VISA_READY_MESSAGE, type ConversationItem } from "@/lib/trip-state";
 
 const said = (id: string, text: string): ConversationItem => ({ id, kind: "agent", text });
@@ -57,12 +57,6 @@ describe("the sentence", () => {
     expect(sentenceSize("Where are you going?")).toBe("xl");
     expect(sentenceSize("x".repeat(100))).toBe("lg");
     expect(sentenceSize("x".repeat(200))).toBe("md");
-  });
-
-  it("puts the destination in italics, whatever its case", () => {
-    expect(pivotParts("For bali you need an e-VOA.", "Bali")).toEqual(["For ", "bali", " you need an e-VOA."]);
-    expect(pivotParts("No destination here.", "Bali")).toEqual(["No destination here.", "", ""]);
-    expect(pivotParts("Anything.", null)).toEqual(["Anything.", "", ""]);
   });
 });
 

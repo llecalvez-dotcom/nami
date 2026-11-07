@@ -70,14 +70,6 @@ export function sentenceSize(text: string): "xl" | "lg" | "md" {
   return "md";
 }
 
-// Splits the sentence around the destination, written in italics; the whole sentence when it is not there.
-export function pivotParts(text: string, word: string | null | undefined): [string, string, string] {
-  if (!word) return [text, "", ""];
-  const at = text.toLowerCase().indexOf(word.toLowerCase());
-  if (at < 0) return [text, "", ""];
-  return [text.slice(0, at), text.slice(at, at + word.length), text.slice(at + word.length)];
-}
-
 // The same gate above Bali at four times of day: the day goes by as the papers get done.
 export type Scene = "aube" | "matin" | "dore" | "nuit";
 

@@ -11,7 +11,7 @@ const stage = (props: Partial<Parameters<typeof FocusStage>[0]>) =>
   renderToStaticMarkup(
     createElement(FocusStage, {
       item: null,
-      destination: "Bali",
+      scene: "matin",
       visual: null,
       ready: null,
       agent: null,
@@ -37,9 +37,9 @@ const visa: ConversationItem = {
 };
 
 describe("the side panel shows one thing at a time", () => {
-  it("shows Nami's sentence with the destination in italics, and the two answers", () => {
+  it("shows Nami's sentence as a title on the wall, and the two answers", () => {
     const html = stage({ item: visa });
-    expect(html).toContain("<em>Bali</em>");
+    expect(html).toContain("For Bali you need an e-VOA.");
     expect(html).toContain("Create my visa");
     expect(html).toContain("Not now");
   });

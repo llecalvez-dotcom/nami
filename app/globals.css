@@ -559,114 +559,93 @@
   }
 }
 
-/* Side panel (/panel): a horizon at dawn above Bali. The sky holds Nami's sentence, the wave says who has the floor,
-   the sand holds the answers. One color per paper: the lagoon for the visa, the frangipani for the arrival card.
-   docs/specs/2026-11-07-refonte-panneau.md */
+/* Side panel (/panel), "hung painting" direction (2026-11-07, Nathan: cleaner, Apple-like, the text must stand out).
+   The painted gate above Bali is a framed picture at the top; the rest of the panel is a warm white wall where the
+   text sits, never on the painting. The day goes by in the picture as the papers get done. One accent per paper:
+   the lagoon for the visa, the frangipani for the arrival card. docs/specs/2026-11-07-refonte-panneau.md */
 .nami-panel {
-  --np-ink: #13303a;
-  --np-ink-soft: rgb(19 48 58 / 0.76);
-  --np-sand: #f8efe3;
-  --np-cream: #fdf8f0;
-  --np-line: rgb(19 48 58 / 0.12);
-  --np-lagoon: #0c7480;
-  --np-lagoon-soft: #c4e4e2;
-  --np-coral: #a9441f;
-  --np-coral-soft: #f7d3c3;
+  --np-wall: #f6f3ee;
+  --np-ink: #15232b;
+  --np-ink-soft: rgb(21 35 43 / 0.68);
+  --np-line: rgb(21 35 43 / 0.1);
+  --np-fill: rgb(21 35 43 / 0.05);
+  --np-on-accent: #fdfbf7;
+  --np-lagoon: #0b6f7a;
+  --np-lagoon-soft: #d3e9e8;
+  --np-coral: #b0461f;
+  --np-coral-soft: #f6dcd0;
   --paper: var(--np-lagoon);
   --paper-soft: var(--np-lagoon-soft);
   --np-ease: cubic-bezier(0.23, 1, 0.32, 1);
-  --np-serif: "Gambetta", Georgia, "Times New Roman", serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
   color: var(--np-ink);
-  isolation: isolate;
-  background: linear-gradient(180deg, #cde3ea 0%, #dfe9e6 30%, #f3e4d4 66%, #f2d3c0 100%);
-}
-/* The painting behind everything; the sand stays opaque so the answers always read. */
-.nami-panel .np-backdrop { position: absolute; inset: 0; z-index: -1; overflow: hidden; }
-.nami-panel .np-scene {
-  position: absolute;
-  inset: 0;
-  background-size: cover;
-  background-position: center bottom;
-  opacity: 0;
-  transition: opacity 1600ms var(--np-ease);
-}
-.nami-panel .np-scene[data-on="true"] { opacity: 1; }
-/* Morning: the sky is a deep blue, the destination keeps the ink color. */
-.nami-panel[data-scene="matin"] .np-sentence em { color: var(--np-ink); }
-/* Night: light text on the sky; the sand keeps dark text. */
-.nami-panel[data-scene="nuit"] {
-  --np-ink: #f7efe3;
-  --np-ink-soft: rgb(247 239 227 / 0.82);
-  --np-line: rgb(247 239 227 / 0.2);
-}
-.nami-panel[data-scene="nuit"] .np-sentence em { color: #f4c27a; }
-.nami-panel[data-scene="nuit"] .np-glass { background: rgb(14 30 58 / 0.55); }
-.nami-panel[data-scene="nuit"] .np-sand {
-  --np-ink: #13303a;
-  --np-ink-soft: rgb(19 48 58 / 0.76);
-  --np-line: rgb(19 48 58 / 0.12);
-  color: var(--np-ink);
+  background: var(--np-wall);
+  -webkit-font-smoothing: antialiased;
 }
 .nami-panel[data-paper="arrival_card"] {
   --paper: var(--np-coral);
   --paper-soft: var(--np-coral-soft);
 }
-.nami-panel .np-serif {
-  font-family: var(--np-serif);
-  font-weight: 400;
-  letter-spacing: -0.01em;
-}
-.nami-panel .np-sentence {
-  font-family: var(--np-serif);
-  font-weight: 400;
-  letter-spacing: -0.015em;
+.nami-panel .np-title {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.022em;
   text-wrap: pretty;
 }
-.nami-panel .np-sentence[data-size="xl"] { font-size: 32px; line-height: 1.12; }
-.nami-panel .np-sentence[data-size="lg"] { font-size: 25px; line-height: 1.2; }
-.nami-panel .np-sentence[data-size="md"] { font-size: 20px; line-height: 1.3; }
-.nami-panel .np-sentence em,
-.nami-panel .np-pivot {
-  font-style: italic;
-  color: var(--paper);
-}
-.nami-panel .np-enter {
-  animation: np-enter 280ms var(--np-ease) both;
-}
+.nami-panel .np-title[data-size="xl"] { font-size: 29px; line-height: 1.12; }
+.nami-panel .np-title[data-size="lg"] { font-size: 23px; line-height: 1.2; }
+.nami-panel .np-title[data-size="md"] { font-size: 19px; line-height: 1.28; letter-spacing: -0.015em; }
+.nami-panel .np-enter { animation: np-enter 280ms var(--np-ease) both; }
 @keyframes np-enter {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
 }
 .nami-panel .np-press {
-  transition: transform 160ms var(--np-ease), background-color 200ms var(--np-ease), color 200ms var(--np-ease), box-shadow 200ms var(--np-ease);
+  transition: transform 160ms var(--np-ease), background-color 200ms var(--np-ease), color 200ms var(--np-ease), opacity 200ms var(--np-ease);
 }
 .nami-panel .np-press:active { transform: scale(0.97); }
-.nami-panel .np-glass {
-  background: rgb(253 248 240 / 0.88);
-  backdrop-filter: blur(24px) saturate(1.2);
-  box-shadow: 0 1px 0 rgb(255 255 255 / 0.6) inset, 0 12px 32px rgb(19 48 58 / 0.1);
-}
 
-/* The wave: two layers of the same swell drifting at different speeds. Its state says who has the floor. */
-.nami-panel .np-wave { position: relative; height: 76px; }
-.nami-panel .np-swells { position: absolute; inset: 0; overflow: hidden; }
-.nami-panel .np-swells > svg {
+/* The hung painting: no shadow, no border, its margin is the wall itself. It gets shorter when there is more to read. */
+.nami-panel .np-frame { position: relative; margin: 0 12px; flex: none; }
+.nami-panel .np-picture {
+  position: relative;
+  height: clamp(190px, 40vh, 360px);
+  border-radius: 22px;
+  overflow: hidden;
+  background: #cfe2e8;
+  transition: height 520ms var(--np-ease);
+}
+.nami-panel .np-frame[data-compact="true"] .np-picture { height: clamp(110px, 17vh, 160px); }
+.nami-panel .np-frame[data-compact="true"] .np-scene { background-position: center 50%; }
+.nami-panel .np-scene {
   position: absolute;
-  bottom: 0;
+  inset: 0;
+  background-size: cover;
+  background-position: center 62%;
+  opacity: 0;
+  transition: opacity 1600ms var(--np-ease);
+}
+.nami-panel .np-scene[data-on="true"] { opacity: 1; }
+
+/* The wave: the wall laps at the foot of the painting. Its state says who has the floor. */
+.nami-panel .np-wave { position: absolute; inset: auto 0 0 0; height: 34px; overflow: hidden; color: var(--np-wall); }
+.nami-panel .np-wave svg {
+  position: absolute;
+  bottom: -1px;
   left: 0;
   width: 200%;
   height: 100%;
   transform-origin: bottom;
-  transition: transform 420ms var(--np-ease), opacity 420ms var(--np-ease);
+  transition: transform 420ms var(--np-ease);
 }
-.nami-panel .np-wave .np-swell-back { color: var(--paper-soft); animation: np-drift 14s linear infinite; transform: scaleY(0.55); }
-.nami-panel .np-wave .np-swell-front { color: var(--paper); opacity: 0.85; animation: np-drift 9s linear infinite reverse; transform: scaleY(0.35); }
-.nami-panel .np-wave[data-state="speaking"] .np-swell-back { animation-duration: 5s; transform: scaleY(0.95); }
+.nami-panel .np-wave .np-swell-back { opacity: 0.55; animation: np-drift 14s linear infinite; transform: scaleY(0.6); }
+.nami-panel .np-wave .np-swell-front { animation: np-drift 9s linear infinite reverse; transform: scaleY(0.4); }
+.nami-panel .np-wave[data-state="speaking"] .np-swell-back { animation-duration: 5s; transform: scaleY(1); }
 .nami-panel .np-wave[data-state="speaking"] .np-swell-front { animation-duration: 3.2s; transform: scaleY(0.7); }
 .nami-panel .np-wave[data-state="listening"] .np-swell-back { animation-duration: 3s; transform: scaleY(1); }
-.nami-panel .np-wave[data-state="listening"] .np-swell-front { animation-duration: 2s; transform: scaleY(0.9); opacity: 1; }
-.nami-panel .np-wave[data-state="working"] .np-swell-back { animation: np-roll 4s linear infinite; transform: scaleY(0.7); }
-.nami-panel .np-wave[data-state="working"] .np-swell-front { animation: np-roll 2.4s linear infinite; transform: scaleY(0.5); }
+.nami-panel .np-wave[data-state="listening"] .np-swell-front { animation-duration: 2s; transform: scaleY(0.9); }
+.nami-panel .np-wave[data-state="working"] .np-swell-back { animation: np-roll 4s linear infinite; transform: scaleY(0.8); }
+.nami-panel .np-wave[data-state="working"] .np-swell-front { animation: np-roll 2.4s linear infinite; transform: scaleY(0.55); }
 @keyframes np-drift {
   from { translate: 0 0; }
   to { translate: -50% 0; }
@@ -675,10 +654,10 @@
   from { translate: -50% 0; }
   to { translate: 0 0; }
 }
-/* The same height on every screen: the wave and the microphone never jump from one step to the next. */
-.nami-panel .np-sand { background: var(--np-sand); min-height: 128px; }
+.nami-panel .np-mic-slot { position: absolute; left: 50%; bottom: 0; transform: translate(-50%, 42%); z-index: 10; }
 @media (prefers-reduced-motion: reduce) {
   .nami-panel .np-scene,
-  .nami-panel .np-swells > svg,
-  .nami-panel .np-enter { animation: none !important; }
+  .nami-panel .np-wave svg,
+  .nami-panel .np-picture,
+  .nami-panel .np-enter { animation: none !important; transition: none !important; }
 }
