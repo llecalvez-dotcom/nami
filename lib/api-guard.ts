@@ -3,6 +3,7 @@ export const API_LIMITS = {
   formalities: 16 * 1024,
   extract: 5 * 1024 * 1024 + 64 * 1024,
   transcribe: 10 * 1024 * 1024 + 64 * 1024,
+  access: 1024,
 } as const;
 
 const QUOTA_LIMITS = {
@@ -10,6 +11,7 @@ const QUOTA_LIMITS = {
   formalities: 20,
   transcribe: 20,
   extract: 5,
+  access: 10,
 } as const;
 
 const CONCURRENCY_LIMITS = {
@@ -17,6 +19,7 @@ const CONCURRENCY_LIMITS = {
   formalities: 3,
   transcribe: 2,
   extract: 1,
+  access: 2,
 } as const;
 
 const WINDOW_MS = 10 * 60 * 1000;

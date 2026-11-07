@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "@/app/api/access/route";
+import { resetGuards } from "@/lib/api-guard";
 
 const call = (code: string) =>
   POST(new Request("http://localhost/api/access", { method: "POST", body: JSON.stringify({ code }) }));
 
 beforeEach(() => {
+  resetGuards();
   vi.stubEnv("NAMI_ACCESS_CODE", "specimen access code");
   vi.stubEnv("NODE_ENV", "production");
 });
@@ -29,5 +31,10 @@ describe("POST /api/access", () => {
 
   it("rejects an incorrect code", async () => {
     expect((await call("incorrect")).status).toBe(401);
+  });
+
+  it("limits code attempts to stop brute force", async () => {
+    for (let attempt = 0; attempt < 10; attempt++) expect((await call("wrong")).status).toBe(401);
+    expect((await call("specimen access code")).status).toBe(429);
   });
 });
