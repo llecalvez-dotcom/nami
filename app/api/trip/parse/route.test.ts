@@ -77,6 +77,74 @@ describe("POST /api/trip/parse", () => {
     expect(prompt).toContain("Answer: Tuesday at 2:30 pm");
   });
 
+  it("does not invent a midnight landing when only the departure day and stay length are stated", async () => {
+    complete.mockResolvedValue(JSON.stringify({
+      ...nulls, destination: "Bali", country_iso2: "ID", departure_date: "2026-11-09",
+      arrival_at: "2026-11-09T00:00+08:00", return_date: "2026-11-19", purpose: "tourism", travellers: 1,
+    }));
+    const response = await call({
+      transcript: "I'm flying to Bali on Monday for a friend's wedding, staying ten days.",
+      today: "2026-11-07",
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.request.arrival_at).toBeNull();
+    expect(body.missing).toContain("arrival_at");
+    expect(body.changed).not.toContain("arrival_at");
+    expect(body.request).toMatchObject({ departure_date: "2026-11-09", return_date: "2026-11-19" });
+    expect(complete.mock.calls[0][0].system).not.toContain("use 00:00");
+  });
+
+  it.each(["Monday, staying 10 days with 2 friends", "A 7-day trip to Bali on Monday"])(
+    "rejects an invented time even when the question suggests one: %s",
+    async (transcript) => {
+      complete.mockResolvedValue(JSON.stringify({ ...nulls, arrival_at: "2026-11-09T14:30+08:00" }));
+      const response = await call({
+        transcript,
+        today: "2026-11-07",
+        current_request: { ...nulls, raw_text: "Bali", destination: "Bali" },
+        question: "Do you land at 14:30?",
+      });
+      const body = await response.json();
+      expect(body.request.arrival_at).toBeNull();
+      expect(body.missing).toContain("arrival_at");
+      expect(body.changed).not.toContain("arrival_at");
+    },
+  );
+
+  it.each([
+    ["landing at 7pm", "19:00"],
+    ["arrive 14:30", "14:30"],
+    ["landing in the morning", "09:00"],
+    ["landing at midnight", "00:00"],
+    ["landing at noon", "12:00"],
+    ["landing at 7", "07:00"],
+    ["j'arrive a 14h30", "14:30"],
+    ["j'arrive a 7 h", "07:00"],
+    ["j'arrive dans l'apres-midi", "14:00"],
+    ["landing at 7 p.m.", "19:00"],
+  ])("preserves a model landing time when stated: %s", async (phrase, time) => {
+    const arrival_at = `2026-11-09T${time}+08:00`;
+    complete.mockResolvedValue(JSON.stringify({ ...nulls, arrival_at }));
+    const body = await (await call({ transcript: `Bali on Monday, ${phrase}`, today: "2026-11-07" })).json();
+    expect(body.request.arrival_at).toBe(arrival_at);
+    expect(body.missing).not.toContain("arrival_at");
+    expect(body.changed).toContain("arrival_at");
+  });
+
+  it("keeps an already known landing time when an unrelated answer states no time", async () => {
+    const arrival_at = "2026-11-09T19:00+08:00";
+    complete.mockResolvedValue(JSON.stringify({ ...nulls, nationality: "FR", arrival_at: "2026-11-09T00:00+08:00" }));
+    const body = await (await call({
+      transcript: "French",
+      today: "2026-11-07",
+      current_request: { ...nulls, raw_text: "Bali on Monday, landing at 7pm", arrival_at },
+      question: "What is your nationality?",
+    })).json();
+    expect(body.request.arrival_at).toBe(arrival_at);
+    expect(body.changed).toEqual(["nationality"]);
+  });
+
   it("refuses an invalid body", async () => {
     expect((await call({ transcript: "", today: "2026-11-07" })).status).toBe(400);
     expect((await call({ transcript: "Bali", today: "tomorrow" })).status).toBe(400);

@@ -25,7 +25,7 @@ Fields:
 - destination: the place in English as named by the traveller (e.g. "Bali", "Jakarta", "Lombok", "Barcelona", "Geneva", "Tanzania"). Any place on the island of Bali (Ubud, Canggu, Seminyak, Denpasar...) becomes "Bali".
 - country_iso2: ISO alpha-2 of the destination country (Bali -> "ID").
 - departure_date: YYYY-MM-DD, only for an exact day. Resolve relative days from today: "Monday" or "lundi" is the next Monday strictly after today. A month alone ("in March") stays null.
-- arrival_at: landing date-time in the destination's local time with its UTC offset, "YYYY-MM-DDTHH:mm+HH:mm" (Bali is +08:00). Only if the traveller gives the landing day; if the day is known but not the time, use 00:00.
+- arrival_at: landing date-time in the destination's local time with its UTC offset, "YYYY-MM-DDTHH:mm+HH:mm" (Bali is +08:00). Only if the traveller gives both the landing day and a time of day. If the time is unknown, leave null; never default to midnight.
 - return_date: YYYY-MM-DD, from an explicit return date or a stay length counted from departure_date ("ten days" -> departure_date + 10).
 - purpose: one lowercase word: "tourism" (holidays, weddings, visiting friends), "business", "family", "study" or "other".
 - travellers: number of people travelling. If the traveller only speaks about themselves ("I", "je") with no companion, 1. A group without a number ("with my family") stays null.
@@ -55,6 +55,16 @@ function extractJson(text: string): unknown {
 
 export class ModelOutputError extends Error {}
 
+function statesTimeOfDay(transcript: string): boolean {
+  const text = transcript.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return /\b(?:[01]?\d|2[0-3])[:h][0-5]\d\b/.test(text)
+    || /\b(?:[01]?\d|2[0-3])\s*h\b/.test(text)
+    || /\b(?:0?[1-9]|1[0-2])\s*[ap]\.?\s*m\.?\b/.test(text)
+    || /\b(?:at|around|vers)\s+(?:[01]?\d|2[0-3])\b/.test(text)
+    || /(?:^|\s)à\s+(?:[01]?\d|2[0-3])\b/i.test(transcript)
+    || /\b(?:morning|afternoon|evening|night|tonight|noon|midnight|matin|apres-midi|soir|nuit|midi|minuit)\b/.test(text);
+}
+
 export async function parseTrip(input: ParseInput, complete: CompleteJson): Promise<ParseResult> {
   const text = await complete({ system: SYSTEM_PROMPT, user: buildUserPrompt(input), schema: MODEL_OUTPUT_JSON_SCHEMA });
   let output: ModelOutput;
@@ -63,6 +73,7 @@ export async function parseTrip(input: ParseInput, complete: CompleteJson): Prom
   } catch (error) {
     throw new ModelOutputError(`The model did not return a valid trip request: ${(error as Error).message}`);
   }
+  if (!statesTimeOfDay(input.transcript)) output.arrival_at = null;
 
   const current = input.current_request ?? TripRequestDraftSchema.parse({ raw_text: input.transcript });
   const request: TripRequestDraft = { ...current };
