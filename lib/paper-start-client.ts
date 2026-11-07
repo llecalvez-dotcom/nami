@@ -1,6 +1,7 @@
 // Per scope (a trip), the key of a start whose outcome is unknown: a lost response may hide a created session.
 const unsettled = new Map<string, { input: string; key: string }>();
-const AMBIGUOUS = (status: number) => status === 408 || status === 429 || status >= 500;
+// A 429 is definitive: with queue false, H creates nothing, and Nami's quota gate never reached H.
+const AMBIGUOUS = (status: number) => status === 408 || status >= 500;
 
 export function resetVisaStartAttempts(): void {
   unsettled.clear();

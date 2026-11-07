@@ -78,4 +78,18 @@ describe("visa start attempts", () => {
     const bodies = fetch.mock.calls.map((call) => JSON.parse((call[1] as RequestInit).body as string));
     expect(bodies[1]).toMatchObject({ idempotency_key: bodies[0].idempotency_key, resume: true });
   });
+
+  it("gives a new key after a busy-slots 429, so the next start runs the quota check", async () => {
+    resetVisaStartAttempts();
+    let n = 0;
+    const uuid = () => `00000000-0000-4000-8000-00000000000${++n}`;
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ error: "All H agent slots are busy." }, { status: 429 }))
+      .mockResolvedValueOnce(Response.json({ session_id: "s-1" }, { status: 201 }));
+    await expect(createVisaStartAttempt({ paper_id: "evoa" }, { fetch, uuid, scope: "trip-1" })()).rejects.toThrow();
+    await createVisaStartAttempt({ paper_id: "evoa" }, { fetch, uuid, scope: "trip-1" })();
+    const bodies = fetch.mock.calls.map((call) => JSON.parse((call[1] as RequestInit).body as string));
+    expect(bodies[1].idempotency_key).not.toBe(bodies[0].idempotency_key);
+    expect(bodies[1]).not.toHaveProperty("resume");
+  });
 });
