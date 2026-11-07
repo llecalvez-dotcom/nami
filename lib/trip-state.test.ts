@@ -155,11 +155,10 @@ describe("agent tasks", () => {
       traveller: "Nationality: France.",
       trip: "Purpose: tourism.",
     });
-    expect(task).toContain("click it once, then wait and take a fresh screenshot before concluding it did not open");
-    expect(task).toContain("If a search box appears, type the required value (for example France or Tourism), then click the matching option or press Enter");
-    expect(task).toContain("Use select_option only on native select elements, never on custom dropdowns");
-    expect(task).toContain("Never attempt the same failed action more than 3 times");
-    expect(task).toContain("After 3 failed attempts on the same field, stop trying and call ask_user with field set to that field");
+    expect(task).toContain("call pick_option with the label of the list and the value to pick, instead of clicking it");
+    expect(task).toContain("use select_option only on native select elements");
+    expect(task).toContain("Never attempt the same failed action more than 2 times");
+    expect(task).toContain("After 2 failed attempts on the same field, stop trying and call ask_user with field set to that field");
     expect(task).toContain("asking the human to pick the required value themselves in Chrome");
     expect(task).toContain("Say which value to pick");
     expect(task).toContain("Wait for the human's answer before continuing, then take a fresh look and continue from the updated form");

@@ -38,6 +38,15 @@ export async function sendAgentAnswer(sessionId: string, toolReq: ToolRequest, r
   return body.upload_result ?? null;
 }
 
+async function pickInChrome(sessionId: string, toolReq: ToolRequest): Promise<void> {
+  const response = await fetch(`/api/agent/${encodeURIComponent(sessionId)}/pick`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tool_req: toolReq }),
+  });
+  if (!response.ok) throw new Error(await readError(response));
+}
+
 export async function cancelAgent(sessionId: string): Promise<void> {
   const response = await fetch(`/api/agent/${encodeURIComponent(sessionId)}/cancel`, { method: "POST" });
   if (!response.ok) throw new Error(await readError(response));
@@ -51,6 +60,19 @@ async function handleToolCall(tripId: string, sessionId: string, call: ToolReque
   if (call.tool_name === "ask_user") {
     rawCalls.set(rawKey(sessionId, call), call);
     saveTrip(askUserFromAgent(trip, call, secrets));
+    return;
+  }
+  if (call.tool_name === "pick_option") {
+    try {
+      await pickInChrome(sessionId, call);
+    } catch (error) {
+      const latest = getTrip(tripId);
+      if (latest) saveTrip(pushAgentMessage(latest, `Could not pick in the list, retrying: ${(error as Error).message}`));
+      await sleep(RETRY_MS);
+      return;
+    }
+    const latest = getTrip(tripId);
+    if (latest) saveTrip(markToolHandled(latest, call));
     return;
   }
   // The poll loop awaits this call, so the same call id is never sent twice at once. It is marked handled once H accepted it.
