@@ -26,7 +26,14 @@ import {
 } from "@/lib/planner";
 
 // read_passport, confirm_passport, use_photo: the side panel's spoken steps before the visa agent starts.
-export type ProposalAction = "papers" | "create_visa" | "flights" | "read_passport" | "confirm_passport" | "use_photo";
+export type ProposalAction =
+  | "papers"
+  | "create_visa"
+  | "create_arrival_card"
+  | "flights"
+  | "read_passport"
+  | "confirm_passport"
+  | "use_photo";
 
 export type ConversationItem =
   | { id: string; kind: "user"; text: string }
@@ -76,6 +83,7 @@ type NewConversationItem = ConversationItem extends infer T ? (T extends Convers
 const ACTIVE_AGENT_STATES: AgentRun["state"][] = ["pending", "queued", "running", "awaiting_tool_results", "paused"];
 
 export const VISA_READY_MESSAGE = "I stopped before sending anything: the next step sends your data to the Indonesian government. Check the form in the tab, then continue yourself.";
+export const ARRIVAL_CARD_READY_MESSAGE = "Your arrival card is filled in, and I stopped before sending it. Check it in the tab, then send it yourself.";
 
 // After a reload the confirmed passport is gone (never stored): nothing from H is read, so nothing is saved unmasked, until it is confirmed again.
 export function needsPassportReconfirm(run: AgentRun | null, passportConfirmed: boolean): boolean {
@@ -112,6 +120,16 @@ const FLIGHTS_AFTER_VISA: NewConversationItem = {
   ...FLIGHTS_PROPOSAL,
   text: "Do you also want me to help you find your flights?",
 } as NewConversationItem;
+
+// The second paper, once the visa is done (Nathan, 2026-11-07): the same way, in the same tab.
+const ARRIVAL_CARD_PROPOSAL: NewConversationItem = {
+  kind: "proposal",
+  action: "create_arrival_card",
+  text: "Next, your All Indonesia arrival card: it is required to enter Bali. Shall I fill it in too? I stop before anything is sent.",
+  accept_label: "Fill in my arrival card",
+  decline_label: "Not now",
+  decision: null,
+};
 
 const CREATE_VISA_PROPOSAL: NewConversationItem = {
   kind: "proposal",
@@ -359,6 +377,10 @@ export function decideProposal(trip: Trip, itemId: string, accepted: boolean, no
           answer: null,
         },
       );
+    case "create_arrival_card":
+      if (!accepted) return push(decided, { kind: "agent", text: "Okay, the arrival card can wait." }, FLIGHTS_AFTER_VISA);
+      // Like the visa: a real trip starts a real H session (startVisaRun), the sample only records the choice.
+      return trip.sample ? decided : trip;
     case "read_passport":
     case "confirm_passport":
     case "use_photo":
@@ -407,14 +429,17 @@ export function pushAgentMessage(trip: Trip, text: string): Trip {
 export function startVisaRun(trip: Trip, itemId: string, sessionId: string, now: Date, passportFileReady = false): Trip {
   const item = trip.conversation.find((i) => i.id === itemId);
   // Already "accepted" when the side panel went looking for the passport first; never a second run.
-  if (!item || item.kind !== "proposal" || item.action !== "create_visa" || item.decision === "declined" || isAgentActive(trip.agent_run)) return trip;
-  const evoa = getBaliPaper("evoa");
+  if (!item || item.kind !== "proposal" || (item.action !== "create_visa" && item.action !== "create_arrival_card")
+    || item.decision === "declined" || isAgentActive(trip.agent_run)) return trip;
+  const paperId = item.action === "create_arrival_card" ? "arrival_card" : "evoa";
+  const paper = getBaliPaper(paperId);
   return push(
     {
       ...updateItem(trip, itemId, { decision: "accepted" }),
       agent_run: {
         session_id: sessionId,
         kind: "paper",
+        paper_id: paperId,
         started_at: now.toISOString(),
         state: "pending",
         next_index: 0,
@@ -426,7 +451,10 @@ export function startVisaRun(trip: Trip, itemId: string, sessionId: string, now:
         ...(passportFileReady ? ["Passport file ready for the agent"] : []),
       ],
     },
-    { kind: "agent", text: `The agent is filling in your visa on ${evoa.domain}, in your Chrome. Keep your hand on Stop agent.` },
+    {
+      kind: "agent",
+      text: `The agent is filling in your ${paperId === "evoa" ? "visa" : "arrival card"} on ${paper.domain}, in your Chrome. Keep your hand on Stop agent.`,
+    },
   );
 }
 
@@ -567,14 +595,17 @@ export function reportReady(trip: Trip, call: ToolRequest, secrets: readonly (st
     ? call.args.filled_fields.filter((f): f is string => typeof f === "string").map((f) => redact(f, secrets))
     : [];
   const marked = markHandled(trip, call);
+  const paperId = marked.agent_run!.paper_id ?? "evoa";
   return push(
     {
       ...withRun(closeAgentQuestions(marked, "Agent stopped"), { state: "interrupted", drained: true, pending_question: undefined, result: { ...marked.agent_run!.result, summary, filled_fields: filled } }),
-      agent_steps: [...marked.agent_steps, "Nami stopped the agent at the payment page so you can check and pay"],
-      formalities: marked.formalities.map((f) => (f.id === "evoa" ? { ...f, status: "pending_approval" } : f)),
+      agent_steps: [...marked.agent_steps, "Nami stopped the agent before anything was sent, so you can check and send it"],
+      formalities: marked.formalities.map((f) => (f.id === paperId ? { ...f, status: "pending_approval" } : f)),
     },
-    { kind: "agent", text: VISA_READY_MESSAGE, list: filled },
-    FLIGHTS_AFTER_VISA,
+    // After the visa, the arrival card; after the arrival card, the flights.
+    ...(paperId === "evoa"
+      ? [{ kind: "agent", text: VISA_READY_MESSAGE, list: filled } as NewConversationItem, ARRIVAL_CARD_PROPOSAL]
+      : [{ kind: "agent", text: ARRIVAL_CARD_READY_MESSAGE, list: filled } as NewConversationItem, FLIGHTS_AFTER_VISA]),
   );
 }
 

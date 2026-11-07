@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { freshToolCalls, redact, toAgentChanges, type AgentChanges } from "@/lib/agent-changes";
 import { TripRequestDraftSchema } from "@/lib/contracts";
 import {
+  ARRIVAL_CARD_READY_MESSAGE,
   answerAgentQuestion,
   applyAgentChanges,
   askUserFromAgent,
@@ -234,10 +235,11 @@ describe("report_ready", () => {
     expect(trip.formalities.find((f) => f.id === "evoa")?.status).toBe("pending_approval");
     expect(trip.agent_run?.result).toMatchObject({ summary: "Stopped on payment", filled_fields: ["surname", "passport_number"] });
     expect(trip.agent_run).toMatchObject({ state: "interrupted", drained: true });
-    expect(trip.agent_steps.at(-1)).toBe("Nami stopped the agent at the payment page so you can check and pay");
+    expect(trip.agent_steps.at(-1)).toBe("Nami stopped the agent before anything was sent, so you can check and send it");
     expect(trip.conversation.at(-2)).toMatchObject({ kind: "agent", text: VISA_READY_MESSAGE, list: ["surname", "passport_number"] });
-    // The flights come only now, once the visa is ready.
-    expect(trip.conversation.at(-1)).toMatchObject({ kind: "proposal", action: "flights", text: "Do you also want me to help you find your flights?", decision: null });
+    // The arrival card comes next, once the visa is ready; the flights only after it.
+    expect(trip.conversation.at(-1)).toMatchObject({ kind: "proposal", action: "create_arrival_card", decision: null });
+    expect(trip.conversation.some((i) => i.kind === "proposal" && i.action === "flights")).toBe(false);
     expect(reportReady(trip, REPORT, SECRETS)).toBe(trip);
 
     const done = applyAgentChanges(trip, changes({ status: "completed" }), SECRETS).trip;
@@ -253,5 +255,26 @@ describe("helpers", () => {
   it("redact keeps the last 2 characters only", () => {
     expect(redact("n° 24AB12345, born 1990-04-12", SECRETS)).toBe("n° •••••••45, born ••••••••12");
     expect(redact("nothing", [null, undefined, ""])).toBe("nothing");
+  });
+});
+
+describe("second paper: the arrival card after the visa", () => {
+  it("starts an arrival card run from its proposal, then offers the flights once it is ready", () => {
+    const afterVisa = reportReady(liveTrip(), REPORT, SECRETS);
+    const card = afterVisa.conversation.at(-1)!;
+    const started = startVisaRun(afterVisa, card.id, "s-2", now, true);
+    expect(started.agent_run).toMatchObject({ session_id: "s-2", paper_id: "arrival_card", state: "pending" });
+    expect(started.conversation.at(-1)).toMatchObject({ kind: "agent", text: expect.stringContaining("arrival card on allindonesia.imigrasi.go.id") });
+
+    const ready = reportReady(started, { ...REPORT, id: "report-2" }, SECRETS);
+    expect(ready.formalities.find((f) => f.id === "arrival_card")?.status).toBe("pending_approval");
+    expect(ready.conversation.at(-2)).toMatchObject({ kind: "agent", text: ARRIVAL_CARD_READY_MESSAGE });
+    expect(ready.conversation.at(-1)).toMatchObject({ kind: "proposal", action: "flights", decision: null });
+  });
+
+  it("offers the flights when the arrival card is declined", () => {
+    const afterVisa = reportReady(liveTrip(), REPORT, SECRETS);
+    const declined = decideProposal(afterVisa, afterVisa.conversation.at(-1)!.id, false, now);
+    expect(declined.conversation.at(-1)).toMatchObject({ kind: "proposal", action: "flights" });
   });
 });

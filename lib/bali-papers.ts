@@ -62,8 +62,11 @@ export const BALI_PAPERS: readonly BaliPaper[] = [
     window_note: "Opens 72 h before arrival (“within 3 (three) days prior arrival”). 4 steps.",
     pilot_priority: 2,
     forbidden_buttons: ["Submit", "Kirim"],
+    // Decision of 2026-11-07, 21 h, as for the e-VOA: nothing is sent to the government in the demo.
     stop_condition:
-      "Stop when step 4 (Deklarasi) is displayed, with the declaration left unchecked and the submit button not clicked.",
+      "Stop on the first page (personal information) once every field you can fill is filled: never click Next or Submit there, because the next steps send the traveller's data to the government.",
+    route_hint:
+      "The arrival card starts on this personal information page: fill it in for the traveller from the details below. For anything you do not know (flight number, address in Indonesia), call ask_user.",
     observed_on: OBSERVED_ON,
     source_urls: ["https://allindonesia.imigrasi.go.id/arrival-card-submission/personal-information"],
   },

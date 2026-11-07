@@ -22,12 +22,18 @@ import { getTrip, saveTrip } from "@/lib/trip-store";
 
 // An empty local session lets the server use NAMI_LOCAL_SESSION_ID (the side panel shows no settings).
 // photoDocumentId: the ID photo confirmed in the side panel, resolved on the server like the passport (ticket 16).
-async function startVisaSession(trip: Trip, passport: PassportFields, documentId: string | null, photoDocumentId: string | null): Promise<string> {
+async function startVisaSession(
+  trip: Trip,
+  passport: PassportFields,
+  documentId: string | null,
+  photoDocumentId: string | null,
+  paperId: "evoa" | "arrival_card" = "evoa",
+): Promise<string> {
   const settings = readAgentSettings();
   const attempt = createVisaStartAttempt({
     request: trip.request,
     passport,
-    paper_id: "evoa",
+    paper_id: paperId,
     local_session_id: settings.local_session_id.trim(),
     file_paths: filePaths(settings.files),
     ...(documentId ? { document_id: documentId } : {}),
@@ -68,9 +74,11 @@ export function useTripActions({
   const latest = () => (trip ? getTrip(trip.id) ?? trip : null);
 
   // confirmed: what the side panel confirmed in this very event, before the next render carries it.
+  // paperId: the e-VOA, or the arrival card that comes after it (same passport, same tab).
   const createVisa = async (
     itemId: string,
     confirmed?: { passport: PassportFields; documentId: string | null; photoDocumentId?: string | null },
+    paperId: "evoa" | "arrival_card" = "evoa",
   ) => {
     const current = latest();
     const fields = confirmed?.passport ?? passport;
@@ -88,7 +96,7 @@ export function useTripActions({
     }
     setStarting(true);
     try {
-      const sessionId = await startVisaSession(current, fields, passportDocument, confirmed?.photoDocumentId ?? photoDocumentId);
+      const sessionId = await startVisaSession(current, fields, passportDocument, confirmed?.photoDocumentId ?? photoDocumentId, paperId);
       const started = startVisaRun(latest() ?? current, itemId, sessionId, new Date(), passportDocument !== null);
       update(started);
       onStarted?.(started);
@@ -104,6 +112,9 @@ export function useTripActions({
     if (!current) return;
     const item = current.conversation.find((i) => i.id === itemId);
     if (accepted && !current.sample && item?.kind === "proposal" && item.action === "create_visa") return void createVisa(itemId);
+    if (accepted && !current.sample && item?.kind === "proposal" && item.action === "create_arrival_card") {
+      return void createVisa(itemId, undefined, "arrival_card");
+    }
     update(decideProposal(current, itemId, accepted, new Date()));
   };
 

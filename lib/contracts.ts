@@ -120,6 +120,8 @@ export type AgentQuestion = z.infer<typeof AgentQuestionSchema>;
 export const AgentRunSchema = z.object({
   session_id: z.string().min(1),
   kind: z.enum(["paper", "flights"]),
+  // Which official form the agent fills (absent on runs saved before the arrival card: the e-VOA).
+  paper_id: z.enum(["evoa", "arrival_card"]).optional(),
   started_at: IsoDateTime,
   state: AgentStateSchema,
   pending_question: AgentQuestionSchema.optional(),
