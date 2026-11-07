@@ -40,7 +40,7 @@ function TripBlock({ trip }: { trip: Trip }) {
   );
   return (
     <article className="space-y-5">
-      <div className="relative aspect-[16/9] overflow-hidden rounded-[22px] bg-muted">
+      <div className="riso relative aspect-[16/9] overflow-hidden rounded-[12px]">
         <Image
           src={destinationImage(request.destination, request.country_iso2)}
           alt={request.destination ?? "Destination"}
@@ -54,14 +54,14 @@ function TripBlock({ trip }: { trip: Trip }) {
         </div>
       </div>
       <div>
-        <p className="text-2xl font-semibold tracking-tight">{request.destination ?? request.raw_text}</p>
+        <p className="text-2xl font-medium tracking-[-0.04em]">{request.destination ?? request.raw_text}</p>
         <p className="mt-1 text-sm text-muted-foreground">
           {request.departure_date ? formatDate(request.departure_date) : "Dates to confirm"}
           {request.return_date ? ` to ${formatDate(request.return_date)}` : ""}
         </p>
       </div>
 
-      <section className="rounded-[22px] bg-muted/60 p-4">
+      <section className="rounded-[14px] bg-muted/60 p-4">
         <h3 className="mb-3 text-sm font-semibold">Visa progress</h3>
         <VisaProgress steps={visaSteps(trip)} compact />
       </section>
@@ -69,7 +69,7 @@ function TripBlock({ trip }: { trip: Trip }) {
       {openQuestion ? (
         <Link
           href={`/trip/${trip.id}`}
-          className="flex items-start gap-3 rounded-[22px] bg-accent p-4 text-sm text-accent-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
+          className="flex items-start gap-3 rounded-[14px] bg-accent p-4 text-sm text-accent-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
         >
           <MessageCircleQuestion className="mt-0.5 size-4 shrink-0" />
           <span>
@@ -82,7 +82,7 @@ function TripBlock({ trip }: { trip: Trip }) {
       {trip.formalities.length > 0 ? (
         <section className="space-y-2">
           <h3 className="text-sm font-semibold">Entry papers</h3>
-          <ul className="divide-y divide-border rounded-[22px] bg-card ring-1 ring-border">
+          <ul className="divide-y divide-border rounded-[14px] bg-card ring-1 ring-border">
             {trip.formalities.map((f) => {
               const host = hostOf(f.official_url) ?? f.official_url;
               return (
@@ -112,11 +112,11 @@ function TripBlock({ trip }: { trip: Trip }) {
       ) : null}
 
       {run ? (
-        <section className="rounded-[22px] bg-foreground p-4 text-background">
+        <section className="rounded-[14px] bg-foreground p-4 text-background">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="flex items-center gap-1.5 text-sm font-semibold">
-                <Sparkles className="size-3.5 text-[#b9adff]" /> Agent activity
+                <Sparkles className="size-3.5 text-background/80" /> Agent activity
               </p>
               <p className="text-xs text-background/60">
                 Started at {formatTime(run.started_at)} · {run.state.replaceAll("_", " ")}
@@ -142,7 +142,7 @@ function TripBlock({ trip }: { trip: Trip }) {
 
       <Link
         href={`/trip/${trip.id}`}
-        className="flex h-12 items-center justify-center gap-2 rounded-full bg-primary text-sm font-medium text-primary-foreground shadow-glow"
+        className="glass flex h-12 items-center justify-center gap-2 text-sm font-medium"
       >
         Open the trip <ArrowRight className="size-4" />
       </Link>
@@ -175,25 +175,26 @@ export function CountryPanel({
 
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center md:items-center md:justify-end md:p-6" role="presentation">
-      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-foreground/30" />
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-[rgb(7_18_27/0.14)]" />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="country-panel-title"
-        className="relative flex max-h-[88vh] w-full flex-col overflow-hidden rounded-t-[32px] bg-card shadow-float animate-in slide-in-from-bottom-8 fade-in duration-300 md:max-h-[calc(100vh-3rem)] md:w-[440px] md:rounded-[32px] md:slide-in-from-right-8 md:slide-in-from-bottom-0"
+        className="poster poster-mint poster-solid flex max-h-[88vh] w-full flex-col overflow-hidden rounded-b-none animate-in fade-in slide-in-from-bottom-8 duration-300 md:max-h-[calc(100vh-3rem)] md:w-[440px] md:rounded-b-[32px] md:zoom-in-95 md:slide-in-from-bottom-0"
       >
         <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4">
           <div>
-            {status ? <CountryStatusPill status={status} /> : null}
-            <h2 id="country-panel-title" className="mt-3 text-3xl font-semibold tracking-tight">
+            <p className="label-mono">World map · country</p>
+            <h2 id="country-panel-title" className="mt-2 text-[32px] leading-[1.1] font-medium tracking-[-0.04em]">
               {name}
             </h2>
+            {status ? <CountryStatusPill status={status} className="mt-3" /> : null}
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="grid size-10 shrink-0 place-items-center rounded-full bg-muted transition-colors hover:bg-accent"
+            className="glass grid size-10 shrink-0 place-items-center"
           >
             <X className="size-4" />
           </button>
@@ -208,11 +209,11 @@ export function CountryPanel({
                   : null}
               </p>
               <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-[22px] bg-muted p-4">
+                <div className="rounded-[14px] bg-muted p-4">
                   <p className="text-sm text-muted-foreground">{passports.length > 1 ? "Passports" : "Passport"}</p>
                   <p className="text-2xl font-semibold">{passports.length ? passports.join(", ") : "To confirm"}</p>
                 </div>
-                <div className="rounded-[22px] bg-muted p-4">
+                <div className="rounded-[14px] bg-muted p-4">
                   <p className="text-sm text-muted-foreground">Trips from here</p>
                   <p className="text-2xl font-semibold">{homeTrips}</p>
                 </div>
@@ -244,7 +245,7 @@ export function CountryPanel({
               <LivePapersButton iso2={iso2} destination={name} />
               <Link
                 href={`/?q=${encodeURIComponent(`I want to go to ${name}`)}#ask`}
-                className="flex h-12 items-center justify-center gap-2 rounded-full bg-primary text-sm font-medium text-primary-foreground shadow-glow"
+                className="glass flex h-12 items-center justify-center gap-2 text-sm font-medium"
               >
                 Plan this trip <ArrowRight className="size-4" />
               </Link>

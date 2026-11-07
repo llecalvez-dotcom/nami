@@ -61,18 +61,18 @@ export function HomeScreen() {
   return (
     <div className="flex flex-1 flex-col pb-28 md:pb-16">
       <AppNav />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-5 sm:px-8">
-        <section id="ask" className="scroll-mt-24 pt-10 sm:pt-20">
-          <p className="text-sm font-medium text-muted-foreground">Your travel concierge</p>
-          <h1 className="mt-3 max-w-3xl text-5xl leading-[1.02] font-semibold tracking-[-0.035em] sm:text-7xl">
-            Where to <span className="text-primary">next?</span>
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 sm:px-7">
+        <section id="ask" className="on-sky mx-auto flex max-w-3xl scroll-mt-24 flex-col items-center pt-14 text-center sm:pt-24">
+          <p className="label-mono text-[11px]">Your travel concierge</p>
+          <h1 className="mt-4 text-[45px] leading-[1.05] sm:text-[88px]">
+            <span className="font-script font-bold tracking-[-0.025em]">Where to</span> <span className="mix-serif">next?</span>
           </h1>
-          <p className="mt-5 max-w-xl text-lg leading-relaxed text-muted-foreground">
+          <p className="mt-5 max-w-xl text-[18px] leading-[1.4] opacity-85">
             Tell me about your trip. I take care of what it takes, you keep the last word.
           </p>
 
-          <form onSubmit={submit} className="mt-10 flex max-w-3xl items-center gap-2 rounded-full bg-card p-2 shadow-float">
-            <MicButton voice={voice} className="size-12 rounded-full sm:size-14" />
+          <form onSubmit={submit} className="glass mt-10 flex w-full items-center gap-2 p-1.5 text-left">
+            <MicButton voice={voice} className="size-12 rounded-full" />
             <label htmlFor="trip-text" className="sr-only">
               Tell me about your trip
             </label>
@@ -81,31 +81,31 @@ export function HomeScreen() {
               value={text}
               onChange={(e) => setText(e.target.value)}
               placeholder="Tell me about your trip"
-              className="h-12 min-w-0 flex-1 bg-transparent px-2 text-base outline-none placeholder:text-muted-foreground/70 sm:h-14 sm:text-lg"
+              className="h-12 min-w-0 flex-1 bg-transparent px-2 text-base text-[var(--ink)] outline-none placeholder:text-[var(--ink)]/60 sm:text-lg"
             />
             <button
               type="submit"
               aria-label="Send"
               disabled={!text.trim() || busy}
-              className="inline-flex h-12 shrink-0 items-center gap-2 rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground shadow-glow transition-opacity disabled:opacity-40 disabled:shadow-none sm:h-14 sm:px-6"
+              className="glass inline-flex h-12 shrink-0 items-center gap-2 px-5 font-mono text-[11px] tracking-[0.1em] uppercase disabled:opacity-40"
             >
               <span className="hidden sm:inline">{busy ? "Reading…" : "Send"}</span>
               <ArrowRight className="size-4" />
             </button>
           </form>
-          <VoiceStatusLine voice={voice} className="mt-3 pl-4" />
+          <VoiceStatusLine voice={voice} className="mt-3" />
           {error ? (
-            <p role="alert" className="mt-3 pl-4 text-sm text-attention-foreground">
+            <p role="alert" className="glass-help mt-3 px-4 py-2 text-sm">
               I couldn&apos;t read your request: {error}
             </p>
           ) : (
-            <div className="mt-4 flex max-w-3xl flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
               {EXAMPLES.map((example) => (
                 <button
                   key={example}
                   type="button"
                   onClick={() => setText(example)}
-                  className="rounded-full bg-card/70 px-4 py-2 text-left text-sm text-muted-foreground shadow-soft transition-colors hover:bg-card hover:text-foreground"
+                  className="glass-help px-4 py-2 text-left text-sm transition-colors hover:bg-white/20"
                 >
                   {example}
                 </button>
@@ -114,17 +114,18 @@ export function HomeScreen() {
           )}
         </section>
 
-        <section className="mt-20" aria-labelledby="trips-title">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <h2 id="trips-title" className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                Let&apos;s pack for your trips
-              </h2>
-              <p className="mt-2 text-muted-foreground">Every paper, flight and question, one card per trip.</p>
-            </div>
-            <Link href="/trips" className="hidden shrink-0 text-sm font-medium text-primary sm:inline">
+        <section className="poster poster-yellow mx-auto mt-20 max-w-[960px] overflow-hidden pt-6" aria-labelledby="trips-title">
+          <div className="flex items-center justify-between px-6 label-mono sm:px-8">
+            <span>Nami · trips</span>
+            <Link href="/trips" className="underline-offset-4 hover:underline">
               See all
             </Link>
+          </div>
+          <div className="px-6 pt-6 sm:px-8">
+            <h2 id="trips-title" className="display-title text-[45px] sm:text-[56px]">
+              Let&apos;s pack for your <span className="mix-serif">trips.</span>
+            </h2>
+            <p className="mt-2 text-[18px] leading-[1.4]">Every paper, flight and question, one card per trip.</p>
           </div>
           <div
             ref={rail}
@@ -133,64 +134,76 @@ export function HomeScreen() {
               const card = el.firstElementChild?.clientWidth ?? 1;
               setPage(Math.round(el.scrollLeft / (card + 20)));
             }}
-            className="-mx-5 mt-8 flex snap-x snap-mandatory scroll-px-5 gap-5 sm:scroll-px-8 overflow-x-auto px-5 pt-2 pb-6 [scrollbar-width:none] sm:-mx-8 sm:px-8"
+            className="mt-8 flex snap-x snap-mandatory scroll-px-6 gap-5 overflow-x-auto px-6 pt-2 pb-6 [scrollbar-width:none] sm:scroll-px-8 sm:px-8"
             aria-busy={trips === null}
           >
             {cards.map((card) => (
-              <TripCard key={card.id} trip={card} className="w-[82%] shrink-0 snap-start sm:w-[320px]" />
+              <TripCard key={card.id} trip={card} className="w-[82%] shrink-0 snap-start sm:w-[300px]" />
             ))}
-            {trips !== null && <Link
-              href="#ask"
-              className="flex w-[82%] shrink-0 snap-start flex-col items-center justify-center gap-4 rounded-[28px] border-2 border-dashed border-border text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary sm:w-[320px]"
-            >
-              <span className="grid size-14 place-items-center rounded-full bg-card shadow-soft">
-                <Plus className="size-6" />
-              </span>
-              <span className="text-sm font-medium">Plan a new trip</span>
-            </Link>}
+            {trips !== null && (
+              <Link
+                href="#ask"
+                className="flex min-h-64 w-[82%] shrink-0 snap-start flex-col items-center justify-center gap-4 rounded-[18px] border-2 border-dashed border-border transition-colors hover:border-primary sm:w-[300px]"
+              >
+                <span className="glass grid size-14 place-items-center">
+                  <Plus className="size-6" />
+                </span>
+                <span className="label-mono">Plan a new trip</span>
+              </Link>
+            )}
           </div>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between px-6 pb-6 sm:px-8">
             <div className="flex gap-2" aria-hidden>
               {[...cards, null].map((_, i) => (
                 <span
                   key={i}
-                  className={`size-1.5 rounded-full transition-colors ${i === page ? "bg-foreground" : "bg-foreground/20"}`}
+                  className={`size-1.5 rounded-full transition-colors ${i === page ? "bg-foreground" : "bg-foreground/25"}`}
                 />
               ))}
             </div>
-            <a href="#ask" className="inline-flex items-center gap-4 text-sm font-semibold">
-              Add a trip
-              <span className="grid size-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-glow">
-                <Plus className="size-6" />
-              </span>
+            <a href="#ask" className="glass inline-flex h-12 items-center gap-3 px-5 font-mono text-[11px] tracking-[0.1em] uppercase">
+              Add a trip <Plus className="size-4" />
             </a>
+          </div>
+          <div className="marquee overflow-hidden bg-foreground py-2.5 text-background" aria-hidden>
+            <div>
+              {[0, 1].map((k) => (
+                <span key={k} className="flex shrink-0 font-mono text-[11px] tracking-[0.12em] uppercase">
+                  {Array.from({ length: 6 }, (_, i) => (
+                    <span key={i} className="px-4">
+                      Plan a trip · Check your papers · Nami fills the forms · You keep the last word ·
+                    </span>
+                  ))}
+                </span>
+              ))}
+            </div>
           </div>
         </section>
 
-        <section className="mt-16">
+        <section className="mx-auto mt-10 max-w-[960px]">
           <Link
             href="/map"
-            className="group relative flex flex-col gap-6 overflow-hidden rounded-[32px] bg-foreground p-8 text-background sm:flex-row sm:items-end sm:justify-between sm:p-10"
+            className="group poster poster-mint flex flex-col gap-6 p-7 sm:flex-row sm:items-end sm:justify-between sm:p-10"
           >
-            <div
-              aria-hidden
-              className="absolute -top-24 -right-24 size-80 rounded-full bg-[radial-gradient(circle_at_30%_30%,rgb(157_140_255/0.55),rgb(91_61_245/0.15)_55%,transparent_70%)]"
-            />
-            <div className="relative">
-              <Globe2 className="size-8 text-[#b9adff]" />
-              <h2 className="mt-6 text-3xl font-semibold tracking-tight sm:text-4xl">Your world, at a glance</h2>
-              <p className="mt-2 max-w-md text-background/60">
+            <div>
+              <p className="label-mono flex items-center gap-2">
+                <Globe2 className="size-3.5" /> World map
+              </p>
+              <h2 className="mt-5 text-[32px] leading-[1.15] font-medium sm:text-[40px]">
+                Your world, at a <span className="mix-serif">glance.</span>
+              </h2>
+              <p className="mt-2 max-w-md text-muted-foreground">
                 Home, the places you dream of, and every visa on its way, on one 3D globe.
               </p>
             </div>
-            <div className="relative flex flex-wrap items-center gap-x-6 gap-y-3">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
               {(["in_progress", "planned", "wish"] as const).map((status) => (
-                <span key={status} className="inline-flex items-center gap-2 text-sm text-background/80">
-                  <span className="size-2.5 rounded-full" style={{ background: COUNTRY_STATUS[status].color }} />
+                <span key={status} className="inline-flex items-center gap-2 text-sm">
+                  <span className="size-2.5 rounded-full ring-1 ring-black/15" style={{ background: COUNTRY_STATUS[status].color }} />
                   {counts[status] ?? 0} {COUNTRY_STATUS[status].label.toLowerCase()}
                 </span>
               ))}
-              <span className="grid size-12 place-items-center rounded-full bg-background text-foreground transition-transform group-hover:rotate-45">
+              <span className="glass grid size-12 place-items-center transition-transform group-hover:rotate-45">
                 <ArrowUpRight className="size-5" />
               </span>
             </div>

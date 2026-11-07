@@ -131,9 +131,9 @@ export function PassportCard({
   };
 
   return (
-    <section className="space-y-4 rounded-[28px] bg-card p-6 shadow-soft">
+    <section className="space-y-4 rounded-[18px] bg-card p-6 shadow-soft">
       <div className="flex items-start justify-between gap-3">
-        <p className="text-lg leading-snug font-semibold tracking-tight">{reader === "off" ? "Enter passport details" : "Send me a photo of your passport"}</p>
+        <p className="text-[20px] leading-snug font-medium tracking-[-0.5px]">{reader === "off" ? "Enter passport details" : "Send me a photo of your passport"}</p>
         <div className="flex items-center gap-2">
           {confirmed ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-success/12 px-2.5 py-1 text-xs font-medium text-success">
@@ -228,7 +228,7 @@ export function PassportCard({
                   value={displayedValues[key]}
                   placeholder={masked ? undefined : placeholder}
                   aria-label={label}
-                  aria-invalid={!displayedValues[key].trim() || undefined}
+                  aria-invalid={(!displayedValues[key].trim() && (edited.includes(key) || extraction !== null)) || undefined}
                   onChange={(e) => {
                     unconfirm();
                     setEdited((keys) => keys.includes(key) ? keys : [...keys, key]);

@@ -57,8 +57,8 @@ async function startVisaSession(trip: Trip, passport: PassportFields): Promise<s
 function Fact({ label, value }: { label: string; value: string | null }) {
   return (
     <div>
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p className={value ? "text-2xl font-semibold tracking-tight sm:text-3xl" : "text-2xl font-semibold tracking-tight text-muted-foreground/50 sm:text-3xl"}>
+      <p className="label-mono text-muted-foreground">{label}</p>
+      <p className={value ? "text-[32px] leading-[1.15] font-medium tracking-[-0.04em]" : "text-[32px] leading-[1.15] font-medium tracking-[-0.04em] text-muted-foreground/60"}>
         {value ?? "To confirm"}
       </p>
     </div>
@@ -90,8 +90,9 @@ export function TripScreen({ id }: { id: string }) {
     return (
       <div className="flex flex-1 flex-col">
         <AppNav />
-        <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-start gap-4 px-6 py-24">
-          <h1 className="text-5xl font-semibold tracking-tight">Trip not found</h1>
+        <main className="poster poster-alu mx-auto mt-16 flex w-[calc(100%-2rem)] max-w-3xl flex-col items-start gap-4 p-8 sm:p-12">
+          <p className="label-mono">Nami · trip</p>
+          <h1 className="text-[45px] leading-[1.05] font-medium tracking-[-0.04em]">Trip not found</h1>
           <p className="text-muted-foreground">It may have been saved in another browser.</p>
           <Link href="/trips" className="font-medium text-primary underline-offset-4 hover:underline">
             Back to your trips
@@ -176,24 +177,27 @@ export function TripScreen({ id }: { id: string }) {
             <SampleBadge />
             <button
               type="button"
-              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-card px-3.5 text-sm font-medium shadow-soft transition-colors hover:text-primary"
+              className="glass inline-flex h-10 items-center gap-1.5 px-3 font-mono text-[11px] tracking-[0.1em] uppercase sm:px-4"
               onClick={() => update(createSampleTrip(new Date()))}
             >
-              <RotateCcw className="size-3.5" /> Reset
+              <RotateCcw className="size-3.5" /> <span className="sr-only sm:not-sr-only">Reset</span>
             </button>
           </>
         ) : null}
       </AppNav>
 
-      <main className="mx-auto w-full max-w-6xl flex-1 px-5 pt-6 sm:px-8 sm:pt-10">
-        <section className="grid overflow-hidden rounded-[32px] bg-card shadow-soft md:grid-cols-[1.1fr_1fr]">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-6 sm:px-7 sm:pt-10">
+        <section className="poster poster-alu grid overflow-hidden md:grid-cols-[1.1fr_1fr]">
           <div className="flex flex-col gap-5 p-7 sm:p-10">
-            <CountryStatusPill status={tripStatus(trip)} className="self-start" />
+            <div className="flex items-center justify-between gap-3">
+              <span className="label-mono">Nami · trip folder</span>
+              <CountryStatusPill status={tripStatus(trip)} />
+            </div>
             <Fact label="From" value={request.origin_country ? countryName(request.origin_country) : null} />
             <Fact label="To" value={request.destination ?? (request.country_iso2 ? countryName(request.country_iso2) : null)} />
             <p className="max-w-md text-sm leading-relaxed text-muted-foreground">“{request.raw_text}”</p>
           </div>
-          <div className="relative min-h-56 md:min-h-full">
+          <div className="riso relative min-h-56 md:min-h-full">
             <Image
               src={destinationImage(request.destination, request.country_iso2)}
               alt={request.destination ?? "Destination"}
@@ -202,23 +206,26 @@ export function TripScreen({ id }: { id: string }) {
               sizes="(min-width: 768px) 50vw, 100vw"
               className="object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/25 to-transparent" />
             <Link
               href="/map"
-              className="absolute right-4 bottom-4 inline-flex h-10 items-center gap-2 rounded-full bg-card/90 px-4 text-sm font-medium shadow-soft backdrop-blur transition-colors hover:text-primary"
+              className="glass absolute right-4 bottom-4 z-10 inline-flex h-11 bg-[rgb(255_253_243/0.88)] items-center gap-2 px-4 font-mono text-[11px] tracking-[0.1em] text-[#102934] uppercase"
             >
               <Globe2 className="size-4" /> See on the map
             </Link>
           </div>
         </section>
-        <section className="mt-6 rounded-[28px] bg-card p-6 shadow-soft sm:p-8" aria-label="Visa progress">
-          <h2 className="mb-4 text-lg font-semibold tracking-tight">Visa progress</h2>
+
+        <section className="poster poster-alu mt-6 p-6 sm:p-8" aria-label="Visa progress">
+          <h2 className="mb-4 text-[20px] font-medium tracking-[-0.5px]">Visa progress</h2>
           <VisaProgress steps={visaSteps(trip)} />
         </section>
 
-        <div className="mt-10 grid gap-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-12">
+        <div className="poster poster-alu mt-6 grid gap-10 p-5 sm:p-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-12">
           <section aria-label="Conversation" className="min-w-0">
-            <h2 className="mb-6 text-2xl font-semibold tracking-tight">Talk with Nami</h2>
+            <p className="label-mono">Conversation</p>
+            <h2 className="mt-2 mb-6 text-[32px] leading-[1.15] font-medium">
+              Talk with <span className="mix-serif">Nami.</span>
+            </h2>
             <Conversation
               items={trip.conversation}
               onAnswer={(itemId, value, label) => update(answerQuestion(trip, itemId, value, label))}
