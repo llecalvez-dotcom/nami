@@ -1,6 +1,7 @@
 import { API_LIMITS, guard, readJsonLimited } from "@/lib/api-guard";
 import { createSession } from "@/lib/h-agent";
 import { documentFilePaths } from "@/lib/documents";
+import { bindSessionDocument } from "@/lib/agent-passport-upload";
 import {
   buildPilotTask,
   fail,
@@ -55,6 +56,7 @@ async function start(request: Request): Promise<Response> {
       maxTimeS: PAPER_MAX_TIME_S,
       maxSteps: PAPER_MAX_STEPS,
     });
+    if (input.data.document_id) bindSessionDocument(session.id, documentPaths[0]);
     return Response.json({ session_id: session.id, status: session.status }, { status: 201 });
   } catch (error) {
     return hErrorResponse(error);

@@ -35,7 +35,7 @@ describe("createSession", () => {
       agent: {
         name: "hackathon-h",
         description: expect.any(String),
-        environments: [{ id: "browser", kind: "web", host: "user_device", session_id: "local-42" }],
+        environments: [{ id: "browser", kind: "web", host: "user_device", session_id: "local-42", settle_s: 2, mode: { type: "visual", markdown: true } }],
         tools: [TOOL],
       },
       messages: [{ type: "user_message", message: "Fill it" }],
