@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Starts everything the demo needs, in order:
-#   1. the agent's dedicated Chrome (own profile, debugging port, never put to sleep),
+#   1. the agent's dedicated Chrome (own profile, debugging port, never put to sleep, pixel density 1),
 #   2. the H bridge `holo local browser` on that port, with a fixed session id, restarted if it stops,
 #   3. Nami (`npm run dev`).
 # Ctrl+C stops the bridge and Nami; the agent's Chrome stays open.
-# Never prints the H key.
+# Never prints the H key. Prints the NAMI_LOCAL_SESSION_ID line to put in .env.local.
 #
 # Usage: scripts/lancer-demo.sh [--port 9333]
 # Env:   NAMI_AGENT_CHROME_PORT (9333), NAMI_AGENT_CHROME_PROFILE (~/chrome-for-agents),
-#        NAMI_LOCAL_SESSION_ID (UUID, else kept in ~/.config/nami/local-browser-session-id),
+#        NAMI_LOCAL_SESSION_ID (UUID, else from .env.local, else kept in ~/.config/nami/local-browser-session-id),
 #        CHROME_BIN, HOLO_BIN.
 set -euo pipefail
 set +x
@@ -34,18 +34,26 @@ done
 export NAMI_AGENT_CHROME_PORT="$PORT"
 mkdir -p "$STATE_DIR" "$LOG_DIR"
 
-# --- H key: holo reads HAI_API_KEY, else ~/.config/hai/.env. Take it from .env.local if needed, without printing it.
-if [ -z "${HAI_API_KEY:-}" ] && [ -f "$ROOT/.env.local" ]; then
+# Value of one variable of .env.local (the last one wins), without printing it.
+env_local() {
+  local line value=""
+  [ -f "$ROOT/.env.local" ] || return 0
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
-      HAI_API_KEY=*)
-        value="${line#HAI_API_KEY=}"
+      "$1"=*)
+        value="${line#"$1"=}"
         value="${value%\"}"; value="${value#\"}"; value="${value%\'}"; value="${value#\'}"
-        [ -n "$value" ] && export HAI_API_KEY="$value"
         ;;
     esac
   done < "$ROOT/.env.local"
-  unset line value
+  printf '%s' "$value"
+}
+
+# --- H key: holo reads HAI_API_KEY, else ~/.config/hai/.env. Take it from .env.local if needed, without printing it.
+if [ -z "${HAI_API_KEY:-}" ]; then
+  value="$(env_local HAI_API_KEY)"
+  [ -n "$value" ] && export HAI_API_KEY="$value"
+  unset value
 fi
 if [ -z "${HAI_API_KEY:-}" ] && ! grep -qs '^HAI_API_KEY=.' "${XDG_CONFIG_HOME:-$HOME/.config}/hai/.env"; then
   die "No H key: set HAI_API_KEY in .env.local, or run: holo login --key"
@@ -57,7 +65,8 @@ HOLO="${HOLO_BIN:-$(command -v holo || true)}"
 [ -n "$HOLO" ] || die 'holo not found: pip install "hai-agents[cli,browser]" (or set HOLO_BIN)'
 
 # --- Fixed session id (the bridge only accepts a UUID)
-SESSION_ID="${NAMI_LOCAL_SESSION_ID:-}"
+ENV_LOCAL_SESSION_ID="$(env_local NAMI_LOCAL_SESSION_ID | tr -d '[:space:]')"
+SESSION_ID="${NAMI_LOCAL_SESSION_ID:-$ENV_LOCAL_SESSION_ID}"
 if [ -z "$SESSION_ID" ] && [ -s "$STATE_DIR/local-browser-session-id" ]; then
   SESSION_ID="$(tr -d '[:space:]' < "$STATE_DIR/local-browser-session-id")"
 fi
@@ -67,6 +76,15 @@ if [ -z "$SESSION_ID" ]; then
 fi
 [[ "$SESSION_ID" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] \
   || die "Session id must be a UUID, got: $SESSION_ID"
+# The Nami started below reads it: /api/papers/start uses it when the side panel sends no session.
+export NAMI_LOCAL_SESSION_ID="$SESSION_ID"
+
+load_node() {
+  if ! command -v node > /dev/null 2>&1 && [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
+    # shellcheck disable=SC1091
+    . "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
+  fi
+}
 
 # --- 1. Agent's Chrome
 chrome_up() { curl -fsS --max-time 2 "http://127.0.0.1:$PORT/json/version" > /dev/null 2>&1; }
@@ -94,14 +112,48 @@ agent_chrome_running() {
   return 1
 }
 
+# Pixel density of the agent's Chrome, read in a tab through DevTools (Runtime.evaluate). Opens a blank tab if there is none.
+# Prints the number, or "error".
+chrome_scale() {
+  NAMI_CDP_PORT="$PORT" node - << 'JS'
+const base = `http://127.0.0.1:${process.env.NAMI_CDP_PORT}`;
+const done = (text) => { console.log(text); process.exit(0); };
+setTimeout(() => done("error"), 8000);
+(async () => {
+  const tabs = await (await fetch(`${base}/json`)).json();
+  let tab = tabs.find((t) => t.type === "page" && t.webSocketDebuggerUrl);
+  if (!tab) tab = await (await fetch(`${base}/json/new?about:blank`, { method: "PUT" })).json();
+  const ws = new WebSocket(tab.webSocketDebuggerUrl);
+  ws.onerror = () => done("error");
+  ws.onopen = () => ws.send(JSON.stringify({ id: 1, method: "Runtime.evaluate", params: { expression: "window.devicePixelRatio", returnByValue: true } }));
+  ws.onmessage = (event) => {
+    const reply = JSON.parse(String(event.data));
+    if (reply.id !== 1) return;
+    const value = reply.result?.result?.value;
+    done(typeof value === "number" ? String(value) : "error");
+  };
+})().catch(() => done("error"));
+JS
+}
+
 if chrome_up; then
   agent_chrome_running || die "Port $PORT is used by a browser that is not the agent's Chrome (profile $PROFILE). Quit it, or use --port."
-  say "The agent's Chrome already listens on port $PORT: reusing it."
+  load_node
+  command -v node > /dev/null 2>&1 || die "node not found: cannot check the pixel density of the agent's Chrome"
+  scale="$(chrome_scale)"
+  case "$scale" in
+    1) ;;
+    error) die "Could not read the pixel density of the agent's Chrome on port $PORT. Quit that Chrome, then run this script again." ;;
+    *) die "The agent's Chrome on port $PORT has a pixel density of $scale, not 1: H's clicks would land at the wrong place. Quit that Chrome (profile $PROFILE), then run this script again: it starts Chrome with --force-device-scale-factor=1. Keep the page zoom at 100%." ;;
+  esac
+  say "The agent's Chrome already listens on port $PORT (pixel density 1): reusing it."
 else
   CHROME="$(find_chrome)"
   [ -n "$CHROME" ] || die "Chrome not found (set CHROME_BIN)"
+  # --force-device-scale-factor=1: Retina: without it, H's clicks land at twice their coordinates (measured on 2026-11-07).
   nohup "$CHROME" \
     --remote-debugging-port="$PORT" \
+    --force-device-scale-factor=1 \
     --user-data-dir="$PROFILE" \
     --disable-backgrounding-occluded-windows \
     --disable-renderer-backgrounding \
@@ -156,14 +208,22 @@ trap cleanup EXIT INT TERM
 sleep 3
 kill -0 "$BRIDGE_PID" 2> /dev/null || die "The H bridge did not start (log: $BRIDGE_LOG)"
 
+if [ "$ENV_LOCAL_SESSION_ID" = "$SESSION_ID" ]; then
+  ENV_LOCAL_HINT="Already in .env.local, so the side panel needs no setting:"
+else
+  ENV_LOCAL_HINT="Put this line in .env.local (then restart any Nami not started by this script):"
+fi
+
 cat << INFO
 
   Agent's Chrome   port $PORT, profile $PROFILE
   H bridge         holo local browser (log: $BRIDGE_LOG)
-  Session id       $SESSION_ID
+  Session id       $SESSION_ID (the same from one launch to the next)
 
-  In Nami, open http://localhost:3000/?demo=1 and paste the session id
-  in "Local browser session". It stays the same from one launch to the next.
+  $ENV_LOCAL_HINT
+
+      NAMI_LOCAL_SESSION_ID=$SESSION_ID
+
   Keep the agent's Chrome window visible on screen during the demo.
 
 INFO
@@ -180,10 +240,7 @@ if [ -n "$status" ] && [ "$status" != "000" ]; then
   wait "$BRIDGE_PID" || exit 1
   exit 0
 fi
-if ! command -v npm > /dev/null 2>&1 && [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
-  # shellcheck disable=SC1091
-  . "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
-fi
+command -v npm > /dev/null 2>&1 || load_node
 command -v npm > /dev/null 2>&1 || die "npm not found"
 # In the background so that a bridge that gives up stops the whole demo (it signals this script).
 npm run dev &

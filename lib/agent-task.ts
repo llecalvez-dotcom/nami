@@ -8,6 +8,7 @@ export type PaperTaskInput = {
   formName: string;
   traveller: string;
   trip: string;
+  routeHint?: string;
 };
 
 export type PaperInstructionsInput = {
@@ -35,6 +36,7 @@ export function buildPaperInstructions(input: PaperInstructionsInput): string {
 export function buildPaperTask(input: PaperTaskInput): string {
   return [
     `Go to ${input.officialUrl}. Fill in the ${input.formName} form for the traveller and the trip below, step by step, up to the last screen.`,
+    ...(input.routeHint ? [input.routeHint] : []),
     "Follow the safety instructions and stop before final submission or payment.",
     `Traveller: ${input.traveller}`,
     `Trip: ${input.trip}`,

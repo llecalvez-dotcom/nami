@@ -39,6 +39,35 @@ describe("pickOption", () => {
     }
   });
 
+  const fakeSelect = (name: string, options: { text: string; value: string }[]) => ({
+    name, id: "", disabled: false, value: "", options, getAttribute: () => null, closest: () => null, dispatchEvent: vi.fn(),
+  });
+
+  it("lists the options of the targeted list when none matches, at most 30", () => {
+    const activities = fakeSelect("selectParentActivity", [
+      { text: "Select", value: "" },
+      { text: "General,  Family, or Social", value: "1" },
+      ...Array.from({ length: 40 }, (_, i) => ({ text: `Activity ${i + 1}`, value: `a${i + 1}` })),
+    ]);
+    vi.stubGlobal("document", { querySelectorAll: () => [fakeSelect("selectCountry", [{ text: "FRANCE", value: "FR" }]), activities] });
+    vi.stubGlobal("window", {});
+    const result: string = eval(pickExpression("selectParentActivity", "Tourism"));
+    const listed = ["General, Family, or Social", ...Array.from({ length: 29 }, (_, i) => `Activity ${i + 1}`)].join(", ");
+    expect(result).toBe(`No list has an option matching Tourism. Options of selectParentActivity: ${listed}. Call pick_option again with the closest one.`);
+    expect(result).not.toContain("Activity 30");
+    expect(result).not.toContain("Select,");
+    expect(activities.value).toBe("");
+    expect(activities.dispatchEvent).not.toHaveBeenCalled();
+  });
+
+  it("lists the lists of the page when no list has the label nor the option", () => {
+    vi.stubGlobal("document", { querySelectorAll: () => [fakeSelect("selectCountry", [{ text: "FRANCE", value: "FR" }])] });
+    vi.stubGlobal("window", {});
+    expect(eval(pickExpression("Purpose", "Tourism"))).toBe(
+      "No list has an option matching Tourism. No list is labelled Purpose; lists on this page: selectCountry. Call pick_option again with one of them.",
+    );
+  });
+
   it("evaluates the pick in the official tab only", async () => {
     vi.stubGlobal("WebSocket", FakeSocket);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [

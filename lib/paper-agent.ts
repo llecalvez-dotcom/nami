@@ -124,6 +124,7 @@ export function buildPilotTask(input: Pick<PaperStart, "request" | "passport">, 
     formName: paper.name,
     traveller: describeTraveller(input.passport),
     trip: describeTrip(input.request),
+    routeHint: paper.route_hint,
   });
 }
 

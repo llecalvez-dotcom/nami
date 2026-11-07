@@ -180,6 +180,15 @@ describe("agent tasks", () => {
     expect(task).not.toContain("Never click or open the OS file picker");
   });
 
+  it("adds the route hint right after the first line of the task, and nothing without one", () => {
+    const input = { officialUrl: "https://example.gov/form", formName: "Visa", traveller: "Nationality: France.", trip: "Purpose: tourism." };
+    const lines = buildPaperTask({ ...input, routeHint: "Pick FRANCE, then Tourism." }).split("\n");
+    expect(lines[0]).toContain("Go to https://example.gov/form");
+    expect(lines[1]).toBe("Pick FRANCE, then Tourism.");
+    expect(lines).toHaveLength(5);
+    expect(buildPaperTask(input).split("\n")).toHaveLength(4);
+  });
+
   it("builds the flights task", () => {
     const task = buildFlightsTask({ origin: "Paris", destinationAirport: "DPS", departDate: "2026-11-09", arriveBefore: "18:00" });
     expect(task).toContain("from Paris to DPS departing 2026-11-09");

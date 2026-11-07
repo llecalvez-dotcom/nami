@@ -22,8 +22,8 @@
 | F6 | Champ « Try another country » pour le jury (visible avec `?demo=1`) | ✅ | Ali | 03 |
 | F7 | Passeport : saisie à la main par défaut ; lecture de la photo seulement si `PASSPORT_READER=h` et case de consentement cochée | 🟡 (cette PR : contrôle MRZ par champ et alerte de validité en direct, même en saisie manuelle ; données fictives uniquement) | Ali | 03, PR #12 |
 | F8 | Masquage des données sensibles en démo (`?demo=1`) | ✅ (2 derniers caractères du numéro, date de naissance cachée) | Ali | 03 |
-| F9 | Réglages de démo : « Local browser session », chemins des fichiers | 🔵 PR #14, test réel à faire | Clément | 05 |
-| F10 | Agent Activity en direct + « Stop agent » qui arrête vraiment la session H | 🔵 PR #14, test réel à faire | Clément | 05 |
+| F9 | Réglages de démo : « Local browser session », chemins des fichiers | 🟡 PR #14 fusionnée ; ticket 15 (PR `feat/15-agent-evoa-complet`) : session prise dans `NAMI_LOCAL_SESSION_ID` du `.env.local` quand le panneau n'en envoie pas, ligne affichée par `scripts/lancer-demo.sh` ; à vérifier au passage réel | Clément | 05, 15 |
+| F10 | Agent Activity en direct + « Stop agent » qui arrête vraiment la session H | 🟡 PR #14 fusionnée, suivi vu en réel aux passages de 18 h à 19 h 30 ; « Stop » en cours de passage jamais testé en réel (T6) | Clément | 05, 15 |
 | F11 | Question de l'agent lue à voix haute, réponse validée au clic | 🔵 relié à l'agent dans la PR #14 | Nathan, puis Clément | 04, 05 |
 | F12 | Design premium (cartes arrondies, accent violet, photos des destinations, navigation) | ✅ (PR #13, testée par Devin avec les vraies API et relue par Claude) | Léon | sans ticket |
 | F14 | Page World map : globe 3D, pays de résidence, envies, visas en cours, pop-up d'avancement au clic | ✅ (PR #13) | Léon | sans ticket |
@@ -44,7 +44,7 @@
 | B3 | `lib/planner/` : quelles questions, quels modules, fenêtres d'ouverture | ✅ | Nathan | 02 |
 | B4 | `/api/formalities` : papiers cherchés en direct (Linkup) + contrôle des domaines officiels | ✅ (PR #6, L1 réussi) | Ali | 03 |
 | B5 | `/api/documents/extract` : lecture du passeport (vision H), un seul fournisseur, consentement exigé par le serveur | 🟡 (cette PR : chiffres de contrôle MRZ et comparaison aux champs imprimés ; divergence signalée, jamais corrigée en silence) | Ali | 03, PR #12 |
-| B6 | `lib/h-agent.ts` + `/api/papers/start` + routes `agent` (suivre, répondre, arrêter) | 🔵 PR #14 : relue par Claude, arrêt hors domaine ajouté, à jour avec `main` (222 tests, lint, compilation OK) ; test réel à faire | Clément | 05 |
+| B6 | `lib/h-agent.ts` + `/api/papers/start` + routes `agent` (suivre, répondre, arrêter) | 🟡 PR #14 fusionnée, puis #37 à #45 (`pick_option`, arrêt au paiement, sessions H) ; en réel : étape 1 du formulaire atteinte (19 h 05, 18 étapes, 0,04 $). Ticket 15 : chemin des menus (`route_hint`), options listées par `pick_option`, Chrome en densité 1 ; parcours jusqu'au paiement à faire (T6) | Clément | 05, 15 |
 | B6b | `/api/papers/start` accepte un papier en direct de n'importe quel pays, domaine officiel revérifié par le serveur | ⬜ (après la partie A) | Clément | 05, partie B |
 | B7 | Mode démo préparé (sessions lancées 5 min avant, heure réelle affichée) | ⬜ (ticket 06 à écrire) | Nathan | 06 |
 | B8 | Module Vol (Google Flights), seulement s'il reste du temps | ⬜ | Clément | sans ticket |
@@ -57,9 +57,9 @@
 | T1 | F0 : le modèle H comprend 5 demandes variées | ❓ marqué réussi plus tôt, mais pas refait par un humain | Nathan | |
 | T2 | F5 : la voix est comprise dans le bruit de la salle | ❓ jamais fait avec un micro dans la salle ; à refaire au test du ticket 06 | Nathan | `docs/tests/f5-conversation-voix.md` |
 | T3 | ~~F1 manuel~~ : supprimé. Le premier passage réel de l'agent sur l'e-VOA sert de repérage | sans objet | Clément | `docs/tests/f1-evoa.md` |
-| T4 | F6 : l'agent H pilote le Chrome du portable par l'API | ⬜ (au premier passage réel de la PR #14) | Clément | `docs/tests/f1-evoa.md` |
-| T5 | F8 : l'agent H sait déposer un fichier | ⬜ (au premier passage réel de la PR #14) | Clément | `docs/tests/f1-evoa.md` |
-| T6 | F1 agent : l'agent remplit le visa jusqu'au paiement, 3 fois sur 3, une fois arrêté par « Stop agent » | ⬜ (PR #14) | Clément | `docs/tests/f1-evoa.md` |
+| T4 | F6 : l'agent H pilote le Chrome du portable par l'API | ✅ sur le Mac de Nathan, Chrome de l'agent en densité 1 (passage de 19 h 05, `docs/tests/2026-11-07-etat-reel.md`) ; à refaire sur le portable de Clément | Clément | `docs/tests/f1-evoa.md` |
+| T5 | F8 : l'agent H sait déposer un fichier | ⬜ échec au passage de 19 h 05 (`upload_file` « no file input found », champs fichier cachés) ; passeport déposé à la main refusé par le site (photo au téléphone, ticket 16) | Clément, Ali | `docs/tests/f1-evoa.md` |
+| T6 | F1 agent : l'agent remplit le visa jusqu'au paiement, 3 fois sur 3, une fois arrêté par « Stop agent » | ⬜ ticket 15 : 3 passages réels à faire sur le portable de Clément, gabarit vide dans `docs/tests/f1-evoa.md` | Clément | `docs/tests/f1-evoa.md` |
 | T6b | Autre pays en beta (Kenya ou Tanzanie) : l'agent s'arrête avant le paiement ou passe la main, 1 passage | ⬜ (après T6) | Clément | `docs/tests/f1-autres-pays.md` |
 | T9 | L'agent H pilote l'ordinateur entier : trouve le passeport dans le Finder, le dépose dans une page (30 min, faux passeport) | ⬜ décide entre A et C | Ali | `docs/tests/t9-bureau.md` |
 | T10 | Parcours complet à la voix, sans clavier, dans la salle | ⬜ (après le ticket 06) | Nathan | `docs/tests/f5-conversation-voix.md` |
@@ -73,7 +73,7 @@
 | S1 | Clés API dans les secrets de Devin cloud, jamais dans Git | ✅ (`HAI_API_KEY` remplacée à 14 h 25) | Nathan |
 | S2 | `.env*` et `private/` ignorés par Git | ✅ | Claude |
 | S3 | Accord écrit du titulaire du passeport | ✅ | Nathan |
-| S4 | L'agent ne clique jamais sur payer ou envoyer : consigne, arrêt de la session hors du domaine officiel, main sur « Stop agent » | 🔵 tout est dans la PR #14 (sosies de domaine refusés, testé) ; à vérifier au test réel | Clément |
+| S4 | L'agent ne clique jamais sur payer ou envoyer : consigne, arrêt de la session hors du domaine officiel, main sur « Stop agent » | 🟡 PR #14 et #38 fusionnées : « Submit », « Pay », « Bayar », « Kirim » interdits, arrêt sur l'écran de résumé ou de paiement, `report_ready` arrête la session (tests vitest, revérifiés au ticket 15) ; jamais vu en réel jusqu'au paiement (T6) | Clément |
 | S4b | L'agent ne remplit jamais un site non officiel (domaine revérifié par le serveur) | ⬜ (ticket 05, partie B) | Clément |
 | S4c | L'accord du titulaire du passeport couvre un formulaire d'un autre pays | ✅ (confirmé par Nathan à 15 h 10) | Nathan |
 | S5 | Après la démo : supprimer les sessions H et le dossier `private/` | ⬜ | Nathan |
@@ -96,7 +96,7 @@
 ## 6. Ce que chacun fait maintenant, dans l'ordre
 
 **Clément (agent H)**
-1. Finir le CLI de H, puis test réel de la PR #14 sur son portable : 3 passages, arrêt devant le paiement, une fois « Stop agent » en cours de route ; résultat dans `docs/tests/f1-evoa.md` (T4, T5, T6). Puis fusion. C'est le premier vrai essai du pilotage local : tout le recadrage en dépend.
+1. Ticket 15 : relire la PR `feat/15-agent-evoa-complet`, puis 3 passages réels sur son portable (`scripts/lancer-demo.sh`, Chrome en densité 1) : arrêt devant le paiement, une fois « Stop agent » en cours de route ; résultat dans `docs/tests/f1-evoa.md` (T4, T5, T6), puis ajuster `route_hint` ou `stop_condition`. Tout le recadrage en dépend.
 2. Si l'agent s'arrête avec « it left the official site (….imigrasi.go.id) » alors que le site l'y a envoyé normalement : élargir le domaine de l'e-VOA à `imigrasi.go.id` dans `lib/bali-papers.ts`.
 3. Si T9 réussit : ticket 10 (avec Ali).
 
