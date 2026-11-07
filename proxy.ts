@@ -1,8 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { accessToken, constantTimeEqual } from "@/lib/access";
+import { documentsEnabled } from "@/lib/documents";
 
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+  if (["/api/documents/find", "/api/documents/preview"].includes(pathname.replace(/\/$/, "")) && !documentsEnabled()) {
+    return NextResponse.json({ error: "Not found." }, { status: 404, headers: { "Cache-Control": "no-store" } });
+  }
   if (pathname === "/api/access" || pathname === "/access" || pathname === "/access/") return NextResponse.next();
   const isApi = pathname === "/api" || pathname.startsWith("/api/");
 

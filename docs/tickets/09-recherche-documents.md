@@ -33,3 +33,10 @@ Dossier de test avec `passeport-scan.jpg` (faux), `facture.pdf`, `photo.jpg` : l
 ## Critère de fin
 
 `npm test`, `npm run lint` et `npm run build` passent ; aucune route active en production ; aucun chemin absolu renvoyé au navigateur.
+
+## Intégration différée
+
+La recherche et la confirmation restent dans `PassportCard`, sans modifier les écrans réécrits par la PR #14.
+Après sa fusion, brancher `onDocumentConfirmed(id)` sur `/api/papers/start` :
+résoudre l'id côté serveur avec `resolveDocumentPath`, puis ajouter le chemin validé à `file_paths`.
+Aucun fichier sélectionné n'est envoyé à un modèle par ce ticket.
