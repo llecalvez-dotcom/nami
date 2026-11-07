@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { audioFileName, requestMicrophone } from "@/components/voice/microphone";
 import { stopSpeaking } from "@/components/voice/speech";
 import { setSpokenLanguage } from "@/lib/voice/language";
+import { isPhantomTranscript } from "@/lib/voice/phantom";
 import { createSilenceDetector, rms } from "@/lib/voice/silence";
 
 export const MAX_RECORDING_SECONDS = 20;
@@ -26,7 +27,7 @@ async function transcribe(blob: Blob): Promise<string> {
   const response = await fetch("/api/voice/transcribe", { method: "POST", body: form });
   const body = (await response.json().catch(() => ({}))) as { text?: string; language?: string | null; error?: string };
   if (!response.ok || typeof body.text !== "string") throw new Error(body.error ?? "Transcription failed. Type instead.");
-  if (!body.text) throw new Error("I didn't catch anything. Try again or type instead.");
+  if (!body.text || isPhantomTranscript(body.text)) throw new Error("I didn't catch anything. Try again or type instead.");
   setSpokenLanguage(body.language);
   return body.text;
 }

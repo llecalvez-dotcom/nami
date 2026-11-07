@@ -81,3 +81,31 @@ describe("speech queue", () => {
     expect(spoken).toEqual(["First", "Third"]);
   });
 });
+
+describe("microphone after a line", () => {
+  it("opens the card's microphone only after a line really heard", async () => {
+    const { createSpeechQueue } = await import("@/lib/voice/speech-queue");
+    let finish: (spoken?: boolean) => void = () => {};
+    const queue = createSpeechQueue({ speak: (_text, done) => { finish = done; }, cancel: () => {} });
+    const heard: string[] = [];
+    queue.onSpoken((id) => heard.push(id));
+    queue.enqueue("a", "Shall I read it?");
+    finish(false);
+    queue.enqueue("b", "Is that right?");
+    finish(true);
+    expect(heard).toEqual(["b"]);
+  });
+
+  it("tells when a line starts and ends, for the panel's wave", () => {
+    const { engine, end } = fakeEngine();
+    const queue = createSpeechQueue(engine);
+    const states: (string | null)[] = [];
+    queue.onChange(() => states.push(queue.speaking()));
+
+    queue.enqueue("1", "Shall I fill in your visa?");
+    end();
+    queue.enqueue("2", "I am looking for your passport.");
+    queue.clear();
+    expect(states).toEqual(["1", null, "2", null]);
+  });
+});

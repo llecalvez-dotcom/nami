@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { completeJson, H_ATTEMPTS_MS } from "@/lib/llm";
+import { completeJson, H_ATTEMPTS_MS, H_FALLBACK_MODEL } from "@/lib/llm";
 
 const INPUT = { system: "s", user: "u", schema: {} };
 const answer = (content: string) => Response.json({ choices: [{ message: { content } }] });
@@ -33,6 +33,8 @@ describe("H text model", () => {
       vi.stubGlobal("fetch", fetch);
       expect(await completeJson()(INPUT)).toBe("{\"ok\":true}");
       expect(fetch).toHaveBeenCalledTimes(2);
+      // The second try goes to the fast model.
+      expect(JSON.parse(String((fetch.mock.calls[1] as unknown as [string, RequestInit])[1].body)).model).toBe(H_FALLBACK_MODEL);
     }
   });
 
