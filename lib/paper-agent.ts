@@ -38,7 +38,21 @@ export const REPORT_READY_TOOL: ToolSpec = {
   },
 };
 
-export const PAPER_TOOLS: ToolSpec[] = [ASK_USER_TOOL, REPORT_READY_TOOL];
+export const PICK_OPTION_TOOL: ToolSpec = {
+  name: "pick_option",
+  description:
+    "Pick a value in a dropdown list of the current page without opening it. Use it for every dropdown, instead of clicking it. Then take a fresh look at the page.",
+  input_schema: {
+    type: "object",
+    properties: {
+      field: { type: "string", description: "Label of the dropdown as shown on the page, for example Passport/Country/Region." },
+      option: { type: "string", description: "Value to pick, as shown in the list, for example FRANCE or Tourism." },
+    },
+    required: ["field", "option"],
+  },
+};
+
+export const PAPER_TOOLS: ToolSpec[] = [ASK_USER_TOOL, REPORT_READY_TOOL, PICK_OPTION_TOOL];
 
 export const LOCAL_SESSION_ID = z
   .string()

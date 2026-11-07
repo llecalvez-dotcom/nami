@@ -153,8 +153,10 @@ describe("POST /api/papers/start (route 5)", () => {
     expect(body.queue).toBe(false);
     expect(body.max_time_s).toBe(900);
     expect(body.max_steps).toBe(80);
-    expect(body.agent.environments).toEqual([{ id: "browser", kind: "web", host: "user_device", session_id: "local-42" }]);
-    expect(body.agent.tools.map((t: { name: string }) => t.name)).toEqual(["ask_user", "report_ready"]);
+    expect(body.agent.environments).toEqual([
+      { id: "browser", kind: "web", host: "user_device", session_id: "local-42", settle_s: 2, mode: { type: "visual", markdown: true } },
+    ]);
+    expect(body.agent.tools.map((t: { name: string }) => t.name)).toEqual(["ask_user", "report_ready", "pick_option"]);
     expect(body.agent.tools[0].input_schema.required).toEqual(["question", "field"]);
     expect(body.agent.tools[1].input_schema.required).toEqual(["summary", "filled_fields"]);
   });

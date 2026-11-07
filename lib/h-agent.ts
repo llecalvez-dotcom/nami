@@ -95,7 +95,9 @@ export function createSessionBody(input: CreateSessionInput) {
       name: agentName(),
       description: "Nami: fills in an official travel form in the traveller's own Chrome and stops before payment.",
       // "web" on "user_device", attached to the session_id printed by `holo local browser` (your-browser).
-      environments: [{ id: "browser", kind: "web", host: "user_device", session_id: input.localBrowserSessionId }],
+      environments: [
+        { id: "browser", kind: "web", host: "user_device", session_id: input.localBrowserSessionId, settle_s: 2, mode: { type: "visual", markdown: true } },
+      ],
       tools: input.tools,
     },
     messages: [{ type: "user_message", message: input.task }],
