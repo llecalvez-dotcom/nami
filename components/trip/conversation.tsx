@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import { Check, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { VoiceAnswer } from "@/components/voice/voice-answer";
 import { cn } from "@/lib/utils";
 import type { ConversationItem } from "@/lib/trip-state";
 
@@ -21,31 +21,7 @@ function AgentLabel({ from }: { from: "nami" | "agent_h" }) {
   );
 }
 
-function EmailAnswer({ onSubmit }: { onSubmit: (value: string) => void }) {
-  const [value, setValue] = useState("");
-  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-  return (
-    <form
-      className="mt-4 flex gap-2"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (valid) onSubmit(value);
-      }}
-    >
-      <input
-        type="email"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder="you@example.com"
-        aria-label="Your e-mail"
-        className="h-10 min-w-0 flex-1 rounded-lg border bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
-      />
-      <Button type="submit" size="lg" className="h-10 rounded-lg px-4" disabled={!valid}>
-        Validate
-      </Button>
-    </form>
-  );
-}
+const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
 function TextAnswer({ onSubmit }: { onSubmit: (value: string) => Promise<void> }) {
   const [value, setValue] = useState("");
@@ -108,7 +84,14 @@ function QuestionCard({
           <Check className="size-3.5 text-primary" /> {item.answer}
         </p>
       ) : item.input === "email" ? (
-        <EmailAnswer onSubmit={(value) => onAnswer(item.id, value, value)} />
+        <VoiceAnswer
+          question={item.question}
+          type="email"
+          isValid={isEmail}
+          placeholder="you@example.com"
+          label="Your e-mail"
+          onValidate={(value) => onAnswer(item.id, value, value)}
+        />
       ) : (
         <>
           {item.options.length > 0 ? (
