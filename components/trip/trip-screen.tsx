@@ -117,7 +117,7 @@ export function TripScreen({ id }: { id: string }) {
     if (answered === current || item?.kind !== "agent_question" || !current.agent_run) return;
     update(answered);
     try {
-      await sendAgentAnswer(current.agent_run.session_id, rawToolReq(item.tool_req), value);
+      await sendAgentAnswer(current.agent_run.session_id, rawToolReq(current.agent_run.session_id, item.tool_req), value);
     } catch {
       update(reopenAgentQuestion(latest(), itemId));
     }

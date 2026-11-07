@@ -15,8 +15,11 @@ const SLOW_RETRY_MS = 10_000;
 // Raw ask_user calls, in memory only: the stored copy is masked, H expects the call echoed as received.
 const rawCalls = new Map<string, ToolRequest>();
 
-export function rawToolReq(stored: ToolRequest): ToolRequest {
-  return rawCalls.get(toolCallKey(stored)) ?? stored;
+// Keyed by session too: H call ids such as "call_1" can repeat from one session to the next.
+const rawKey = (sessionId: string, call: ToolRequest) => `${sessionId}\n${toolCallKey(call)}`;
+
+export function rawToolReq(sessionId: string, stored: ToolRequest): ToolRequest {
+  return rawCalls.get(rawKey(sessionId, stored)) ?? stored;
 }
 
 async function readError(response: Response): Promise<string> {
@@ -44,7 +47,7 @@ async function handleToolCall(tripId: string, sessionId: string, call: ToolReque
   const trip = getTrip(tripId);
   if (!trip) return;
   if (call.tool_name === "ask_user") {
-    rawCalls.set(toolCallKey(call), call);
+    rawCalls.set(rawKey(sessionId, call), call);
     saveTrip(askUserFromAgent(trip, call, secrets));
     return;
   }
