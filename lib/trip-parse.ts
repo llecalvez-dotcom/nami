@@ -63,13 +63,18 @@ function statesTimeOfDay(transcript: string): boolean {
     "i",
   );
   return /\b(?:[01]?\d|2[0-3])[:h][0-5]\d(?:\s*[ap]\.?\s*m\.?)?\b/.test(text)
-    || /\b(?:[01]?\d|2[0-3])\s*h(?:eures?)?\b/.test(text)
+    || /\b(?:[01]?\d|2[0-3])\s*h(?:eures?)?\b(?!\s*(?:de\s+vol|of\s+flight))/.test(text)
     || /\b(?:0?[1-9]|1[0-2])\s*[ap]\.?\s*m\.?\b/.test(text)
     || /\b(?:at|around|vers)\s+(?:[01]?\d|2[0-3])\b/.test(text)
     || /(?:^|\s)à\s+(?:[01]?\d|2[0-3])\b/i.test(transcript)
     || spokenTime.test(transcript)
     || new RegExp(`\\b${hours}\\s+(?:o['’]clock|heures?)\\b`).test(text)
     || /\b(?:morning|afternoon|evening|night|tonight|noon|midnight|matin|apres-midi|soir|nuit|midi|minuit)\b/.test(text);
+}
+
+function mentionsLanding(transcript: string): boolean {
+  const text = transcript.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return /\b(?:land|lands|landing|arrive|arrives|arriving|arrival|atterri\w*|atterrissage|arrive\w*|arrivee)\b/.test(text);
 }
 
 export async function parseTrip(input: ParseInput, complete: CompleteJson): Promise<ParseResult> {
@@ -81,7 +86,6 @@ export async function parseTrip(input: ParseInput, complete: CompleteJson): Prom
     throw new ModelOutputError(`The model did not return a valid trip request: ${(error as Error).message}`);
   }
   const timeStated = statesTimeOfDay(input.transcript);
-  const proposedArrival = output.arrival_at;
   if (!timeStated) output.arrival_at = null;
 
   const current = input.current_request ?? TripRequestDraftSchema.parse({ raw_text: input.transcript });
@@ -92,7 +96,7 @@ export async function parseTrip(input: ParseInput, complete: CompleteJson): Prom
     (request as Record<string, unknown>)[key] = value;
     changed.push(key);
   }
-  if (!timeStated && proposedArrival && current.arrival_at && proposedArrival.slice(0, 10) !== current.arrival_at.slice(0, 10)) {
+  if (!timeStated && current.arrival_at && mentionsLanding(input.transcript)) {
     request.arrival_at = null;
     changed.push("arrival_at");
   }

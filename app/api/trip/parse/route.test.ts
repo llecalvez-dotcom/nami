@@ -172,6 +172,31 @@ describe("POST /api/trip/parse", () => {
     expect(body.request.arrival_at).toBeNull();
     expect(body.missing).toContain("arrival_at");
     expect(body.changed).toContain("arrival_at");
+
+    complete.mockResolvedValue(JSON.stringify({ ...nulls, departure_date: "2026-11-11" }));
+    const nullBody = await (await call({
+      transcript: "Finalement j'atterris mercredi",
+      today: "2026-11-07",
+      current_request: { ...nulls, raw_text: "Bali on Monday, landing at 7pm", arrival_at: "2026-11-09T19:00+08:00" },
+    })).json();
+    expect(nullBody.request.arrival_at).toBeNull();
+  });
+
+  it("keeps a known landing time when an unrelated answer has a stray model date", async () => {
+    const arrival_at = "2026-11-09T19:00+08:00";
+    complete.mockResolvedValue(JSON.stringify({ ...nulls, purpose: "tourism", arrival_at: "2026-11-12T00:00+08:00" }));
+    const body = await (await call({
+      transcript: "For a wedding",
+      today: "2026-11-07",
+      current_request: { ...nulls, raw_text: "Bali on Monday, landing at 7pm", arrival_at },
+    })).json();
+    expect(body.request.arrival_at).toBe(arrival_at);
+  });
+
+  it("does not take a flight duration for a landing time", async () => {
+    complete.mockResolvedValue(JSON.stringify({ ...nulls, arrival_at: "2026-11-09T02:00+08:00" }));
+    const body = await (await call({ transcript: "Bali lundi, 2 heures de vol", today: "2026-11-07" })).json();
+    expect(body.request.arrival_at).toBeNull();
   });
 
   it("refuses an invalid body", async () => {
