@@ -26,7 +26,8 @@ import {
   type QuestionField,
 } from "@/lib/planner";
 
-export type ProposalAction = "papers" | "create_visa" | "flights";
+// read_passport, confirm_passport, use_photo: the side panel's spoken steps before the visa agent starts.
+export type ProposalAction = "papers" | "create_visa" | "flights" | "read_passport" | "confirm_passport" | "use_photo";
 
 export type ConversationItem =
   | { id: string; kind: "user"; text: string }
@@ -107,10 +108,16 @@ const FLIGHTS_PROPOSAL: NewConversationItem = {
   decision: null,
 };
 
+// The flights come once the visa is ready, never next to it.
+const FLIGHTS_AFTER_VISA: NewConversationItem = {
+  ...FLIGHTS_PROPOSAL,
+  text: "Do you also want me to help you find your flights?",
+} as NewConversationItem;
+
 const CREATE_VISA_PROPOSAL: NewConversationItem = {
   kind: "proposal",
   action: "create_visa",
-  text: "Shall I fill in your visa (e-VOA) on the official site? I stop before payment: you check, you pay.",
+  text: "For Bali you need an e-VOA. Shall I fill it in for you on the official site? I stop before payment: you check, you pay.",
   accept_label: "Create my visa",
   decline_label: "Not now",
   decision: null,
@@ -324,7 +331,6 @@ export function decideProposal(trip: Trip, itemId: string, accepted: boolean, no
             text: "Here are your 3 entry papers, read by hand on the official sites on 7 Nov 2026. The visa comes first.",
           },
           CREATE_VISA_PROPOSAL,
-          FLIGHTS_PROPOSAL,
         );
       }
       return push(
@@ -353,6 +359,10 @@ export function decideProposal(trip: Trip, itemId: string, accepted: boolean, no
           answer: null,
         },
       );
+    case "read_passport":
+    case "confirm_passport":
+    case "use_photo":
+      return decided;
     case "flights":
       return push(
         { ...decided, modules: setModule(decided.modules, "flights", accepted ? "accepted" : "declined") },
@@ -380,13 +390,24 @@ export function stopAgent(trip: Trip): Trip {
 
 // Live H session (ticket 05, part A). The passport number and birth date are masked before anything is stored.
 
+export function pushProposal(trip: Trip, action: ProposalAction, text: string, acceptLabel: string, declineLabel: string): Trip {
+  return push(trip, { kind: "proposal", action, text, accept_label: acceptLabel, decline_label: declineLabel, decision: null });
+}
+
+// Marks a proposal as accepted without its side effect (the side panel runs it itself).
+export function acceptProposal(trip: Trip, itemId: string): Trip {
+  const item = trip.conversation.find((i) => i.id === itemId);
+  return item?.kind === "proposal" && item.decision === null ? updateItem(trip, itemId, { decision: "accepted" }) : trip;
+}
+
 export function pushAgentMessage(trip: Trip, text: string): Trip {
   return push(trip, { kind: "agent", text });
 }
 
 export function startVisaRun(trip: Trip, itemId: string, sessionId: string, now: Date, passportFileReady = false): Trip {
   const item = trip.conversation.find((i) => i.id === itemId);
-  if (!item || item.kind !== "proposal" || item.action !== "create_visa" || item.decision !== null) return trip;
+  // Already "accepted" when the side panel went looking for the passport first; never a second run.
+  if (!item || item.kind !== "proposal" || item.action !== "create_visa" || item.decision === "declined" || isAgentActive(trip.agent_run)) return trip;
   const evoa = getBaliPaper("evoa");
   return push(
     {
@@ -553,6 +574,7 @@ export function reportReady(trip: Trip, call: ToolRequest, secrets: readonly (st
       formalities: marked.formalities.map((f) => (f.id === "evoa" ? { ...f, status: "pending_approval" } : f)),
     },
     { kind: "agent", text: VISA_READY_MESSAGE, list: filled },
+    FLIGHTS_AFTER_VISA,
   );
 }
 
