@@ -9,8 +9,8 @@ import { expiryWarning } from "@/lib/passport-dates";
 import { DocumentFinder, DocumentPreview, type DocumentChoice } from "@/components/trip/document-finder";
 
 const FIELDS: { key: PassportFieldKey; label: string; placeholder: string }[] = [
-  { key: "surname", label: "Surname", placeholder: "MARTIN" },
-  { key: "given_names", label: "Given names", placeholder: "Camille" },
+  { key: "surname", label: "Surname, as printed", placeholder: "e.g. DUPONT" },
+  { key: "given_names", label: "Given names, as printed", placeholder: "e.g. Camille Jeanne" },
   { key: "nationality", label: "Nationality", placeholder: "FR" },
   { key: "birth_date", label: "Date of birth", placeholder: "YYYY-MM-DD" },
   { key: "passport_number", label: "Passport number", placeholder: "12AB34567" },
@@ -80,21 +80,33 @@ export function PassportCard({
     };
   }, []);
 
-  const upload = async (file: File) => {
+  const readPassport = async (file?: File) => {
     const id = ++requestId.current;
     setError(null);
     unconfirm();
     if (reader === "off" || !consent) return;
-    if (!["image/jpeg", "image/png"].includes(file.type)) return setError("Send a JPEG or PNG photo.");
-    if (file.size > MAX_BYTES) return setError("Photo too large (5 MB max).");
-    const body = new FormData();
-    body.set("consent_provider", reader);
-    body.set("image", file);
-    if (returnDate) body.set("return_date", returnDate);
-    if (arrivalAt) body.set("arrival_at", arrivalAt);
+    let body: BodyInit;
+    if (file) {
+      if (!["image/jpeg", "image/png"].includes(file.type)) return setError("Send a JPEG or PNG photo.");
+      if (file.size > MAX_BYTES) return setError("Photo too large (5 MB max).");
+      setDocument(null);
+      const form = new FormData();
+      form.set("consent_provider", reader);
+      form.set("image", file);
+      if (returnDate) form.set("return_date", returnDate);
+      if (arrivalAt) form.set("arrival_at", arrivalAt);
+      body = form;
+    } else {
+      if (!document) return;
+      body = JSON.stringify({ id: document.id, consent_provider: reader });
+    }
     setBusy(true);
     try {
-      const response = await fetch("/api/documents/extract", { method: "POST", body });
+      const response = await fetch(file ? "/api/documents/extract" : "/api/documents/extract-found", {
+        method: "POST",
+        body,
+        headers: file ? undefined : { "Content-Type": "application/json" },
+      });
       if (id !== requestId.current) return;
       const json = await response.json();
       if (id !== requestId.current) return;
@@ -159,6 +171,10 @@ export function PassportCard({
         </div>
       ) : !FIELDS.some((field) => displayedValues[field.key].trim()) ? (
         <DocumentFinder demo={demo} onConfirm={(selected) => {
+          requestId.current++;
+          setBusy(false);
+          setConsent(false);
+          setConfirmed(false);
           setDocument(selected);
           onDocumentConfirmed?.(selected.id);
         }} />
@@ -179,6 +195,11 @@ export function PassportCard({
             />
             <span>I agree that this photo is sent to {provider} to read it (not stored by Nami)</span>
           </label>
+          {document ? (
+            <Button type="button" disabled={busy || !consent} onClick={() => void readPassport()}>
+              {busy ? "Reading…" : "Read it"}
+            </Button>
+          ) : null}
           <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground shadow-glow has-[:disabled]:opacity-50">
             <Camera className="size-4" /> {busy ? "Reading…" : values ? "Send another photo" : "Choose a photo"}
             <input
@@ -189,7 +210,7 @@ export function PassportCard({
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 e.target.value = "";
-                if (file) void upload(file);
+                if (file) void readPassport(file);
               }}
             />
           </label>
@@ -226,7 +247,7 @@ export function PassportCard({
         >
           {FIELDS.map(({ key, label, placeholder }) => {
             const confidence = extraction?.confidence_per_field[key];
-            const masked = demo && SENSITIVE.includes(key);
+            const masked = demo && confirmed && SENSITIVE.includes(key);
             const low = confidence !== undefined && confidence < 0.7;
             return (
               <label key={key} className="space-y-1">
@@ -239,7 +260,7 @@ export function PassportCard({
                 </span>
                 <Input
                   className="h-10 rounded-xl border-transparent bg-muted px-3"
-                  type={masked ? "password" : "text"}
+                  type={masked ? "password" : key.endsWith("_date") ? "date" : "text"}
                   autoComplete="off"
                   value={displayedValues[key]}
                   placeholder={masked ? undefined : placeholder}

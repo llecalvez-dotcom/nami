@@ -4,7 +4,7 @@ import { documentsEnabled } from "@/lib/documents";
 
 export async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
-  if (["/api/documents/find", "/api/documents/preview"].includes(pathname.replace(/\/$/, "")) && !documentsEnabled()) {
+  if (["/api/documents/find", "/api/documents/preview", "/api/documents/extract-found"].includes(pathname.replace(/\/$/, "")) && !documentsEnabled()) {
     return NextResponse.json({ error: "Not found." }, { status: 404, headers: { "Cache-Control": "no-store" } });
   }
   if (pathname === "/api/access" || pathname === "/access" || pathname === "/access/") return NextResponse.next();
