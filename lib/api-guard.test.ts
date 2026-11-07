@@ -109,7 +109,7 @@ describe("api guard quotas", () => {
 
 describe("api guard concurrency", () => {
   it("blocks at the route limit and releases capacity after a thrown error", async () => {
-    const requestWithCookie = request({ cookie: "nami_access=extract-client" });
+    const requestWithCookie = request({ cookie: "nami_access=extract-client", "content-length": "0" });
     const first = lease(guard(requestWithCookie, "extract"));
     const busy = guard(requestWithCookie, "extract");
     expect(busy).toBeInstanceOf(Response);
