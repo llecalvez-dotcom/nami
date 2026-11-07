@@ -13,7 +13,8 @@ export type DocumentChoice = {
   score: number;
 };
 
-export function DocumentPreview({ document }: { document: DocumentChoice }) {
+// Demo mode (?demo=1): the preview is blurred so the audience cannot read the identity page.
+export function DocumentPreview({ document, demo = false }: { document: DocumentChoice; demo?: boolean }) {
   const [failed, setFailed] = useState(false);
   const image = /\.(jpe?g|png)$/i.test(document.name);
   return image && !failed ? (
@@ -22,13 +23,13 @@ export function DocumentPreview({ document }: { document: DocumentChoice }) {
     <img
       src={`/api/documents/preview?id=${encodeURIComponent(document.id)}`}
       alt={`Preview of ${document.name}`}
-      className="h-24 w-32 rounded-xl object-contain"
+      className={`h-24 w-32 rounded-xl object-contain${demo ? " blur-md" : ""}`}
       onError={() => setFailed(true)}
     />
   ) : <FileImage className="size-10 text-muted-foreground" aria-label="No image preview available" />;
 }
 
-export function DocumentFinder({ onConfirm }: { onConfirm: (document: DocumentChoice) => void }) {
+export function DocumentFinder({ onConfirm, demo = false }: { onConfirm: (document: DocumentChoice) => void; demo?: boolean }) {
   const [enabled, setEnabled] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -73,7 +74,7 @@ export function DocumentFinder({ onConfirm }: { onConfirm: (document: DocumentCh
           {documents.length === 0 ? <p className="text-sm">No matching files found. Upload a photo or type the fields below.</p> : null}
           {documents.map((document) => (
             <div key={document.id} className="flex flex-wrap items-center gap-3 rounded-xl bg-card p-3">
-              <DocumentPreview document={document} />
+              <DocumentPreview document={document} demo={demo} />
               <div className="min-w-0 flex-1 text-sm">
                 <p className="break-all font-medium">{document.name}</p>
                 <p className="break-all text-xs text-muted-foreground">{document.folder} · {document.modified_at.slice(0, 10)}</p>

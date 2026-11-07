@@ -141,11 +141,11 @@ export function PassportCard({ demo, returnDate, arrivalAt, onDocumentConfirmed 
       </div>
       {document ? (
         <div className="flex items-center gap-3 rounded-2xl bg-muted p-3">
-          <DocumentPreview document={document} />
+          <DocumentPreview document={document} demo={demo} />
           <p className="min-w-0 break-all text-sm">Selected document: {document.name}</p>
         </div>
       ) : !FIELDS.some((field) => displayedValues[field.key].trim()) ? (
-        <DocumentFinder onConfirm={(selected) => {
+        <DocumentFinder demo={demo} onConfirm={(selected) => {
           setDocument(selected);
           onDocumentConfirmed?.(selected.id);
         }} />
