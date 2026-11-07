@@ -15,7 +15,7 @@ Pars de `main` (où la note est fusionnée). Travaille sur `feat/01-squelette` e
 7. `lib/agent-task.ts` : fonctions qui construisent les deux consignes de la section 4.5 (papier pilote avec un emplacement pour la condition d'arrêt ; vols).
 8. Écrans de la section 4.2 avec `data/sample.ts`, sans logique réseau : Accueil (« Where to next? », bouton micro inactif, champ texte, voyages enregistrés) et Trip (conversation à gauche avec cartes de proposition et de question et leurs boutons ; dossier du voyage à droite avec modules, cartes des papiers, Agent Activity et bouton « Stop agent »). Palette et typographie de la section 4.2. Les boutons changent l'état local (accepter, refuser, répondre) pour que le parcours soit cliquable de bout en bout.
 9. Tests vitest : schémas (la `TripRequest` d'exemple est valide ; un brouillon sans `country_iso2` est accepté ; une `TripRequest` stricte sans `country_iso2` est refusée) ; `isOfficialUrl` (`https://allindonesia.imigrasi.go.id/x` accepté ; `https://gov.example.com`, `https://example.com/gov`, `https://allindonesia.imigrasi.go.id.evil.com` refusés).
-10. Vérifier que `private/` est dans `.gitignore` (les vrais documents de la démo y vivent). README court : ce que fait l'app, commandes `npm run dev` et `npm test`.
+10. Vérifier que `private/` est dans `.gitignore` (les vrais documents de la démo y vivent). README : compléter seulement la section « Lancer l'application » du README existant (commandes `npm install`, `npm run dev`, `npm test`), sans réécrire le reste.
 
 ## Critère de fin
 
