@@ -28,6 +28,23 @@ Tagline : **Don't just plan my trip. Make it happen.**
 
 **Règle d'or** : chacun code contre les contrats communs (`lib/contracts.ts`) avec des données d'exemple, sans attendre les autres.
 
+## 🛠️ Plan de build (qui touche quoi)
+
+Un dossier = un propriétaire, pour ne jamais se marcher dessus. Devin code les tickets, le propriétaire relit la PR et fait le test réel.
+
+| Étape | Ticket | Ce qui est construit | Propriétaire | Dossiers |
+|---|---|---|---|---|
+| 1 | [01](../tickets/01-squelette.md) | Squelette Next.js, contrats, écrans sur données d'exemple | Léon (relecture) | tout, une seule fois |
+| 2 | [02](../tickets/02-intelligence.md) | Compréhension de la demande, questions, propositions | Ali | `lib/planner/`, `app/api/trip/` |
+| 2 | [03](../tickets/03-papiers-et-documents.md) | Papiers de Bali, Linkup, lecture du passeport | Ali | `lib/official-sites.ts`, `lib/bali-papers.ts`, `app/api/formalities/`, `app/api/documents/` |
+| 2 | [04](../tickets/04-voix.md) | Voix Gladia, boucle vocale | Nathan | `app/api/voice/`, `components/voice/` |
+| 2 | (sans ticket) | Design premium des écrans, conversation, dossier du voyage | Léon | `app/` (pages), `components/` (hors voix) |
+| 2 | (sans ticket) | Tests F1, F6, F8 avec l'agent H, scripts de test | Clément | `scripts/feasibility/` |
+| 3 | 05 (écrit après les tests de Clément) | Agent H sur le visa e-VOA, Agent Activity, mode démo préparé | Clément | `lib/agent-task.ts`, `app/api/papers/`, `app/api/agent/` |
+| 4 | 06 (P1) | Module Vol | Clément | `app/api/flights/` |
+
+Les étapes 2 partent en parallèle dès que le ticket 01 est fusionné.
+
 ## 🧪 Tests de faisabilité
 
 | Test | Ce qu'on vérifie | Qui | Échéance | Statut |
