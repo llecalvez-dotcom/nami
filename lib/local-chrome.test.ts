@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cdpUrls, fillExpression, fillField, pickExpression, pickOption } from "./local-chrome";
+import { NOT_ON_OFFICIAL_SITE, cdpUrls, fillExpression, fillField, guardedExpression, pickExpression, pickOption } from "./local-chrome";
 import { FILL_FIELD_TOOL, PICK_OPTION_TOOL, UPLOAD_FILE_TOOL } from "./paper-agent";
 
 class FakeSocket {
@@ -286,5 +286,28 @@ describe("fillField", () => {
 
   it("escapes the values injected in the page", () => {
     expect(fillExpression('x")', 'y"', 0)).toContain('"x\\")", "y\\""');
+  });
+
+  // The tab was official when chosen; it may have navigated since. The page checks its own hostname before acting.
+  it("checks the page's hostname again inside the page, pick and fill alike", async () => {
+    const run = (expression: string, hostname: string, protocol = "https:") =>
+      new Function("location", `return ${expression}`)({ hostname, protocol });
+    const guarded = guardedExpression('"acted"', ["evisa.imigrasi.go.id"]);
+    expect(run(guarded, "evisa.imigrasi.go.id")).toBe("acted");
+    expect(run(guarded, "www.evisa.imigrasi.go.id")).toBe("acted");
+    expect(run(guarded, "evisa.imigrasi.go.id.evil.example")).toBe(NOT_ON_OFFICIAL_SITE);
+    expect(run(guarded, "evil.example")).toBe(NOT_ON_OFFICIAL_SITE);
+    expect(run(guarded, "evisa.imigrasi.go.id", "file:")).toBe(NOT_ON_OFFICIAL_SITE);
+    FakeSocket.sent = [];
+    vi.stubGlobal("WebSocket", FakeSocket);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [
+      { type: "page", url: "https://evisa.imigrasi.go.id/web/apply", webSocketDebuggerUrl: "ws://official" },
+    ] }));
+    await fillField("Postal Code", "80361", ["evisa.imigrasi.go.id"]);
+    await pickOption("Port of Entry", "NGURAH RAI AIRPORT", ["evisa.imigrasi.go.id"]);
+    for (const sent of FakeSocket.sent) {
+      expect(JSON.parse(sent).params.expression).toContain('["evisa.imigrasi.go.id"]');
+      expect(JSON.parse(sent).params.expression).toContain("location.hostname");
+    }
   });
 });

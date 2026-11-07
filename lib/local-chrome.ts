@@ -122,6 +122,18 @@ export function fillExpression(field: string, value: string, settleMs = FILL_SET
 })(${JSON.stringify(field)}, ${JSON.stringify(value)}, ${Number(settleMs) || 0})`;
 }
 
+export const NOT_ON_OFFICIAL_SITE = "The tab is no longer on the official site; nothing was changed. Take a screenshot and go back to the official form.";
+
+// Runs in the page, around the action: the tab was official when chosen, but it may have navigated since. The page
+// itself checks its hostname again, so the traveller's data never goes into another site.
+export function guardedExpression(expression: string, domains: string[]): string {
+  return `((domains) => {
+  const h = String(location.hostname || "").toLowerCase();
+  if (!/^https?:$/.test(location.protocol) || !domains.some((d) => h === d || h.endsWith("." + d))) return ${JSON.stringify(NOT_ON_OFFICIAL_SITE)};
+  return (${expression});
+})(${JSON.stringify(domains.map((d) => d.toLowerCase()))})`;
+}
+
 async function evaluateInOfficialTab(expression: string, domains: string[], urls: string[], fallback: string, timeoutMs: number): Promise<string> {
   const tabs = await listTabs(urls);
   const tab = tabs.find((t) => t.type === "page" && t.webSocketDebuggerUrl && onDomain(t.url, domains));
@@ -137,7 +149,7 @@ async function evaluateInOfficialTab(expression: string, domains: string[], urls
       reject(new Error("Could not reach Chrome."));
     };
     ws.onopen = () =>
-      ws.send(JSON.stringify({ id: 1, method: "Runtime.evaluate", params: { expression, returnByValue: true, awaitPromise: true } }));
+      ws.send(JSON.stringify({ id: 1, method: "Runtime.evaluate", params: { expression: guardedExpression(expression, domains), returnByValue: true, awaitPromise: true } }));
     ws.onmessage = (event) => {
       const reply = JSON.parse(String(event.data)) as { id?: number; result?: { result?: { value?: unknown } } };
       if (reply.id !== 1) return;
