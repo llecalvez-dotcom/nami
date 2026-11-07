@@ -1,6 +1,6 @@
 # Ticket 02 : compréhension de la demande et moteur de suggestions
 
-Responsable humain : **Ali** (relit la PR et lance le test réel F0).
+Responsable humain : **Nathan** (lance Devin, relit la PR et fait le test réel F0).
 Prérequis : ticket 01 fusionné dans `main` (contrats `lib/contracts.ts`).
 Branche : `feat/02-intelligence`, PR vers `main`.
 

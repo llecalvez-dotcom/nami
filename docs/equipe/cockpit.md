@@ -20,9 +20,9 @@ Tagline : **Don't just plan my trip. Make it happen.**
 | Qui | Rôle | Périmètre | Premier livrable | Statut |
 |---|---|---|---|---|
 | Clément | A, agent H | Sessions H, consignes, condition d'arrêt, navigateur local, puis module Vol | Parcours à la main du e-VOA jusqu'à l'écran de paiement (sans payer), puis carte d'arrivée et Love Bali | À faire |
-| Ali | B, papiers et intelligence | Linkup, domaines officiels, logique des questions et des propositions, compréhension de la demande, lecture du passeport | Tests L1 (Linkup), F0 (compréhension), F7 (passeport) | À faire |
+| Ali | B, papiers et passeport | Ticket 03 : Linkup en direct, domaines officiels, lecture du passeport | Tests L1 (Linkup) et F7 (passeport) | À faire |
 | Léon | C, front et conversation | Écrans, cartes de la conversation, dépôt de documents, dossier du voyage, statuts, direction visuelle | Parcours cliquable sur données d'exemple | À faire |
-| Nathan | D, voix, démo, qualité, orchestration | Gladia, déroulé de démo, vidéo de secours, tests de bout en bout, Discord, pilotage de Devin et de Claude, bascule vers le module Vol | Test F5 (voix dans la salle), déroulé chronométré | À faire |
+| Nathan | D, voix, compréhension, démo | Tickets 02 (compréhension de la demande) et 04 (voix Gladia), déroulé de démo, vidéo de secours, Discord, bascule vers le module Vol | Tests F0 (compréhension) et F5 (voix dans la salle) | À faire |
 | Devin | Construction | Squelette, contrats, composants, tests unitaires | Ticket 01 | À lancer |
 | Claude | Orchestration | Tickets Devin, relecture des PR, note à jour, cohérence des contrats | Note v4.2 | Fait |
 
@@ -30,12 +30,12 @@ Tagline : **Don't just plan my trip. Make it happen.**
 
 ## 🛠️ Plan de build (qui touche quoi)
 
-Un dossier = un propriétaire, pour ne jamais se marcher dessus. Devin code les tickets, le propriétaire relit la PR et fait le test réel.
+Un dossier = un propriétaire, pour ne jamais se marcher dessus. **Chaque propriétaire lance lui-même Devin (ou ChatGPT, ou Claude) sur son ticket**, relit la PR et fait le test réel. Claude relit aussi chaque PR. Résultats des tests de faisabilité : un fichier par test dans `docs/tests/` (par exemple `docs/tests/f1-evoa.md`).
 
 | Étape | Ticket | Ce qui est construit | Propriétaire | Dossiers |
 |---|---|---|---|---|
 | 1 | [01](../tickets/01-squelette.md) | Squelette Next.js, contrats, écrans sur données d'exemple | Léon (relecture) | tout, une seule fois |
-| 2 | [02](../tickets/02-intelligence.md) | Compréhension de la demande, questions, propositions | Ali | `lib/planner/`, `app/api/trip/` |
+| 2 | [02](../tickets/02-intelligence.md) | Compréhension de la demande, questions, propositions | Nathan | `lib/planner/`, `app/api/trip/` |
 | 2 | [03](../tickets/03-papiers-et-documents.md) | Papiers de Bali, Linkup, lecture du passeport | Ali | `lib/official-sites.ts`, `lib/bali-papers.ts`, `app/api/formalities/`, `app/api/documents/` |
 | 2 | [04](../tickets/04-voix.md) | Voix Gladia, boucle vocale | Nathan | `app/api/voice/`, `components/voice/` |
 | 2 | (sans ticket) | Design premium des écrans, conversation, dossier du voyage | Léon | `app/` (pages), `components/` (hors voix) |
@@ -49,22 +49,22 @@ Les étapes 2 partent en parallèle dès que le ticket 01 est fusionné.
 
 | Test | Ce qu'on vérifie | Qui | Échéance | Statut |
 |---|---|---|---|---|
-| F1 manuel | e-VOA de bout en bout avec les vrais documents, jusqu'à l'écran de paiement : étapes, boutons, captcha, compte | Clément | 13 h 30 | À faire |
-| F1 agent | L'agent H remplit le e-VOA jusqu'à l'écran de paiement 3 fois sur 3, avec un champ venu de la voix, un du passeport, une question à l'oral, aucun clic sur payer | Clément | 15 h 30 | À faire |
-| F8 | L'agent H sait déposer un fichier dans le Chrome local (sinon l'humain choisit le fichier quand l'agent le demande) | Clément | 15 h 30 | À faire |
-| F6 | Navigateur local d'H piloté par l'API, question de l'agent, deux sessions de suite, formulaire encore rempli 30 min après | Clément | 15 h 30 | À faire |
-| L1 | Linkup sur 5 pays hors V1 : au moins 4 justes face à France Diplomatie | Ali | 13 h 30 | À faire |
-| F0 | Le modèle d'H comprend 5 demandes variées | Ali | 13 h 30 | À faire |
-| F7 | Lecture du vrai passeport en 3 photos : 7 champs justes sur au moins 2 | Ali | 13 h 30 | À faire |
-| F5 | Gladia dans la salle : 4 demandes sur 5 justes | Nathan | 13 h 30 | À faire |
+| F1 manuel | e-VOA de bout en bout avec les vrais documents, jusqu'à l'écran de paiement : étapes, boutons, captcha, compte | Clément | 14 h | À faire |
+| F1 agent | L'agent H remplit le e-VOA jusqu'à l'écran de paiement 3 fois sur 3, avec un champ venu de la voix, un du passeport, une question à l'oral, aucun clic sur payer | Clément | 16 h | À faire |
+| F8 | L'agent H sait déposer un fichier dans le Chrome local (sinon l'humain choisit le fichier quand l'agent le demande) | Clément | 16 h | À faire |
+| F6 | Navigateur local d'H piloté par l'API, question de l'agent, deux sessions de suite, formulaire encore rempli 30 min après | Clément | 16 h | À faire |
+| L1 | Linkup sur 5 pays hors V1 : au moins 4 justes face à France Diplomatie | Ali | 14 h | À faire |
+| F0 | Le modèle d'H comprend 5 demandes variées | Nathan | 14 h | À faire |
+| F7 | Lecture du vrai passeport en 3 photos : 7 champs justes sur au moins 2 | Ali | 14 h | À faire |
+| F5 | Gladia dans la salle : 4 demandes sur 5 justes | Nathan | 14 h | À faire |
 | G1 | (P1) L'agent H sur Google Flights, Kayak et le site d'une compagnie | Clément | après F1 | À faire |
 
-Si à **15 h 30** aucun papier pilote ne passe, Nathan déclenche la bascule : le module Vol devient l'action H principale.
+Si à **16 h** aucun papier pilote ne passe, Nathan déclenche la bascule : le module Vol devient l'action H principale.
 
 ## ⏱️ Calendrier
 
-- **13 h 30** : tests manuels et rapides (F1 manuel, L1, F0, F7, F5)
-- **15 h 30** : agent H sur le papier pilote (F1 agent, F6), décision de bascule
+- **14 h** : tests manuels et rapides (F1 manuel, L1, F0, F7, F5)
+- **16 h** : agent H sur le papier pilote (F1 agent, F6), décision de bascule
 - **22 h** : vidéo de secours enregistrée, quel que soit l'état
 - **Dimanche 11 h** : gel du code, répétitions seulement
 - **Dimanche 14 h** : rendu
