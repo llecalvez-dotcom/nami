@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useRef, useState } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import { ArrowRight, ArrowUpRight, Globe2, Plus } from "lucide-react";
 import { AppNav } from "@/components/app-nav";
 import { COUNTRY_STATUS } from "@/components/status-badge";
@@ -35,6 +35,7 @@ export function HomeScreen() {
   const voice = useVoiceInput(setText);
 
   const cards = (trips ?? []).map(toCard);
+  const sample = (trips ?? []).find((trip) => trip.sample && trip.request.destination === "Bali");
   const world = trips ? mapCountries(trips, wishlist, homeCountry(trips)) : {};
   const counts = Object.values(world).reduce<Record<string, number>>((acc, c) => {
     acc[c.status] = (acc[c.status] ?? 0) + 1;
@@ -71,7 +72,7 @@ export function HomeScreen() {
             Tell me about your trip. I take care of what it takes, you keep the last word.
           </p>
 
-          <form onSubmit={submit} className="glass mt-10 flex w-full items-center gap-2 p-1.5 text-left">
+          <form onSubmit={submit} className="glass mt-10 flex w-full flex-wrap items-center gap-2 p-1.5 text-left focus-within:ring-3 focus-within:ring-[var(--ink)]/60 sm:flex-nowrap">
             <MicButton voice={voice} className="size-12 rounded-full" />
             <label htmlFor="trip-text" className="sr-only">
               Tell me about your trip
@@ -85,27 +86,33 @@ export function HomeScreen() {
             />
             <button
               type="submit"
-              aria-label="Send"
               disabled={!text.trim() || busy}
-              className="glass inline-flex h-12 shrink-0 items-center gap-2 px-5 font-mono text-[11px] tracking-[0.1em] uppercase disabled:opacity-40"
+              className="inline-flex h-12 w-full shrink-0 items-center justify-center gap-2 rounded-full bg-[#102934] px-5 text-sm font-semibold text-[#fffdf3] disabled:opacity-40 sm:w-auto night:bg-[#f4faff] night:text-[#102934]"
             >
-              <span className="hidden sm:inline">{busy ? "Reading…" : "Send"}</span>
+              <span>{busy ? "Reading…" : "Plan my trip"}</span>
               <ArrowRight className="size-4" />
             </button>
           </form>
           <VoiceStatusLine voice={voice} className="mt-3" />
           {error ? (
-            <p role="alert" className="glass-help mt-3 px-4 py-2 text-sm">
-              I couldn&apos;t read your request: {error}
-            </p>
+            <div role="alert" className="glass-help mt-3 px-4 py-3 text-left text-sm">
+              <p>I couldn&apos;t plan your trip yet. Your text is saved here. Try again or explore the sample trip.</p>
+              <p className="mt-1 text-xs opacity-75">{error}</p>
+              {sample ? (
+                <Link href={`/trip/${sample.id}`} className="mt-2 inline-flex min-h-11 items-center gap-2 font-semibold underline underline-offset-4">
+                  Open sample Bali trip <ArrowRight className="size-4" />
+                </Link>
+              ) : null}
+            </div>
           ) : (
-            <div className="mt-4 flex flex-wrap justify-center gap-2">
-              {EXAMPLES.map((example) => (
+            <div className="stagger-in mt-4 flex flex-wrap justify-center gap-2">
+              {EXAMPLES.map((example, i) => (
                 <button
                   key={example}
                   type="button"
+                  style={{ "--i": i } as CSSProperties}
                   onClick={() => setText(example)}
-                  className="glass-help px-4 py-2 text-left text-sm transition-colors hover:bg-white/20"
+                  className="min-h-11 rounded-2xl px-3 py-2 text-left text-xs opacity-75 hover:bg-white/10 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2"
                 >
                   {example}
                 </button>

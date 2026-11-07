@@ -24,7 +24,7 @@ function LivePapersButton({ iso2, destination }: { iso2: string; destination: st
     <button
       type="button"
       onClick={() => setQuery({ destination, country_iso2: iso2 })}
-      className="inline-flex h-10 items-center gap-2 rounded-full bg-muted px-4 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
+      className="inline-flex min-h-11 items-center gap-2 rounded-full bg-muted px-4 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
     >
       <Search className="size-4" /> What papers do I need? (live check)
     </button>
@@ -126,9 +126,9 @@ function TripBlock({ trip }: { trip: Trip }) {
               <button
                 type="button"
                 onClick={() => saveTrip(stopAgent(trip))}
-                className="inline-flex h-8 items-center gap-1.5 rounded-full bg-destructive px-3 text-xs font-medium text-white"
+                className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full bg-destructive px-3 text-xs font-medium text-white"
               >
-                <Octagon className="size-3.5" /> Stop
+                <Octagon className="size-3.5" /> Stop agent
               </button>
             ) : null}
           </div>
@@ -144,7 +144,7 @@ function TripBlock({ trip }: { trip: Trip }) {
         href={`/trip/${trip.id}`}
         className="glass flex h-12 items-center justify-center gap-2 text-sm font-medium"
       >
-        Open the trip <ArrowRight className="size-4" />
+        Open trip <ArrowRight className="size-4" />
       </Link>
     </article>
   );
@@ -194,7 +194,7 @@ export function CountryPanel({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="glass grid size-10 shrink-0 place-items-center"
+            className="glass grid size-11 shrink-0 place-items-center"
           >
             <X className="size-4" />
           </button>
