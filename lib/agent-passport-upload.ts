@@ -10,6 +10,7 @@ const ASK_USER = "Upload unavailable. Call ask_user so the user can upload the f
 // No confirmed PDF ticket: the agent asks the human and never drops the passport or the photo in the Return Ticket field.
 export const NO_RETURN_TICKET = "No return ticket is confirmed in Nami. Call ask_user so the user uploads their return flight ticket (PDF) in the Return Ticket field themselves; never upload another file in its place.";
 const TTL_MS = 60 * 60 * 1000;
+const TEMPORARY_COPY_MS = 15 * 60 * 1000;
 export type UploadPurpose = "passport" | "photo" | "return_ticket";
 type SessionDocument = { path: string; photo?: string; returnTicket?: string; expires: number; uploads: Map<string, Promise<UploadResult>> };
 const shared = globalThis as typeof globalThis & { namiAgentDocuments?: Map<string, SessionDocument> };
@@ -149,7 +150,9 @@ async function uploadDocument(confirmedPath: string, purpose: UploadPurpose, con
   } catch {
     return ASK_USER;
   } finally {
-    await prepared?.cleanup();
+    // The page reads the file after the change event (its preview, its own upload): the temporary copy (converted or
+    // shrunk) is kept 15 minutes, then deleted. The traveller's original file is never touched.
+    if (prepared) setTimeout(() => void prepared?.cleanup(), TEMPORARY_COPY_MS).unref();
     if (client) {
       if (targetSession) {
         await client.send("Runtime.releaseObjectGroup", { objectGroup: "nami-passport-upload" }, targetSession).catch(() => {});

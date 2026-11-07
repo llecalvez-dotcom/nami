@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { audioFileName, requestMicrophone } from "@/components/voice/microphone";
 import { stopSpeaking } from "@/components/voice/speech";
-import { setSpokenLanguage } from "@/lib/voice/language";
+import { languageToKeep, setSpokenLanguage } from "@/lib/voice/language";
 import { isPhantomTranscript } from "@/lib/voice/phantom";
 import { createSilenceDetector, rms } from "@/lib/voice/silence";
 
@@ -20,7 +20,7 @@ export type VoiceInput = {
   toggle: () => void;
 };
 
-// The language Gladia detected is kept: Nami answers in it (lib/voice/language.ts).
+// The language Gladia detected is kept, from a sentence of 3 words or more: Nami answers in it (lib/voice/language.ts).
 async function transcribe(blob: Blob): Promise<string> {
   const form = new FormData();
   form.append("audio", blob, audioFileName(blob.type));
@@ -28,7 +28,7 @@ async function transcribe(blob: Blob): Promise<string> {
   const body = (await response.json().catch(() => ({}))) as { text?: string; language?: string | null; error?: string };
   if (!response.ok || typeof body.text !== "string") throw new Error(body.error ?? "Transcription failed. Type instead.");
   if (!body.text || isPhantomTranscript(body.text)) throw new Error("I didn't catch anything. Try again or type instead.");
-  setSpokenLanguage(body.language);
+  setSpokenLanguage(languageToKeep(body.text, body.language));
   return body.text;
 }
 

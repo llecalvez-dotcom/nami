@@ -23,6 +23,15 @@ export function setSpokenLanguage(language: string | null | undefined) {
   listeners.forEach((listener) => listener());
 }
 
+// Gladia guesses the language of a short answer badly ("oui", "ok", a word through a distant microphone): measured on
+// 2026-11-07, Nami switched to a language the traveller does not speak. Only a sentence of 3 words or more changes it.
+export const MIN_WORDS_FOR_LANGUAGE = 3;
+
+export function languageToKeep(transcript: string, detected: string | null | undefined): string | null {
+  const words = transcript.trim().split(/\s+/).filter((word) => /\p{L}/u.test(word));
+  return words.length >= MIN_WORDS_FOR_LANGUAGE ? (detected ?? null) : null;
+}
+
 function subscribe(listener: () => void) {
   listeners.add(listener);
   return () => listeners.delete(listener);
