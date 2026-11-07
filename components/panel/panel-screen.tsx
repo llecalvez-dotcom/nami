@@ -60,6 +60,7 @@ export function agentSpeech(step: string): string | null {
   return text.split(/(?<=[.!?])\s/)[0];
 }
 
+const AGENT_SPEECH_GAP_MS = 20_000;
 const RECONFIRM_TEXT = "The agent may still be running. Confirm your passport again so I can follow it here; Stop works meanwhile.";
 
 // The fixed texts of the panel, translated like the rest.
@@ -312,8 +313,8 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
     const index = trip.agent_steps.length - 1;
     if (!trip.agent_run || index <= spokenStep.current.index) return;
     const line = agentSpeech(trip.agent_steps[index]);
-    // At most one line every 6 s: the agent takes a step every 8 to 10 s, the traveller must still be able to speak.
-    if (!line || Date.now() - spokenStep.current.at < 6_000) {
+    // At most one line every 20 s: Nami says less than she writes, the steps tick on the screen (Nathan, 2026-11-07).
+    if (!line || Date.now() - spokenStep.current.at < AGENT_SPEECH_GAP_MS) {
       spokenStep.current.index = index;
       return;
     }
