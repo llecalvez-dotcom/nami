@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Camera, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +38,7 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
   const [values, setValues] = useState<Values | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [consent, setConsent] = useState(false);
+  const requestId = useRef(0);
 
   useEffect(() => {
     let active = true;
@@ -58,6 +59,7 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
   }, []);
 
   const upload = async (file: File) => {
+    const id = ++requestId.current;
     setError(null);
     setConfirmed(false);
     if (reader === "off" || !consent) return;
@@ -71,16 +73,20 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
     setBusy(true);
     try {
       const response = await fetch("/api/documents/extract", { method: "POST", body });
+      if (id !== requestId.current) return;
       const json = await response.json();
+      if (id !== requestId.current) return;
       if (!response.ok) throw new Error(json.error ?? "The passport could not be read.");
       const result = json as DocumentExtraction;
       setExtraction(result);
       setValues(Object.fromEntries(FIELDS.map((f) => [f.key, result.fields[f.key] ?? ""])) as Values);
     } catch (e) {
+      if (id !== requestId.current) return;
       setError(`${(e as Error).message} You can type the fields instead.`);
       setExtraction(null);
       setValues((v) => v ?? EMPTY);
     } finally {
+      if (id !== requestId.current) return;
       setBusy(false);
     }
   };
@@ -93,6 +99,8 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
   );
   const provider = reader === "h" ? "H Company" : "Anthropic";
   const clear = () => {
+    requestId.current++;
+    setBusy(false);
     setValues(null);
     setExtraction(null);
     setError(null);
