@@ -6,6 +6,7 @@ import {
   answerAgentQuestion,
   applyAgentChanges,
   askUserFromAgent,
+  needsPassportReconfirm,
   createTripFromRequest,
   decideProposal,
   reopenAgentQuestion,
@@ -96,6 +97,16 @@ describe("applyAgentChanges", () => {
   it("says why the agent stopped when it fails", () => {
     const { trip } = applyAgentChanges(liveTrip(), changes({ status: "failed", error_code: "environment_error" }), SECRETS);
     expect(trip.conversation.at(-1)).toMatchObject({ kind: "agent", text: expect.stringContaining("environment_error") });
+  });
+});
+
+describe("needsPassportReconfirm", () => {
+  it("holds the live run until the passport is confirmed again", () => {
+    const run = liveTrip().agent_run;
+    expect(needsPassportReconfirm(run, false)).toBe(true);
+    expect(needsPassportReconfirm(run, true)).toBe(false);
+    expect(needsPassportReconfirm(run ? { ...run, drained: true } : null, false)).toBe(false);
+    expect(needsPassportReconfirm(null, false)).toBe(false);
   });
 });
 

@@ -22,6 +22,7 @@ import {
   answerQuestionWithText,
   createSampleTrip,
   decideProposal,
+  needsPassportReconfirm,
   pushAgentMessage,
   reopenAgentQuestion,
   startVisaRun,
@@ -57,7 +58,8 @@ export function TripScreen({ id }: { id: string }) {
   const [starting, setStarting] = useState(false);
   const secrets = useMemo(() => [passport?.passport_number, passport?.birth_date], [passport]);
   const liveRun = found && !found.sample ? found.agent_run : null;
-  useAgentRun(id, liveRun?.session_id ?? null, liveRun !== null && !liveRun.drained, secrets);
+  const reconfirm = needsPassportReconfirm(liveRun, passport !== null);
+  useAgentRun(id, liveRun?.session_id ?? null, liveRun !== null && !liveRun.drained && !reconfirm, secrets);
   const livePapers = useLivePapers(
     found && !found.sample && found.formalities.length > 0 && destination && country_iso2
       ? { destination, country_iso2, arrival_at }
@@ -191,7 +193,13 @@ export function TripScreen({ id }: { id: string }) {
         <aside aria-label="Trip folder" className="min-w-0 lg:sticky lg:top-20 lg:self-start">
           <div className="rounded-3xl border bg-[#efebe4]/60 p-6">
             <Dossier trip={trip} onStop={() => void stop()} livePapers={livePapers}>
-              {trip.formalities.length > 0 || demo ? (
+              {reconfirm ? (
+                <p role="status" className="rounded-2xl border border-primary/40 bg-background p-4 text-sm">
+                  The agent may still be running in Chrome. Send your passport photo again and confirm its fields: I show
+                  its progress here only after that. Stop agent works meanwhile.
+                </p>
+              ) : null}
+              {trip.formalities.length > 0 || demo || reconfirm ? (
                 <PassportCard
                   demo={demo}
                   returnDate={trip.request.return_date}

@@ -76,6 +76,11 @@ const ACTIVE_AGENT_STATES: AgentRun["state"][] = ["pending", "queued", "running"
 
 export const VISA_READY_MESSAGE = "Visa pre-filled in Chrome, stopped before payment. Check every field, then pay yourself.";
 
+// After a reload the confirmed passport is gone (never stored): nothing from H is read, so nothing is saved unmasked, until it is confirmed again.
+export function needsPassportReconfirm(run: AgentRun | null, passportConfirmed: boolean): boolean {
+  return run !== null && !run.drained && !passportConfirmed;
+}
+
 export function isAgentActive(run: AgentRun | null): boolean {
   return run !== null && ACTIVE_AGENT_STATES.includes(run.state);
 }

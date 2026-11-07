@@ -33,6 +33,7 @@ Léon (front et conversation), Clément (agent H), Ali (papiers et intelligence)
 - Une vraie action démontrée vaut mieux que dix fonctionnalités simulées. Aucun résultat inventé.
 - L'agent ne clique jamais sur l'envoi final ni sur le paiement d'un site officiel.
 - Les vrais documents de la démo vivent dans `private/`, ignoré par Git. Aucune clé API dans le dépôt (`.env.local`, ignoré).
+- Routes sans authentification : démo en local sur le portable uniquement, ne pas déployer en public.
 - Une branche et une PR par périmètre ; jamais de fusion directe sur `main` par un agent ; une relecture humaine avant fusion.
 
 ## Lancer l'application
