@@ -29,7 +29,8 @@ function shorten(text: string): string {
 function hostOfUrl(url: unknown): string | null {
   if (typeof url !== "string") return null;
   try {
-    return new URL(url).hostname;
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.hostname : null;
   } catch {
     return null;
   }
