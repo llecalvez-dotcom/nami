@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createVisaStartAttempt } from "@/lib/paper-start-client";
+import { createVisaStartAttempt, resetVisaStartAttempts } from "@/lib/paper-start-client";
 
 describe("visa start attempts", () => {
   it("keeps the UUID and exact body across retries, but assigns a new UUID to a new attempt", async () => {
@@ -28,5 +28,40 @@ describe("visa start attempts", () => {
     const attempt = createVisaStartAttempt({}, { fetch, uuid: () => "00000000-0000-4000-8000-000000000001" });
     await expect(attempt()).rejects.toThrow("All H agent slots are busy.");
     await expect(attempt()).rejects.toThrow("The agent could not start (502).");
+  });
+
+  it("reuses the key on a new click after an ambiguous failure with the same request, never after a clear one", async () => {
+    resetVisaStartAttempts();
+    let n = 0;
+    const uuid = () => `00000000-0000-4000-8000-00000000000${++n}`;
+    const keyOf = (call: unknown[]) => JSON.parse((call[1] as RequestInit).body as string).idempotency_key;
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockRejectedValueOnce(new TypeError("network failed"))
+      .mockResolvedValueOnce(new Response(null, { status: 502 }))
+      .mockResolvedValueOnce(Response.json({ session_id: "s-1" }, { status: 201 }))
+      .mockResolvedValueOnce(Response.json({ error: "Invalid request." }, { status: 400 }))
+      .mockResolvedValueOnce(Response.json({ session_id: "s-2" }, { status: 201 }));
+    const input = { paper_id: "evoa" };
+    await expect(createVisaStartAttempt(input, { fetch, uuid, scope: "trip-1" })()).rejects.toThrow();
+    await expect(createVisaStartAttempt(input, { fetch, uuid, scope: "trip-1" })()).rejects.toThrow();
+    expect(await createVisaStartAttempt(input, { fetch, uuid, scope: "trip-1" })()).toBe("s-1");
+    await expect(createVisaStartAttempt(input, { fetch, uuid, scope: "trip-1" })()).rejects.toThrow();
+    expect(await createVisaStartAttempt(input, { fetch, uuid, scope: "trip-1" })()).toBe("s-2");
+    const keys = fetch.mock.calls.map(keyOf);
+    expect(keys.slice(0, 3)).toEqual([keys[0], keys[0], keys[0]]);
+    expect(new Set(keys.slice(3)).size).toBe(2);
+    expect(keys[3]).not.toBe(keys[0]);
+  });
+
+  it("assigns a new key when the request changed after an ambiguous failure", async () => {
+    resetVisaStartAttempts();
+    let n = 0;
+    const uuid = () => `00000000-0000-4000-8000-00000000000${++n}`;
+    const fetch = vi.fn<typeof globalThis.fetch>().mockRejectedValueOnce(new TypeError("network failed"))
+      .mockResolvedValueOnce(Response.json({ session_id: "s-1" }, { status: 201 }));
+    await expect(createVisaStartAttempt({ paper_id: "evoa", a: 1 }, { fetch, uuid, scope: "trip-1" })()).rejects.toThrow();
+    await createVisaStartAttempt({ paper_id: "evoa", a: 2 }, { fetch, uuid, scope: "trip-1" })();
+    const keys = fetch.mock.calls.map((call) => JSON.parse((call[1] as RequestInit).body as string).idempotency_key);
+    expect(keys[0]).not.toBe(keys[1]);
   });
 });

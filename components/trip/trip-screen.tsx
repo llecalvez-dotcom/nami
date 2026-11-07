@@ -47,7 +47,7 @@ async function startVisaSession(trip: Trip, passport: PassportFields, documentId
     local_session_id: settings.local_session_id.trim(),
     file_paths: filePaths(settings.files),
     ...(documentId ? { document_id: documentId } : {}),
-  });
+  }, { scope: trip.id });
   return attempt();
 }
 
