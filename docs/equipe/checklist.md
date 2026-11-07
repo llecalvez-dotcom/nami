@@ -19,7 +19,8 @@
 | F9 | Réglages de démo : « Local browser session », chemins des fichiers | ⬜ | Clément | 05 |
 | F10 | Agent Activity en direct + « Stop agent » réel | ⬜ (aujourd'hui : simulé) | Clément | 05 |
 | F11 | Question de l'agent lue à voix haute, réponse validée au clic | 🟡 (composant prêt, pas encore relié à l'agent) | Nathan, puis Clément | 04, 05 |
-| F12 | Design premium (typo éditoriale, images, finitions) | ⬜ | Léon | sans ticket |
+| F12 | Design premium (cartes arrondies, accent violet, photos des destinations, navigation) | 🟡 (branche `feat/design`, PR en relecture) | Léon | sans ticket |
+| F14 | Page World map : globe 3D, pays de résidence, envies, visas en cours, pop-up d'avancement au clic | 🟡 (branche `feat/design`, PR en relecture) | Léon | sans ticket |
 | F13 | « Fill it for me (beta) » sur les papiers officiels d'un autre pays (après Bali) | ⬜ | Clément | 05, partie B |
 
 ## 2. Back (routes serveur et logique)
