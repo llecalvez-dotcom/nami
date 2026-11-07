@@ -4,7 +4,7 @@ import { connectChrome, type CdpConnection } from "@/lib/chrome-cdp";
 import { toolCallKey } from "@/lib/agent-changes";
 import type { ToolRequest } from "@/lib/h-agent";
 
-type UploadResult = "uploaded" | "no official tab" | "no file input found" | typeof ASK_USER;
+type UploadResult = "uploaded" | "no official tab" | "no file input found" | "several official tabs open; call ask_user" | typeof ASK_USER;
 const ASK_USER = "Upload unavailable. Call ask_user so the user can upload the file themselves.";
 const TTL_MS = 60 * 60 * 1000;
 type SessionDocument = { id: string; expires: number; uploads: Map<string, Promise<UploadResult>> };
@@ -61,7 +61,9 @@ async function uploadPassport(documentId: string, connect: (port: number) => Pro
     const targets = await client.send("Target.getTargets") as {
       targetInfos: { type: string; targetId: string; url: string }[];
     };
-    const tab = targets.targetInfos.find((target) => target.type === "page" && official(target.url, domain));
+    const tabs = targets.targetInfos.filter((target) => target.type === "page" && official(target.url, domain));
+    if (tabs.length > 1) return "several official tabs open; call ask_user";
+    const tab = tabs[0];
     if (!tab) return "no official tab";
     const attached = await client.send("Target.attachToTarget", { targetId: tab.targetId, flatten: true }) as {
       sessionId: string;

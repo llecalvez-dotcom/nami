@@ -107,6 +107,14 @@ describe("session-bound CDP passport upload", () => {
     expect(chrome.connect).toHaveBeenCalledWith(9333);
   });
 
+  it("refuses several official tabs before attaching or uploading", async () => {
+    const chrome = mockChrome([true]);
+    chrome.targets.push({ targetId: "another-official", type: "page", url: "https://apply." + DOMAIN + "/form" });
+    expect(await uploadSessionDocument("session-1", CALL, chrome.connect)).toBe("several official tabs open; call ask_user");
+    expect(chrome.send).toHaveBeenCalledTimes(1);
+    expect(chrome.close).toHaveBeenCalledOnce();
+  });
+
   it.each([[], [true, true], [false, false]])("refuses missing or ambiguous file inputs: %j", async (...values) => {
     const chrome = mockChrome(values as boolean[]);
     expect(await uploadSessionDocument("session-1", CALL, chrome.connect)).toBe("no file input found");
