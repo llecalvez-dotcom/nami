@@ -81,14 +81,17 @@ find_chrome() {
 }
 
 # Only reuse a Chrome started with the agent's own profile, never a personal one.
+# Checks the process that actually owns the port, not just any Chrome with these args.
 agent_chrome_running() {
-  local line
-  while IFS= read -r line; do
-    case " $line " in
-      *" --remote-debugging-port=$PORT "*" --user-data-dir=$PROFILE "* | \
-        *" --user-data-dir=$PROFILE "*" --remote-debugging-port=$PORT "*) return 0 ;;
-    esac
-  done < <(ps -A -o args= 2> /dev/null)
+  local pid args
+  command -v lsof > /dev/null 2>&1 || die "lsof not found: cannot check which browser owns port $PORT"
+  pid="$(lsof -nP -iTCP:"$PORT" -sTCP:LISTEN -t 2> /dev/null | sed -n 1p || true)"
+  [ -n "$pid" ] || return 1
+  args="$(ps -o args= -p "$pid" 2> /dev/null || true)"
+  case " $args " in
+    *" --remote-debugging-port=$PORT "*" --user-data-dir=$PROFILE "* | \
+      *" --user-data-dir=$PROFILE "*" --remote-debugging-port=$PORT "*) return 0 ;;
+  esac
   return 1
 }
 
