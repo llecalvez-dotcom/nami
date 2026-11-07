@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ArrowRight, Mic } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SampleBadge } from "@/components/status-badge";
+import { MicButton, VoiceStatusLine } from "@/components/voice/mic-button";
+import { useVoiceInput } from "@/components/voice/use-voice-input";
 import { SAMPLE_DRAFT, SAMPLE_TRIP_ID } from "@/data/sample";
 import { formatDate } from "@/lib/format";
 import { createTripFromRequest, type Trip } from "@/lib/trip-state";
@@ -28,6 +30,7 @@ export function HomeScreen() {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const voice = useVoiceInput(setText);
 
   const savedTrips = trips ?? [];
   const hasSample = savedTrips.some((t) => t.id === SAMPLE_TRIP_ID);
@@ -63,15 +66,7 @@ export function HomeScreen() {
       </p>
 
       <form onSubmit={submit} className="mt-12 flex items-center gap-3 rounded-2xl border bg-card p-2.5 shadow-[0_1px_2px_rgba(36,42,41,0.04),0_8px_24px_-12px_rgba(36,42,41,0.12)]">
-        <button
-          type="button"
-          disabled
-          title="Voice input is not wired yet"
-          aria-label="Record your trip (not available yet)"
-          className="grid size-14 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground opacity-60"
-        >
-          <Mic className="size-6" />
-        </button>
+        <MicButton voice={voice} className="size-14" />
         <label htmlFor="trip-text" className="sr-only">
           Tell me about your trip
         </label>
@@ -83,9 +78,10 @@ export function HomeScreen() {
           className="h-14 min-w-0 flex-1 bg-transparent px-2 text-lg outline-none placeholder:text-muted-foreground/70"
         />
         <Button type="submit" size="lg" className="h-12 rounded-xl px-4" disabled={!text.trim() || busy}>
-          {busy ? "Reading…" : "Go"} <ArrowRight />
+          {busy ? "Reading…" : "Send"} <ArrowRight />
         </Button>
       </form>
+      <VoiceStatusLine voice={voice} className="mt-3 pl-1" />
       {error ? (
         <p role="alert" className="mt-3 pl-1 text-sm text-[#8a5a24]">
           I couldn&apos;t read your request: {error}
