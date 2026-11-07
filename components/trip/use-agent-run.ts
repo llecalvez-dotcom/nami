@@ -7,6 +7,8 @@ import { getTrip, saveTrip, subscribeTrips } from "@/lib/trip-store";
 import { agentStateMessage, postAgentState } from "@/lib/agent-overlay";
 import { toolCallKey } from "@/lib/agent-changes";
 import { applyAgentChanges, askUserFromAgent, markToolHandled, pushAgentMessage, reportReady, recordPassportUpload } from "@/lib/trip-state";
+import { FLIGHTS_REREAD_MESSAGE, FLIGHTS_UNREADABLE_MESSAGE, offerFlights } from "@/lib/flights/flow";
+import type { FlightOption } from "@/lib/contracts";
 
 type Secrets = readonly (string | null | undefined)[];
 const MAX_FAILURES = 5;
@@ -49,6 +51,29 @@ async function actInChrome(sessionId: string, toolReq: ToolRequest, route: "pick
   if (!response.ok) throw new Error(await readError(response));
 }
 
+// report_flights (module Vol): Nami's server checks the reported flights against the Google Flights tab (route flights).
+// Without a choice H keeps waiting; the choice goes back through the same route (sendFlightChoice).
+type FlightsReport = { flights: FlightOption[]; retry?: boolean; unreadable?: boolean };
+
+async function checkFlights(sessionId: string, toolReq: ToolRequest): Promise<FlightsReport> {
+  const response = await fetch(`/api/agent/${encodeURIComponent(sessionId)}/flights`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tool_req: toolReq }),
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  return (await response.json()) as FlightsReport;
+}
+
+export async function sendFlightChoice(sessionId: string, toolReq: ToolRequest, flight: FlightOption): Promise<void> {
+  const response = await fetch(`/api/agent/${encodeURIComponent(sessionId)}/flights`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tool_req: toolReq, choice: { flight } }),
+  });
+  if (!response.ok) throw new Error(await readError(response));
+}
+
 export async function cancelAgent(sessionId: string): Promise<void> {
   const response = await fetch(`/api/agent/${encodeURIComponent(sessionId)}/cancel`, { method: "POST" });
   if (!response.ok) throw new Error(await readError(response));
@@ -85,6 +110,23 @@ export async function handleToolCall(tripId: string, sessionId: string, call: To
   if (call.tool_name === "ask_user") {
     rawCalls.set(rawKey(sessionId, call), call);
     saveTrip(askUserFromAgent(trip, call, secrets));
+    return;
+  }
+  if (call.tool_name === "report_flights") {
+    let report: FlightsReport;
+    try {
+      report = await checkFlights(sessionId, call);
+    } catch (error) {
+      const latest = getTrip(tripId);
+      if (latest) saveTrip(pushAgentMessage(latest, `Could not check the flights, retrying: ${(error as Error).message}`));
+      await sleep(RETRY_MS);
+      return;
+    }
+    const latest = getTrip(tripId);
+    if (!latest) return;
+    if (report.retry) saveTrip(pushAgentMessage(markToolHandled(latest, call), FLIGHTS_REREAD_MESSAGE));
+    else if (report.unreadable) saveTrip(pushAgentMessage(markToolHandled(latest, call), FLIGHTS_UNREADABLE_MESSAGE));
+    else saveTrip(offerFlights(latest, call, report.flights));
     return;
   }
   if (call.tool_name === "pick_option" || call.tool_name === "fill_field") {

@@ -1,0 +1,89 @@
+import { describe, expect, it } from "vitest";
+import type { FlightOption } from "@/lib/contracts";
+import { describeFlight, formatDuration, hasDirectFlight, introduceFlights, rankFlights } from "@/lib/flights/rank";
+
+const flight = (index: number, over: Partial<FlightOption>): FlightOption => ({
+  airline: `Airline ${index}`,
+  price: 800,
+  currency: "EUR",
+  stops: 1,
+  duration_min: 1000,
+  depart_at: "10:00",
+  arrive_at: "08:00+1",
+  layovers: [],
+  index,
+  ...over,
+});
+
+// Six flights, no direct one, two with the same price, two with the same duration.
+const FLIGHTS: FlightOption[] = [
+  flight(1, { airline: "Scoot", price: 646, stops: 1, duration_min: 1325, layovers: [{ airport: "Singapore", duration_min: 150 }] }),
+  flight(2, { airline: "Qatar Airways", price: 912, stops: 1, duration_min: 1110, layovers: [{ airport: "Doha" }] }),
+  flight(3, { airline: "Emirates", price: 912, stops: 1, duration_min: 1180, layovers: [{ airport: "Dubai" }] }),
+  flight(4, { airline: "KLM, Garuda", price: 1030, stops: 2, duration_min: 1110, layovers: [{ airport: "Amsterdam" }, { airport: "Jakarta" }] }),
+  flight(5, { airline: "Turkish Airlines", price: 780, stops: 1, duration_min: 1240, layovers: [{ airport: "Istanbul" }] }),
+  flight(6, { airline: "China Southern", price: 590, stops: 2, duration_min: 1600, layovers: [{ airport: "Guangzhou" }, { airport: "Shenzhen" }] }),
+];
+
+const indexes = (list: FlightOption[]) => list.map((f) => f.index);
+
+describe("rankFlights", () => {
+  it("returns at most three flights", () => {
+    expect(rankFlights(FLIGHTS, "cheapest")).toHaveLength(3);
+    expect(rankFlights(FLIGHTS.slice(0, 2), "cheapest")).toHaveLength(2);
+    expect(rankFlights([], "best")).toEqual([]);
+  });
+
+  it("cheapest: price, then duration for equal prices", () => {
+    expect(indexes(rankFlights(FLIGHTS, "cheapest"))).toEqual([6, 1, 5]);
+    expect(indexes(rankFlights(FLIGHTS.filter((f) => f.price >= 900), "cheapest"))).toEqual([2, 3, 4]);
+  });
+
+  it("fastest: duration, then price for equal durations", () => {
+    expect(indexes(rankFlights(FLIGHTS, "fastest"))).toEqual([2, 4, 3]);
+  });
+
+  it("fewest_stops: stops, then price, and says when nothing is direct", () => {
+    expect(indexes(rankFlights(FLIGHTS, "fewest_stops"))).toEqual([1, 5, 2]);
+    expect(hasDirectFlight(FLIGHTS)).toBe(false);
+    expect(introduceFlights("fewest_stops", FLIGHTS)).toBe("No direct flight on those days, here are the flights with the fewest stops.");
+    const withDirect = [...FLIGHTS, flight(7, { airline: "Direct Air", price: 1500, stops: 0, duration_min: 900 })];
+    expect(indexes(rankFlights(withDirect, "fewest_stops"))[0]).toBe(7);
+    expect(introduceFlights("fewest_stops", withDirect)).toBe("No stop if possible first.");
+  });
+
+  it("best: weighs price 0.5, duration 0.3, stops 0.2 on normalised values", () => {
+    // Scoot: cheap, one stop, average duration; Qatar: fastest, one stop; Turkish: in between. China Southern is cheapest
+    // but longest with two stops, KLM is fast but dear with two stops.
+    expect(indexes(rankFlights(FLIGHTS, "best"))).toEqual([1, 5, 2]);
+    expect(introduceFlights("best", FLIGHTS)).toBe("The best balance first.");
+  });
+
+  it("is pure and does not reorder the input", () => {
+    const copy = FLIGHTS.map((f) => ({ ...f }));
+    rankFlights(FLIGHTS, "fastest");
+    expect(FLIGHTS).toEqual(copy);
+  });
+
+  it("handles a single flight for best (no division by zero)", () => {
+    expect(indexes(rankFlights([FLIGHTS[0]], "best"))).toEqual([1]);
+  });
+});
+
+describe("describeFlight", () => {
+  it("names the airline, the price, the stops and the duration in one sentence", () => {
+    expect(describeFlight(FLIGHTS[0])).toBe("Scoot, 646 €, 1 stop in Singapore, 22 h 05, leaves at 10:00");
+    expect(describeFlight(FLIGHTS[3])).toBe("KLM, Garuda, 1030 €, 2 stops in Amsterdam and Jakarta, 18 h 30, leaves at 10:00");
+    expect(describeFlight(flight(9, { airline: "Air France", price: 1299.5, currency: "USD", stops: 0, duration_min: 720 }))).toBe("Air France, 1299.50 USD, direct, 12 h, leaves at 10:00");
+  });
+
+  it("keeps the price and the airline in the first sentence (no full stop inside)", () => {
+    for (const f of FLIGHTS) expect(describeFlight(f).split(/(?<=[.!?])\s+/)).toHaveLength(1);
+  });
+
+  it("formats durations", () => {
+    expect(formatDuration(45)).toBe("45 min");
+    expect(formatDuration(60)).toBe("1 h");
+    expect(formatDuration(65)).toBe("1 h 05");
+  });
+});

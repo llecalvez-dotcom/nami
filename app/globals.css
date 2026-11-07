@@ -574,6 +574,8 @@
   --np-lagoon-soft: #d3e9e8;
   --np-coral: #b0461f;
   --np-coral-soft: #f6dcd0;
+  --np-sky: #4f4a8c;
+  --np-sky-soft: #e0ddef;
   --paper: var(--np-lagoon);
   --paper-soft: var(--np-lagoon-soft);
   --np-ease: cubic-bezier(0.23, 1, 0.32, 1);
@@ -585,6 +587,10 @@
 .nami-panel[data-paper="arrival_card"] {
   --paper: var(--np-coral);
   --paper-soft: var(--np-coral-soft);
+}
+.nami-panel[data-paper="flights"] {
+  --paper: var(--np-sky);
+  --paper-soft: var(--np-sky-soft);
 }
 .nami-panel .np-title {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;

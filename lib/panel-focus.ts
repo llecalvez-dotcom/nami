@@ -1,10 +1,12 @@
 import { awaitsAnswer } from "@/lib/voice/conversation-speech";
 import { ARRIVAL_CARD_READY_MESSAGE, VISA_READY_MESSAGE, type ConversationItem, type Trip } from "@/lib/trip-state";
+import { isFlightQuestion, isFlightReadyMessage } from "@/lib/flights/flow";
 
 // The side panel shows one thing at a time (docs/specs/2026-11-07-refonte-panneau.md): what Nami waits for, or else
 // the last thing Nami said. Computed on the English conversation; the panel shows the translated item with the same id.
 
-export type Paper = "visa" | "arrival_card";
+// "flights" is the third one: the flight search (ticket 18), evening sky.
+export type Paper = "visa" | "arrival_card" | "flights";
 
 // The first item still waiting for an answer, or the last item from Nami or the agent.
 export function focusItem(items: readonly ConversationItem[]): ConversationItem | null {
@@ -19,6 +21,7 @@ export function readyPaper(items: readonly ConversationItem[], focus: Conversati
   if (ready?.kind !== "agent") return null;
   if (ready.text === VISA_READY_MESSAGE) return "visa";
   if (ready.text === ARRIVAL_CARD_READY_MESSAGE) return "arrival_card";
+  if (isFlightReadyMessage(ready.text)) return "flights";
   return null;
 }
 
@@ -26,6 +29,8 @@ export function readyPaper(items: readonly ConversationItem[], focus: Conversati
 export function paperInFocus(trip: Trip, focus: ConversationItem | null): Paper {
   if (focus?.kind === "proposal" && focus.action === "create_arrival_card") return "arrival_card";
   if (focus?.kind === "proposal" && focus.action === "create_visa") return "visa";
+  if ((focus?.kind === "proposal" && focus.action === "flights") || (focus?.kind === "question" && isFlightQuestion(focus.field))) return "flights";
+  if (trip.agent_run?.kind === "flights") return "flights";
   return trip.agent_run?.paper_id === "arrival_card" ? "arrival_card" : "visa";
 }
 
@@ -46,6 +51,12 @@ const MILESTONES: Record<Paper, Milestone[]> = {
     { label: "Your details", pattern: /\b(passport|name|nationality)\b/i },
     { label: "Your trip", pattern: /\b(flight|arrival date|address|accommodation|hotel)\b/i },
     { label: "Declarations", pattern: /\b(health|customs|declar\w*)\b/i },
+  ],
+  flights: [
+    { label: "Dates", pattern: /\b(google flights|opened google|dates?|round trip|aller-retour)\b/i },
+    { label: "Results", pattern: /\bread \d+ flights?\b|\b(results|flights? (list|shown)|report_flights)\b/i },
+    { label: "Your choice", pattern: /\byou chose\b|\b(chose|chosen|selected|clicked) .*\bflight\b/i },
+    { label: "Booking page", pattern: /\b(booking (options|page)|stopped on the booking)\b/i },
   ],
 };
 
@@ -75,7 +86,7 @@ export type Scene = "aube" | "matin" | "dore" | "nuit";
 
 export function sceneFor({ started, paper, visaReady, cardReady }: { started: boolean; paper: Paper; visaReady: boolean; cardReady: boolean }): Scene {
   if (!started) return "aube";
-  if (cardReady) return "nuit";
+  if (cardReady || paper === "flights") return "nuit";
   if (visaReady || paper === "arrival_card") return "dore";
   return "matin";
 }

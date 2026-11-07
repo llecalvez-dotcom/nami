@@ -18,6 +18,15 @@ import type { AgentRun, Formality, ModuleKind, ModuleState, ModuleSuggestion, Tr
 import { TripRequestSchema } from "@/lib/contracts";
 import { isOfficialUrl } from "@/lib/official-sites";
 import {
+  answerFlightQuestion,
+  answerFlightQuestionWithText,
+  applyFlightsChanges,
+  isFlightQuestion,
+  reportFlightsReady,
+  startFlightsFlow,
+  type FlightQuestionField,
+} from "@/lib/flights/flow";
+import {
   formalityWindows,
   isBali,
   nextQuestion,
@@ -51,7 +60,7 @@ export type ConversationItem =
       id: string;
       kind: "question";
       from: "nami" | "agent_h";
-      field: QuestionField | "email";
+      field: QuestionField | "email" | FlightQuestionField;
       question: string;
       options: { label: string; value: string }[];
       input: "email" | "text" | null;
@@ -88,7 +97,8 @@ export const ARRIVAL_CARD_READY_MESSAGE = "Your arrival card is filled in, and I
 
 // After a reload the confirmed passport is gone (never stored): nothing from H is read, so nothing is saved unmasked, until it is confirmed again.
 export function needsPassportReconfirm(run: AgentRun | null, passportConfirmed: boolean): boolean {
-  return run !== null && !run.drained && !passportConfirmed;
+  // A flights session holds no passport: nothing to reconfirm, the polling goes on after a reload.
+  return run !== null && run.kind !== "flights" && !run.drained && !passportConfirmed;
 }
 
 export function isAgentActive(run: AgentRun | null): boolean {
@@ -288,6 +298,7 @@ export function createTripFromRequest(id: string, request: TripRequestDraft, now
 export function answerQuestionWithText(trip: Trip, itemId: string, text: string, request: TripRequestDraft): Trip {
   const item = trip.conversation.find((i) => i.id === itemId);
   if (!item || item.kind !== "question" || item.from !== "nami" || item.answer !== null) return trip;
+  if (isFlightQuestion(item.field)) return answerFlightQuestionWithText(trip, { ...item, field: item.field }, text, request);
   const answered = { ...updateItem(trip, itemId, { answer: text }), request };
   const stillMissing = item.field !== "email" && request[item.field] === null;
   return advance(stillMissing ? push(answered, { kind: "agent", text: "Sorry, I didn't catch that." }) : answered);
@@ -296,6 +307,7 @@ export function answerQuestionWithText(trip: Trip, itemId: string, text: string,
 export function answerQuestion(trip: Trip, itemId: string, value: string, label: string): Trip {
   const item = trip.conversation.find((i) => i.id === itemId);
   if (!item || item.kind !== "question" || item.answer !== null) return trip;
+  if (isFlightQuestion(item.field)) return answerFlightQuestion(trip, { ...item, field: item.field }, value, label);
   const answered = updateItem(trip, itemId, { answer: label });
 
   if (item.field !== "email") {
@@ -387,21 +399,19 @@ export function decideProposal(trip: Trip, itemId: string, accepted: boolean, no
     case "use_photo":
     case "use_return_ticket":
       return decided;
-    case "flights":
-      return push(
-        { ...decided, modules: setModule(decided.modules, "flights", accepted ? "accepted" : "declined") },
-        {
-          kind: "agent",
-          text: accepted ? "Noted. Flight search is not wired yet; your choice is saved." : "Okay, no flight search for now.",
-        },
-      );
+    case "flights": {
+      const withModule = { ...decided, modules: setModule(decided.modules, "flights", accepted ? "accepted" : "declined") };
+      // The dates, the criterion, then the client starts the Google Flights session (lib/flights/flow.ts).
+      if (accepted) return startFlightsFlow(withModule);
+      return push(withModule, { kind: "agent", text: "Okay, no flight search for now." });
+    }
   }
 }
 
 export function stopAgent(trip: Trip): Trip {
   if (!trip.agent_run || !isAgentActive(trip.agent_run)) return trip;
   const openAgentQuestion = trip.conversation.find(
-    (i) => (i.kind === "agent_question" || (i.kind === "question" && i.from === "agent_h")) && i.answer === null,
+    (i) => (i.kind === "agent_question" || (i.kind === "question" && (i.from === "agent_h" || isFlightQuestion(i.field)))) && i.answer === null,
   );
   const stopped: Trip = {
     ...trip,
@@ -478,6 +488,7 @@ export function applyAgentChanges(
 ): { trip: Trip; toolCalls: ToolRequest[] } {
   const run = trip.agent_run;
   if (!run) return { trip, toolCalls: [] };
+  if (run.kind === "flights") return applyFlightsChanges(trip, changes, secrets);
   const parsed = AgentStateSchema.safeParse(changes.status);
   const hStatus = parsed.success ? parsed.data : run.h_status;
   const hTerminal = hStatus !== undefined && isTerminalStatus(hStatus);
@@ -592,6 +603,7 @@ export function reopenAgentQuestion(trip: Trip, itemId: string): Trip {
 
 export function reportReady(trip: Trip, call: ToolRequest, secrets: readonly (string | null | undefined)[]): Trip {
   if (!trip.agent_run || isToolHandled(trip, call)) return trip;
+  if (trip.agent_run.kind === "flights") return reportFlightsReady(trip, call, secrets);
   const summary = redact(typeof call.args.summary === "string" ? call.args.summary : "", secrets);
   const filled = Array.isArray(call.args.filled_fields)
     ? call.args.filled_fields.filter((f): f is string => typeof f === "string").map((f) => redact(f, secrets))

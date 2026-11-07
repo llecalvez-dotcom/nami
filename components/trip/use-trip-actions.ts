@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { filePaths, readAgentSettings } from "@/components/trip/agent-settings";
-import { cancelAgent, rawToolReq, sendAgentAnswer } from "@/components/trip/use-agent-run";
+import { cancelAgent, rawToolReq, sendAgentAnswer, sendFlightChoice } from "@/components/trip/use-agent-run";
+import { flightsStartBody, FLIGHTS_RETRY_PROPOSAL, isChoiceQuestion, isCriterionQuestion, openFlightQuestion, pendingFlightChoice, startFlightsSession } from "@/lib/flights/flow";
+import { googleFlightsUrl } from "@/lib/flights-agent";
 import type { PassportFields } from "@/lib/contracts";
 import { createVisaStartAttempt } from "@/lib/paper-start-client";
 import { missingPassportMessage } from "@/lib/passport-reminder";
@@ -12,7 +14,9 @@ import {
   answerQuestion,
   answerQuestionWithText,
   decideProposal,
+  isAgentActive,
   pushAgentMessage,
+  pushProposal,
   reopenAgentQuestion,
   startVisaRun,
   stopAgent,
@@ -44,6 +48,21 @@ async function startVisaSession(
     ...(documentId && returnTicketDocumentId ? { return_ticket_document_id: returnTicketDocumentId } : {}),
   }, { scope: trip.id });
   return attempt();
+}
+
+// Module Vol: the Google Flights session, from the request only (no passport, no name, no e-mail).
+async function startFlightsSessionRequest(trip: Trip): Promise<{ sessionId: string; url: string }> {
+  const body = flightsStartBody(trip);
+  if (!body) throw new Error("I need your departure and return dates to search flights.");
+  const settings = readAgentSettings();
+  const response = await fetch("/api/flights/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ...body, local_session_id: settings.local_session_id.trim(), idempotency_key: crypto.randomUUID() }),
+  });
+  const json = (await response.json().catch(() => null)) as { session_id?: string; error?: string } | null;
+  if (!response.ok || !json?.session_id) throw new Error(json?.error ?? `Request failed (${response.status})`);
+  return { sessionId: json.session_id, url: googleFlightsUrl(body) };
 }
 
 async function discover(url: string, pick: (json: Record<string, unknown>) => boolean): Promise<boolean> {
@@ -125,9 +144,49 @@ export function useTripActions({
     update(decideProposal(current, itemId, accepted, new Date()));
   };
 
+  // After the criterion, the flight search starts; after the choice, it goes to the agent that waits for it.
+  const startFlightsRun = async () => {
+    const current = latest();
+    if (!current || starting || current.sample || isAgentActive(current.agent_run)) return;
+    setStarting(true);
+    try {
+      const { sessionId, url } = await startFlightsSessionRequest(current);
+      const started = startFlightsSession(latest() ?? current, sessionId, url, new Date());
+      update(started);
+      onStarted?.(started);
+    } catch (error) {
+      const now = latest() ?? current;
+      update(pushProposal(pushAgentMessage(now, (error as Error).message), FLIGHTS_RETRY_PROPOSAL.action, FLIGHTS_RETRY_PROPOSAL.text, FLIGHTS_RETRY_PROPOSAL.accept_label, FLIGHTS_RETRY_PROPOSAL.decline_label));
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const sendChoice = async () => {
+    const current = latest();
+    const choice = current ? pendingFlightChoice(current) : null;
+    if (!current?.agent_run || !choice) return;
+    try {
+      await sendFlightChoice(current.agent_run.session_id, choice.tool_req, choice.flight);
+    } catch (error) {
+      const now = latest() ?? current;
+      update(pushAgentMessage(now, `Your choice could not be sent to the agent: ${(error as Error).message}`));
+    }
+  };
+
+  // Spoken or tapped, the same follow-up: the search once the criterion is settled, the choice once a flight is.
+  const followFlights = (item: Trip["conversation"][number] | undefined, next: Trip) => {
+    if (isCriterionQuestion(item) && !openFlightQuestion(next, "flight_criterion")) void startFlightsRun();
+    if (isChoiceQuestion(item) && pendingFlightChoice(next)) void sendChoice();
+  };
+
   const answer = (itemId: string, value: string, label: string) => {
     const current = latest();
-    if (current) update(answerQuestion(current, itemId, value, label));
+    if (!current) return;
+    const item = current.conversation.find((i) => i.id === itemId);
+    const next = answerQuestion(current, itemId, value, label);
+    update(next);
+    followFlights(item, next);
   };
 
   const answerWithText = async (itemId: string, text: string) => {
@@ -139,7 +198,9 @@ export function useTripActions({
       current_request: current.request,
       question: item?.kind === "question" ? item.question : undefined,
     });
-    update(answerQuestionWithText(latest() ?? current, itemId, text, request));
+    const next = answerQuestionWithText(latest() ?? current, itemId, text, request);
+    update(next);
+    followFlights(item, next);
   };
 
   const answerAgent = async (itemId: string, value: string) => {
@@ -171,5 +232,5 @@ export function useTripActions({
     update(stopAgent(latest() ?? current));
   };
 
-  return { starting, createVisa, decide, answer, answerWithText, answerAgent, stop };
+  return { starting, createVisa, decide, answer, answerWithText, answerAgent, stop, startFlightsRun };
 }

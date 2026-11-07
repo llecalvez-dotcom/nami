@@ -96,11 +96,16 @@ Copie de `scripts/passage-evoa.mjs` : démarre par `/api/flights/start`, suit `/
 - Domaine : `google.com` seulement (`www.google.com`, `consent.google.com`) ; sortie du domaine = session arrêtée, comme `left_official_site`.
 - Captcha ou « trafic inhabituel » de Google : `ask_user`, l'humain résout, l'agent reprend.
 
-## Décisions à prendre (Clément et Nathan)
+## Décisions prises (Clément, samedi 7 novembre au soir)
 
-1. **Où l'agent s'arrête** : page des options de réservation de Google Flights (recommandé : zéro donnée saisie, 100 % sur google.com, l'utilisateur clique lui-même sur la compagnie), ou suivre jusqu'au site de la compagnie et s'arrêter devant le formulaire passager (plus spectaculaire, mais un domaine par compagnie à autoriser et le risque d'un site qui bloque les robots). La fiche est écrite pour la première option.
-2. **Combien de vols proposés** : 2 (plus lisible à la voix) ou 3 (le cadrage disait 3). La fiche dit « 2 ou 3 » : trancher au premier passage selon la longueur de la lecture à voix haute.
-3. **Repli si Google bloque** (captcha répété ou résultats vides pour le Chrome de l'agent) : Kayak avec une URL pré-remplie (`https://www.kayak.fr/flights/PAR-DPS/2026-11-23/2026-12-03`), même parcours. À tester au point G1 en même temps, comme le cadrage le prévoyait.
+1. **Où l'agent s'arrête** : page des options de réservation de Google Flights, puis `report_ready`. Zéro donnée saisie, 100 % sur `www.google.com` (et `consent.google.com` pour « Tout refuser »). Jamais de clic sur Réserver / Book / Continuer / Continue / Pay / Sign in, jamais sur le site d'une compagnie ou d'une agence.
+2. **Combien de vols proposés** : au plus 3, en une seule question (« Le moins cher d'abord : Scoot, 646 €, … ; puis … : lequel je t'ouvre ? »), options cliquables « The first / The second / The third : <vol> », donc « le premier », « Qatar » ou un clic marchent.
+3. **Repli si Google bloque** : pas de Kayak. Captcha, « trafic inhabituel » ou ville non reconnue : l'agent appelle `ask_user` ; page illisible : Nami dit qu'elle n'a pas pu lire les vols et renvoie vers l'onglet.
+4. **Tout en computer use** : aucun Linkup pour les prix (test G0), aucun vol inventé. Chaque vol de `report_flights` est vérifié par CDP contre `document.body.innerText` et les `aria-label` (compagnie et prix collé à sa devise) ; moins de 2 vols vérifiés : relecture demandée à l'agent.
+5. **Toutes les destinations** : `request.destination` tel quel dans l'URL (`q=Flights from Paris to Bali on … through … for N adults economy`, `hl=fr`, `curr=EUR`), départ Paris en V1, voyageurs pris dans la demande (défaut 1).
+6. **Dates** : `departure_date` toujours connue ; `return_date` confirmée (une question, « oui » ou une nouvelle date à la voix) ou demandée (trois dates au clic : J+7, J+10, J+14, ou une date à la voix). Jamais `arrival_at`.
+7. **Ordre des questions** : le critère est demandé avant de lancer l'agent (pendant qu'il ouvre Google, H n'attend pas), le choix du vol après la lecture ; H attend le résultat de `report_flights` pendant le choix, dans les 600 s ; à l'expiration, Nami le dit et propose de relancer.
+8. **Session Vol** : outils `ask_user`, `report_ready`, `report_flights` seulement (pas de `<select>` natif sur Google Flights) ; liaison en mémoire comme les papiers ; aucune donnée personnelle dans la session.
 
 ## Ce qui est hors de ce ticket
 

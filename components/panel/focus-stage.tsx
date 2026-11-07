@@ -40,8 +40,9 @@ type Props = Handlers & {
   t: Translate;
 };
 
-const READY_TITLE: Record<Paper, string> = { visa: "Your visa is ready.", arrival_card: "Your arrival card is ready." };
-const AGENT_TITLE: Record<Paper, string> = { visa: "I'm filling in your visa.", arrival_card: "I'm filling in your arrival card." };
+const READY_TITLE: Record<Paper, string> = { visa: "Your visa is ready.", arrival_card: "Your arrival card is ready.", flights: "Your flight is found." };
+const AGENT_TITLE: Record<Paper, string> = { visa: "I'm filling in your visa.", arrival_card: "I'm filling in your arrival card.", flights: "I'm searching your flights." };
+export const PAPER_COLORS: Record<Paper, string> = { visa: "var(--np-lagoon)", arrival_card: "var(--np-coral)", flights: "var(--np-sky)" };
 
 export const STAGE_TEXTS = [
   "Nami",
@@ -55,6 +56,7 @@ export const STAGE_TEXTS = [
   "fields checked",
   "Watch the tab on the left: you will see every click.",
   "Check it in the tab, then send it yourself.",
+  "Book it in the tab when you want, Nami never pays.",
   "Your passport",
   "Your ID photo",
   "Type instead",
@@ -171,7 +173,7 @@ function Wall(props: Props) {
       </>
     );
   } else if (ready && item) {
-    const color = ready === "arrival_card" ? "var(--np-coral)" : "var(--np-lagoon)";
+    const color = PAPER_COLORS[ready];
     body = (
       <>
         <p className="mb-3 flex items-center gap-2 text-[13px] font-semibold" style={{ color }}>
@@ -181,7 +183,7 @@ function Wall(props: Props) {
           {t("Nami")}
         </p>
         <Sentence text={t(READY_TITLE[ready])} size="xl" />
-        <Secondary>{t("Check it in the tab, then send it yourself.")}</Secondary>
+        <Secondary>{t(ready === "flights" ? "Book it in the tab when you want, Nami never pays." : "Check it in the tab, then send it yourself.")}</Secondary>
         <p className="mt-6 border-t border-[var(--np-line)] pt-5 text-[17px] leading-snug font-medium">{sentenceOf(item)}</p>
       </>
     );

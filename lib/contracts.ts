@@ -167,3 +167,22 @@ export const DocumentExtractionSchema = z.object({
   warnings: z.array(z.string()),
 });
 export type DocumentExtraction = z.infer<typeof DocumentExtractionSchema>;
+
+// Module Vol (ticket 18): a flight read on Google Flights by the agent, checked against the page text before it is shown.
+export const FlightCriterionSchema = z.enum(["cheapest", "fastest", "fewest_stops", "best"]);
+export type FlightCriterion = z.infer<typeof FlightCriterionSchema>;
+
+export const FlightOptionSchema = z.object({
+  airline: z.string().trim().min(1).max(120),
+  price: z.number().finite().nonnegative(),
+  currency: z.string().trim().min(1).max(8),
+  stops: z.number().int().nonnegative(),
+  duration_min: z.number().int().positive(),
+  // Times as displayed on the page (for example 13:50), never recomputed.
+  depart_at: z.string().trim().min(1).max(40),
+  arrive_at: z.string().trim().min(1).max(40),
+  layovers: z.array(z.object({ airport: z.string().trim().min(1).max(80), duration_min: z.number().int().nonnegative().optional() })).default([]),
+  // Position in the list shown on the page (1 = first), so the agent knows which one to click.
+  index: z.number().int().positive(),
+});
+export type FlightOption = z.infer<typeof FlightOptionSchema>;
