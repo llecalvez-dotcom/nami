@@ -1,7 +1,7 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { AgentLine, WATCH_MESSAGE } from "@/components/panel/panel-screen";
+import { AgentLine, agentSpeech, WATCH_MESSAGE } from "@/components/panel/panel-screen";
 import type { Trip } from "@/lib/trip-state";
 
 const RUN = {
@@ -52,4 +52,15 @@ describe("panel agent line", () => {
     expect(WATCH_MESSAGE).toMatch(/never click Pay/);
     expect(WATCH_MESSAGE).not.toMatch(/[–—]/);
   });
+});
+
+describe("what Nami says aloud about the agent", () => {
+  it("reads the first sentence of a step", () => {
+    expect(agentSpeech("FRANCE is selected. Now I need to select the purpose.")).toBe("FRANCE is selected.");
+  });
+
+  it.each(["Action: scroll_web", "On evisa.imigrasi.go.id", "A step failed, the agent retries", "Session created on your local Chrome", "Agent finished", "OK"])(
+    "stays silent on a technical step: %s",
+    (step) => expect(agentSpeech(step)).toBeNull(),
+  );
 });

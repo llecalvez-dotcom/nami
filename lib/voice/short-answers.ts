@@ -1,8 +1,9 @@
 // Short spoken answers that are sent without a click. One entry per card kind, one word list per outcome.
 export const SHORT_ANSWERS = {
   proposal: {
-    accept: ["yes", "yeah", "oui", "ok", "okay", "go", "vas-y"],
-    decline: ["no", "non", "later", "plus tard", "not now"],
+    // The common languages of travellers, Gladia transcribes them all.
+    accept: ["yes", "yeah", "oui", "ok", "okay", "go", "vas-y", "d'accord", "si", "sí", "claro", "ja", "jawohl", "sim", "certo", "ya", "iya", "hai"],
+    decline: ["no", "non", "later", "plus tard", "not now", "pas maintenant", "nein", "nao", "não", "nee", "tidak", "iie", "luego"],
   },
 } as const satisfies Record<string, Record<string, readonly string[]>>;
 

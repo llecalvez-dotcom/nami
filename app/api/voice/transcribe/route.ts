@@ -1,4 +1,4 @@
-import { GladiaError, transcribeWithGladia } from "@/lib/gladia";
+import { GladiaError, transcribeWithLanguage } from "@/lib/gladia";
 import { guard } from "@/lib/api-guard";
 
 const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
@@ -23,8 +23,8 @@ export async function POST(request: Request) {
     if (audio.size > MAX_AUDIO_BYTES) return fail("Recording too long.", 413);
 
     try {
-      const text = await transcribeWithGladia(audio, { apiKey });
-      return Response.json({ text });
+      const { text, language } = await transcribeWithLanguage(audio, { apiKey });
+      return Response.json({ text, language });
     } catch (error) {
       if (error instanceof GladiaError && error.kind === "timeout") return fail(error.message, 504);
       return fail(error instanceof GladiaError ? error.message : "Transcription failed.", 502);

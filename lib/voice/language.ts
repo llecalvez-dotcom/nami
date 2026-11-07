@@ -1,0 +1,54 @@
+"use client";
+
+import { useSyncExternalStore } from "react";
+
+// The language the traveller last spoke in (detected by Gladia): Nami answers and reads aloud in it. English by default.
+
+const KEY = "nami.voice.language";
+const listeners = new Set<() => void>();
+
+export function readSpokenLanguage(): string {
+  try {
+    return localStorage.getItem(KEY) ?? "en";
+  } catch {
+    return "en";
+  }
+}
+
+export function setSpokenLanguage(language: string | null | undefined) {
+  if (!language || !/^[a-z]{2,3}$/.test(language) || language === readSpokenLanguage()) return;
+  try {
+    localStorage.setItem(KEY, language);
+  } catch {}
+  listeners.forEach((listener) => listener());
+}
+
+function subscribe(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+export function useSpokenLanguage(): string {
+  return useSyncExternalStore(subscribe, readSpokenLanguage, () => "en");
+}
+
+const LOCALES: Record<string, string> = {
+  en: "en-US",
+  fr: "fr-FR",
+  es: "es-ES",
+  de: "de-DE",
+  it: "it-IT",
+  pt: "pt-PT",
+  nl: "nl-NL",
+  id: "id-ID",
+  ja: "ja-JP",
+  zh: "zh-CN",
+  ko: "ko-KR",
+  ar: "ar-SA",
+  ru: "ru-RU",
+};
+
+// The browser voice for a language code ("fr" → "fr-FR"); the browser picks its own region for the others.
+export function speechLocale(language: string): string {
+  return LOCALES[language] ?? language;
+}
