@@ -29,7 +29,7 @@ function inside(root: string, path: string): boolean {
 function scoreName(name: string): number {
   const normalized = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   return (/passport|passeport|pasaporte|reisepass/.test(normalized) ? 100 : 0)
-    + (/id|identity|identite|scan/.test(normalized) ? 10 : 0);
+    + (/(^|[^a-z0-9])(id|identity|identite|scan)(?=[^a-z0-9]|$)/.test(normalized) ? 10 : 0);
 }
 
 export async function findDocuments(): Promise<FoundDocument[]> {
