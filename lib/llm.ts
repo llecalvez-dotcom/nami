@@ -19,6 +19,8 @@ async function readJson(response: Response, provider: string): Promise<unknown> 
 // H answers in 1 to 3 s, but a call sometimes hangs (seen twice on 2026-11-07, given up after 20 s): a short first
 // try, then one more on a timeout, a network error or a 5xx/429 answer. Never on a 4xx: the request itself is wrong.
 export const H_ATTEMPTS_MS = [8_000, 10_000];
+// The second try goes to H's fast model: the main one sometimes hangs on a whole series of calls (2026-11-07).
+export const H_FALLBACK_MODEL = "holo4-35b-a3b";
 
 function retryable(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
@@ -28,9 +30,10 @@ function retryable(error: unknown): boolean {
 
 const completeWithH: CompleteJson = async (input) => {
   let lastError: unknown;
-  for (const timeoutMs of H_ATTEMPTS_MS) {
+  for (const [attempt, timeoutMs] of H_ATTEMPTS_MS.entries()) {
+    const model = attempt === 0 ? process.env.HAI_MODEL || "holo4-27b" : H_FALLBACK_MODEL;
     try {
-      return await completeWithHOnce(input, timeoutMs);
+      return await completeWithHOnce(input, timeoutMs, model);
     } catch (error) {
       lastError = error;
       if (!retryable(error)) throw error;
@@ -39,12 +42,12 @@ const completeWithH: CompleteJson = async (input) => {
   throw lastError;
 };
 
-async function completeWithHOnce({ system, user, schema }: Parameters<CompleteJson>[0], timeoutMs: number): Promise<string> {
+async function completeWithHOnce({ system, user, schema }: Parameters<CompleteJson>[0], timeoutMs: number, model: string): Promise<string> {
   const response = await fetch("https://api.hcompany.ai/v1/chat/completions", {
     method: "POST",
     headers: { Authorization: `Bearer ${requireEnv("HAI_API_KEY")}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: process.env.HAI_MODEL || "holo4-27b",
+      model,
       messages: [
         { role: "system", content: system },
         { role: "user", content: user },

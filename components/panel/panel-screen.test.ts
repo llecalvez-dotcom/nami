@@ -1,56 +1,75 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { AgentLine, agentSpeech, WATCH_MESSAGE } from "@/components/panel/panel-screen";
-import type { Trip } from "@/lib/trip-state";
+import { FocusStage, type AgentView } from "@/components/panel/focus-stage";
+import { agentSpeech, PANEL_TEXTS, WATCH_MESSAGE } from "@/components/panel/panel-screen";
+import { agentChecklist } from "@/lib/panel-focus";
+import type { ConversationItem } from "@/lib/trip-state";
 
-const RUN = {
-  session_id: "s-1",
-  kind: "paper" as const,
-  started_at: "2026-11-07T19:00:00.000Z",
-  next_index: 3,
-  handled_tool_ids: [],
-  drained: false,
+const noop = () => {};
+const stage = (props: Partial<Parameters<typeof FocusStage>[0]>) =>
+  renderToStaticMarkup(
+    createElement(FocusStage, {
+      item: null,
+      destination: "Bali",
+      visual: null,
+      ready: null,
+      agent: null,
+      busy: null,
+      t: (text: string) => text,
+      onAnswer: noop,
+      onAnswerAgent: noop,
+      onAnswerText: async () => {},
+      onDecide: noop,
+      onStop: noop,
+      ...props,
+    }),
+  );
+
+const visa: ConversationItem = {
+  id: "p",
+  kind: "proposal",
+  action: "create_visa",
+  text: "For Bali you need an e-VOA. Shall I fill it in for you?",
+  accept_label: "Create my visa",
+  decline_label: "Not now",
+  decision: null,
 };
 
-function trip(state: NonNullable<Trip["agent_run"]>["state"], steps: string[]): Trip {
-  return {
-    id: "t-1",
-    created_at: "2026-11-07T19:00:00.000Z",
-    sample: false,
-    request: {} as Trip["request"],
-    conversation: [],
-    modules: [],
-    formalities: [],
-    agent_run: { ...RUN, state },
-    agent_steps: steps,
-  };
-}
+describe("the side panel shows one thing at a time", () => {
+  it("shows Nami's sentence with the destination in italics, and the two answers", () => {
+    const html = stage({ item: visa });
+    expect(html).toContain("<em>Bali</em>");
+    expect(html).toContain("Create my visa");
+    expect(html).toContain("Not now");
+  });
 
-const line = (t: Trip) => renderToStaticMarkup(createElement(AgentLine, { trip: t, onStop: () => {} }));
-
-describe("panel agent line", () => {
-  it("shows the last step only, with Stop while the agent runs", () => {
-    const html = line(trip("running", ["Session created on your local Chrome", "Choosing FRANCE"]));
-    expect(html).toContain("Choosing FRANCE");
-    expect(html).not.toContain("Session created");
+  it("shows the agent's steps and Stop while it works, with no answer to give", () => {
+    const agent: AgentView = { paper: "visa", checklist: agentChecklist("visa", ["Selected FRANCE"], false), step: "Choosing the purpose" };
+    const html = stage({ item: { id: "w", kind: "agent", text: WATCH_MESSAGE }, agent });
+    expect(html).toContain("filling in your visa");
+    expect(html).toContain("Choosing the purpose");
     expect(html).toContain("Stop");
+    expect(html).not.toContain("Create my visa");
   });
 
-  it("drops Stop once the agent is done", () => {
-    const html = line(trip("interrupted", ["Nami stopped the agent at the payment page so you can check and pay"]));
-    expect(html).toContain("payment page");
-    expect(html).not.toContain("Stop</button>");
+  it("puts the number of checked fields on the blurred passport, never the number itself", () => {
+    const html = stage({ item: { ...visa, action: "confirm_passport" }, visual: { kind: "passport_read", id: "doc-1", holder: "Leon LE CALVEZ", verified: 6 } });
+    expect(html).toContain("6 fields checked");
+    expect(html).toContain("Leon LE CALVEZ");
+    expect(html).toContain("blur-");
   });
 
-  it("renders nothing before the agent starts", () => {
-    expect(line({ ...trip("running", []), agent_run: null })).toBe("");
+  it("celebrates the paper made ready before the next proposal", () => {
+    const html = stage({ item: { ...visa, action: "create_arrival_card", text: "Next, your arrival card?" }, ready: "visa" });
+    expect(html).toContain("Your visa is ready.");
+    expect(html).toContain("Next, your arrival card?");
   });
 
-  it("tells the traveller where to look, and that Nami never pays", () => {
+  it("has no dash in its fixed texts", () => {
+    expect(PANEL_TEXTS.join(" ")).not.toMatch(/[–—]/);
     expect(WATCH_MESSAGE).toMatch(/tab on the left/);
     expect(WATCH_MESSAGE).toMatch(/never click Pay/);
-    expect(WATCH_MESSAGE).not.toMatch(/[–—]/);
   });
 });
 
