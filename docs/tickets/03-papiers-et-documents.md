@@ -1,6 +1,6 @@
 # Ticket 03 : papiers de Bali, Linkup et lecture du passeport
 
-Responsable humain : **Ali** (relit la PR, lance les tests réels L1 et F7).
+Responsable humain : **Ali** (lance Devin, relit la PR, fait les tests réels L1 et F7).
 Prérequis : ticket 01 fusionné dans `main`.
 Branche : `feat/03-papiers-documents`, PR vers `main`.
 

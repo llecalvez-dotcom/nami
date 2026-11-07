@@ -1,6 +1,6 @@
 # Ticket 04 : la voix (Gladia)
 
-Responsable humain : **Nathan** (relit la PR, lance le test réel F5 dans la salle).
+Responsable humain : **Nathan** (lance Devin, relit la PR, fait le test réel F5 dans la salle).
 Prérequis : ticket 01 fusionné dans `main`.
 Branche : `feat/04-voix`, PR vers `main`.
 
