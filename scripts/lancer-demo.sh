@@ -153,6 +153,7 @@ INFO
 cd "$ROOT"
 if curl -fsS --max-time 2 -o /dev/null http://localhost:3000; then
   say "Nami already runs on http://localhost:3000: keeping only the H bridge alive. Ctrl+C to stop it."
+  say "That Nami must use Chrome port $PORT: put NAMI_AGENT_CHROME_PORT=$PORT in .env.local and restart it, or stop it and run this script again."
   wait "$BRIDGE_PID" || exit 1
   exit 0
 fi
