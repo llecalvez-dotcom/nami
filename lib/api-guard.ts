@@ -7,6 +7,7 @@ export const API_LIMITS = {
   papers: 16 * 1024,
   documents: 1024,
   screen: 1024,
+  translate: 32 * 1024,
 } as const;
 
 const QUOTA_LIMITS = {
@@ -19,6 +20,8 @@ const QUOTA_LIMITS = {
   papers: 5,
   documents: 100,
   screen: 180,
+  // One call per new message of Nami or step of the agent, in the traveller's language.
+  translate: 200,
 } as const;
 
 const CONCURRENCY_LIMITS = {
@@ -30,6 +33,7 @@ const CONCURRENCY_LIMITS = {
   papers: 1,
   documents: 4,
   screen: 2,
+  translate: 4,
 } as const;
 
 const WINDOW_MS = 10 * 60 * 1000;

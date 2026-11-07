@@ -4,6 +4,7 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 import { alreadyHeard, awaitsAnswer, speechPlan } from "@/lib/voice/conversation-speech";
 import { createSpeechQueue, type SpeechEngine, type SpeechQueue } from "@/lib/voice/speech-queue";
 import type { ConversationItem } from "@/lib/trip-state";
+import { readSpokenLanguage, speechLocale } from "@/lib/voice/language";
 
 const MUTE_KEY = "nami.voice.muted";
 const muteListeners = new Set<() => void>();
@@ -23,7 +24,7 @@ function browserEngine(): SpeechEngine {
     speak(text, done) {
       // Kept in a variable: Chrome drops onend when the utterance is garbage collected.
       utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = "en-US";
+      utterance.lang = speechLocale(readSpokenLanguage());
       utterance.onend = done;
       utterance.onerror = done;
       window.speechSynthesis.speak(utterance);
@@ -40,6 +41,11 @@ function getQueue(): SpeechQueue | null {
   if (typeof window === "undefined") return null;
   queue = "speechSynthesis" in window ? createSpeechQueue(browserEngine(), readMuted()) : null;
   return queue;
+}
+
+// Reads one line that is not a conversation item (the agent's progress): it never opens a card's microphone.
+export function speakLine(id: string, text: string) {
+  getQueue()?.enqueue(id, text);
 }
 
 export function stopSpeaking() {

@@ -35,14 +35,14 @@ describe("POST /api/voice/transcribe", () => {
     const fetchMock = stubGladia((path) => {
       if (path === "/upload") return Response.json({ audio_url: "https://api.gladia.io/file/abc" });
       if (path === "/pre-recorded") return Response.json({ id: "job-1" }, { status: 201 });
-      return Response.json({ status: "done", result: { transcription: { full_transcript: "I'm flying to Bali on Monday." } } });
+      return Response.json({ status: "done", result: { transcription: { full_transcript: "I'm flying to Bali on Monday.", languages: ["en"] } } });
     });
 
     const response = await POST(await request(audio));
 
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body).toEqual({ text: "I'm flying to Bali on Monday." });
+    expect(body).toEqual({ text: "I'm flying to Bali on Monday.", language: "en" });
     expect(JSON.stringify(body)).not.toContain("secret-key");
     expect(fetchMock.mock.calls[0][1]?.headers).toMatchObject({ "x-gladia-key": "secret-key" });
   });

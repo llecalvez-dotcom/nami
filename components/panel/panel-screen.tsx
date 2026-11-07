@@ -11,6 +11,9 @@ import { useTripActions } from "@/components/trip/use-trip-actions";
 import { MicButton, VoiceStatusLine } from "@/components/voice/mic-button";
 import { MuteToggle } from "@/components/voice/mute-toggle";
 import { useVoiceInput } from "@/components/voice/use-voice-input";
+import { speakLine } from "@/components/voice/speech";
+import { useSpokenLanguage } from "@/lib/voice/language";
+import { requestTranslations, translated, useTranslatedConversation, useTranslationsVersion } from "@/lib/voice/translations";
 import type { DocumentExtraction, PassportFields } from "@/lib/contracts";
 import { bestFirst, foundPassportText, foundPhotoText, readSummary, type Reader } from "@/lib/panel-documents";
 import { requestTripParse } from "@/lib/trip-parse-client";
@@ -47,11 +50,19 @@ function writeCurrentTrip(id: string | null) {
 }
 
 // One line for the agent, under the conversation: the last step only, and Stop while it runs.
-export function AgentLine({ trip, onStop }: { trip: Trip; onStop: () => void }) {
+// What Nami says aloud about the agent's work: its first sentence, and nothing for the technical steps.
+export function agentSpeech(step: string): string | null {
+  const text = step.trim();
+  if (text.length < 12 || /^(Action:|On [\w.-]+$|Session created|Passport file ready|Agent started|Agent finished)|step failed/i.test(text)) return null;
+  return text.split(/(?<=[.!?])\s/)[0];
+}
+
+export function AgentLine({ trip, onStop, language = "en" }: { trip: Trip; onStop: () => void; language?: string }) {
   const run = trip.agent_run;
   if (!run) return null;
   const active = isAgentActive(run);
-  const step = trip.agent_steps.at(-1) ?? "Starting…";
+  const last = trip.agent_steps.at(-1) ?? "Starting…";
+  const step = translated(language, last) ?? last;
   return (
     <div role="status" aria-live="polite" className="flex items-center gap-3 rounded-2xl bg-[#102934] px-4 py-3 text-[#fffdf3]">
       <span className={cn("size-2.5 shrink-0 rounded-full", active ? "animate-pulse bg-primary" : "bg-[#fffdf3]/40")} aria-hidden />
@@ -180,6 +191,29 @@ function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
   const run = trip.agent_run;
   const reconfirm = needsPassportReconfirm(run, passport !== null);
   useAgentRun(trip.id, run?.session_id ?? null, run !== null && !run.drained && !reconfirm, secrets);
+
+  // Nami answers in the language the traveller speaks (detected by Gladia), the agent's steps included.
+  const language = useSpokenLanguage();
+  const shownItems = useTranslatedConversation(trip.conversation, language);
+  const translationsVersion = useTranslationsVersion();
+  const spokenStep = useRef({ index: -1, at: 0 });
+  useEffect(() => {
+    const index = trip.agent_steps.length - 1;
+    if (!trip.agent_run || index <= spokenStep.current.index) return;
+    const line = agentSpeech(trip.agent_steps[index]);
+    // At most one line every 6 s: the agent takes a step every 8 to 10 s, the traveller must still be able to speak.
+    if (!line || Date.now() - spokenStep.current.at < 6_000) {
+      spokenStep.current.index = index;
+      return;
+    }
+    const text = translated(language, line);
+    if (text === null) {
+      void requestTranslations(language, [line, ...trip.agent_steps.slice(-1)]);
+      return;
+    }
+    spokenStep.current = { index, at: Date.now() };
+    speakLine(`agent-step-${trip.id}-${index}`, text);
+  }, [trip.agent_steps, trip.agent_run, trip.id, language, translationsVersion]);
 
   const actions = useTripActions({
     trip,
@@ -310,7 +344,7 @@ function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
       </header>
       <main className="flex-1 space-y-4 overflow-y-auto px-4 py-5">
         <Conversation
-          items={trip.conversation}
+          items={shownItems}
           onAnswer={actions.answer}
           onAnswerText={actions.answerWithText}
           onAnswerAgent={(itemId, value) => void actions.answerAgent(itemId, value)}
@@ -363,7 +397,7 @@ function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
       </main>
       {run ? (
         <footer className="border-t border-border px-4 py-3">
-          <AgentLine trip={trip} onStop={() => void actions.stop()} />
+          <AgentLine trip={trip} language={language} onStop={() => void actions.stop()} />
         </footer>
       ) : null}
     </div>
