@@ -43,7 +43,7 @@ export function MicButton({ voice, className }: { voice: VoiceInput; className?:
 export function VoiceStatusLine({ voice, className }: { voice: VoiceInput; className?: string }) {
   const text =
     voice.status === "recording"
-      ? `Listening… 0:${String(voice.seconds).padStart(2, "0")} / 0:${MAX_RECORDING_SECONDS}. Click again to stop.`
+      ? `Listening… 0:${String(voice.seconds).padStart(2, "0")} / 0:${MAX_RECORDING_SECONDS}. Pause or click to stop.`
       : voice.status === "transcribing"
         ? "Transcribing…"
         : voice.error;

@@ -27,8 +27,8 @@
 | F14 | Page World map : globe 3D, pays de résidence, envies, visas en cours, pop-up d'avancement au clic | ✅ (PR #13) | Léon | sans ticket |
 | F13 | « Fill it for me (beta) » sur les papiers officiels d'un autre pays (après Bali) | ⬜ | Clément | 05, partie B |
 | F15 | Accès à l'app par code (`/access`) | ✅ (PR #12, testé par Devin dans le navigateur) | Ali | PR #12 |
-| F16 | Conversation à la voix : Nami lit tout à voix haute, réponses à la voix partout, fin de parole et envoi automatiques | ⬜ | Nathan | 06 |
-| F17 | Validation page par page : l'agent attend un « oui » avant chaque « Suivant » (`confirm_page`) | ⬜ | Nathan | 06 |
+| F16 | Conversation à la voix : Nami lit tout à voix haute, réponses à la voix partout, fin de parole et envoi automatiques | 🔵 partie B en relecture (branche `feat/06b-voix`, 216 tests, lint et compilation OK) ; test réel T10 à faire | Nathan | 06, partie B |
+| F17 | Validation page par page : l'agent attend un « oui » avant chaque « Suivant » (`confirm_page`) | ⬜ partie A en attente de la fusion de la PR #14 | Nathan | 06, partie A |
 | F18 | Extension Chrome : Nami dans le panneau latéral, l'agent dans l'onglet | 🔵 PR du ticket 08 (`feat/08-extension`), test réel avec l'agent H à faire | Léon | 08 |
 | F19 | Retrouver le passeport : dans un dossier local (A) ou par l'agent dans le Finder (C) | ⬜ | Ali (A), Clément ou Ali (C) | 09, 10 |
 
@@ -107,7 +107,7 @@
 2. Texte de la conversation : elle annonce « 3 entry papers » alors que le dossier en direct de Bali peut afficher 4 cartes.
 
 **Nathan (voix, démo, pitch)**
-1. Devin sur `docs/tickets/06-validation-et-voix.md` dès que la PR #14 est fusionnée.
+1. Relire la PR du ticket 06 partie B (voix) ; partie A (`confirm_page`) sur Devin dès que la PR #14 est fusionnée.
 2. Test T10 à la voix dans la salle quand le ticket 06 arrive.
 3. Avec Claude : mode démo, pitch, plan de la vidéo de secours (22 h).
 4. Questions Discord (O6).
