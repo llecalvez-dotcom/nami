@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PassportFieldsSchema, type DocumentExtraction, type PassportFieldKey, type PassportFields } from "@/lib/contracts";
 import { expiryWarning } from "@/lib/passport-dates";
+import { DocumentFinder, DocumentPreview, type DocumentChoice } from "@/components/trip/document-finder";
 
 const FIELDS: { key: PassportFieldKey; label: string; placeholder: string }[] = [
   { key: "surname", label: "Surname", placeholder: "MARTIN" },
@@ -37,11 +38,13 @@ export function PassportCard({
   returnDate,
   arrivalAt,
   onConfirm,
+  onDocumentConfirmed,
 }: {
   demo: boolean;
   returnDate: string | null;
   arrivalAt: string | null;
   onConfirm?: (fields: PassportFields | null) => void;
+  onDocumentConfirmed?: (id: string) => void;
 }) {
   const [reader, setReader] = useState<"off" | "h" | "anthropic">("off");
   const [busy, setBusy] = useState(false);
@@ -51,6 +54,7 @@ export function PassportCard({
   const [confirmed, setConfirmed] = useState(false);
   const [consent, setConsent] = useState(false);
   const [edited, setEdited] = useState<PassportFieldKey[]>([]);
+  const [document, setDocument] = useState<DocumentChoice | null>(null);
   const requestId = useRef(0);
 
   const unconfirm = () => {
@@ -116,7 +120,7 @@ export function PassportCard({
   const liveExpiryWarning = expiryWarning(displayedValues.expiry_date, trip);
   const complete = manual && FIELDS.every((f) => displayedValues[f.key].trim());
   const hasData = Boolean(
-    error || extraction || confirmed || (values && FIELDS.some((field) => values[field.key].trim())),
+    document || error || extraction || confirmed || (values && FIELDS.some((field) => values[field.key].trim())),
   );
   const provider = reader === "h" ? "H Company" : "Anthropic";
   const clear = () => {
@@ -128,6 +132,7 @@ export function PassportCard({
     setError(null);
     unconfirm();
     setConsent(false);
+    setDocument(null);
   };
 
   return (
@@ -147,6 +152,17 @@ export function PassportCard({
           ) : null}
         </div>
       </div>
+      {document ? (
+        <div className="flex items-center gap-3 rounded-2xl bg-muted p-3">
+          <DocumentPreview document={document} demo={demo} />
+          <p className="min-w-0 break-all text-sm">Selected document: {document.name}</p>
+        </div>
+      ) : !FIELDS.some((field) => displayedValues[field.key].trim()) ? (
+        <DocumentFinder demo={demo} onConfirm={(selected) => {
+          setDocument(selected);
+          onDocumentConfirmed?.(selected.id);
+        }} />
+      ) : null}
       {reader === "off" ? (
         <p className="text-sm text-muted-foreground">
           Automatic reading is off: nothing leaves this device. Type the fields from your passport.
