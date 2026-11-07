@@ -333,6 +333,7 @@ describe("POST /api/papers/start (route 5)", () => {
     const evoa = getBaliPaper("evoa");
     expect(task).toContain(evoa.official_url);
     expect(instructions).toContain(`Never leave the domain ${evoa.domain}`);
+    expect(instructions).toContain(`Work only in the one tab that shows ${evoa.domain}. Never open a new tab`);
     for (const button of evoa.forbidden_buttons) expect(instructions).toContain(button);
     expect(instructions).toContain(evoa.stop_condition);
     expect(instructions).toContain("Then call report_ready as your last action.");

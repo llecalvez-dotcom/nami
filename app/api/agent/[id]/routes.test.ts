@@ -184,14 +184,17 @@ describe("GET /api/agent/[id]/changes (route 6)", () => {
     expect(fetch.mock.calls.every((c) => (c[1] as RequestInit | undefined)?.method !== "DELETE")).toBe(true);
   });
 
-  it("ignores empty browser tabs but cancels on other browser pages and local files", async () => {
-    fetch.mockResolvedValueOnce(batch("running", ["about:blank", "chrome://newtab/", "chrome://new-tab-page/"]));
+  it("ignores empty browser tabs and a search engine home page, but cancels on any search, other browser pages and local files", async () => {
+    fetch.mockResolvedValueOnce(batch("running", ["about:blank", "chrome://newtab/", "chrome://new-tab-page/", "https://www.bing.com/", "https://www.google.com/"]));
     expect((await (await get("s-1")).json()).left_official_site).toBeUndefined();
     expect(fetch).toHaveBeenCalledTimes(1);
     for (const [url, left] of [
       ["chrome://extensions/", "chrome://extensions"],
       ["file:///Users/clement/private/passport.jpg", "file:"],
       ["data:text/html,hi", "data:"],
+      ["https://www.bing.com/search?q=bali+visa", "www.bing.com"],
+      ["https://www.bing.com/?q=evisa", "www.bing.com"],
+      ["https://www.google.com/search?q=evoa", "www.google.com"],
     ]) {
       fetch.mockReset();
       fetch.mockResolvedValueOnce(batch("running", [url]));

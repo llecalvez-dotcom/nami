@@ -73,6 +73,15 @@ function uniqueCalls(calls: ToolRequest[]): ToolRequest[] {
 // Empty tabs the browser opens by itself: not a site, so not a reason to stop the agent.
 const BLANK_PAGES = new Set(["about:blank", "about:newtab", "chrome://newtab", "chrome://new-tab-page", "chrome-search://local-ntp"]);
 
+// The home page of a search engine, with nothing searched: what a new tab shows in some Chrome profiles. Measured on
+// 2026-11-07: the agent opened a tab by mistake (www.bing.com), said so, and was cancelled before it could switch back.
+// Any search (a query, a results page) or any other page still stops the agent.
+const START_PAGE_HOSTS = new Set(["www.bing.com", "bing.com", "www.google.com", "google.com", "www.google.fr", "google.fr", "duckduckgo.com"]);
+
+function isStartPage(parsed: URL): boolean {
+  return START_PAGE_HOSTS.has(parsed.hostname) && (parsed.pathname === "/" || parsed.pathname === "") && parsed.search === "";
+}
+
 function offSite(url: unknown, domain: string): string | null {
   if (typeof url !== "string") return null;
   let parsed: URL;
@@ -83,6 +92,7 @@ function offSite(url: unknown, domain: string): string | null {
   }
   if (parsed.protocol === "http:" || parsed.protocol === "https:") {
     const host = parsed.hostname;
+    if (isStartPage(parsed)) return null;
     return host === domain || host.endsWith(`.${domain}`) ? null : host;
   }
   // Any other scheme (chrome://settings, file://, data:) is off the official site.
