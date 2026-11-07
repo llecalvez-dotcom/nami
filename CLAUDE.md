@@ -27,13 +27,13 @@ Note de projet de Nathan : `~/Code/perso/obsidian-vault/projets/_actifs/2026-11-
 - Aucun tiret cadratin ni demi-cadratin dans les textes de l'interface.
 
 ## Current Project State
-(vérifié le samedi 7 novembre à 15 h 05)
+(vérifié le samedi 7 novembre à 15 h 15)
 
 | Aspect | Status |
 |--------|--------|
-| Code | 🔄 Fusionnés : 01, 02, 03 (PR #6), 04, routes protégées et passeport privé (PR #12). PR #13 (design + page World map, Léon) relue, testée et prête. PR #14 (ticket 05 partie A, agent H sur l'e-VOA, Clément) relue (172 tests) ; arrêt hors du domaine officiel et rebasage demandés à son Devin à 15 h 03 ; test réel 3 sur 3 à faire. Partie B et ticket 06 pas commencés. PR #11 (coffre chiffré) hors hackathon, laissée ouverte. |
+| Code | 🔄 Fusionnés : 01, 02, 03 (PR #6), 04, routes protégées et passeport privé (PR #12), design + page World map (PR #13), fiche du coffre chiffré hors hackathon (PR #11). PR #14 (ticket 05 partie A, agent H sur l'e-VOA, Clément) : arrêt hors domaine ajouté, à jour avec `main`, 222 tests, lint et compilation OK ; test réel 3 sur 3 à faire. Partie B et ticket 06 pas commencés. |
 | Config | ✅ Clés dans les secrets de Devin cloud (`HAI_API_KEY` remplacée à 14 h 25) ; `.env*` et `private/` ignorés ; accord écrit du titulaire du passeport. Nouvelles variables : `PASSPORT_READER` (`off` par défaut, `h` pour la démo), `NAMI_ACCESS_CODE` (obligatoire en production). ❓ CLI de H et Chrome dédié sur le portable de Clément ; `.env.local` locaux avec la nouvelle clé H. |
-| Tests | ✅ `main` : 164 tests, lint et compilation OK ; F0, F5 (voix) et L1 (Linkup, 5 pays sur 5) réussis en réel. ❓ T8 (vrai passeport, Ali). ⬜ T4 à T6 (agent H sur le portable de Clément). |
+| Tests | ✅ `main` : 172 tests, lint et compilation OK ; F0, F5 (voix) et L1 (Linkup, 5 pays sur 5) réussis en réel. ❓ T8 (vrai passeport, Ali). ⬜ T4 à T6 (agent H sur le portable de Clément). |
 
 ## Next Immediate Action
-Relire les nouveaux commits de la PR #14 dès qu'ils arrivent (arrêt hors domaine, rebasage sur `main`) : `npm test`, `npm run lint`, `npm run build`, fusion simulée, puis feu vert au test réel de Clément. En parallèle, écrire `docs/tickets/06-demo.md` (tout brancher + mode démo préparé, avec `PASSPORT_READER=h`, `NAMI_ACCESS_CODE` si en ligne, redémarrage du serveur avant la démo pour les quotas) et préparer le pitch avec Nathan.
+PR #14 relue et à jour : attendre le test réel de Clément (CLI de H en cours d'installation), relire `docs/tests/f1-evoa.md` puis mettre la checklist à jour après la fusion. En parallèle, écrire `docs/tickets/06-demo.md` (tout brancher + mode démo préparé, avec `PASSPORT_READER=h`, `NAMI_ACCESS_CODE` si en ligne, redémarrage du serveur avant la démo pour les quotas) et préparer le pitch avec Nathan.
