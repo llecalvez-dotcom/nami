@@ -54,9 +54,9 @@ npm run demo                 # ou scripts/lancer-demo.sh --port 9333
 ```
 
 Le script lance, dans l'ordre :
-1. le Chrome dédié de l'agent (profil `~/chrome-for-agents`, port 9333 par défaut), réglé pour ne jamais se mettre en veille quand sa fenêtre est cachée, sans la bulle de traduction ;
-2. `holo local browser` sur ce port, avec un identifiant de session fixe (gardé dans `~/.config/nami/local-browser-session-id`), relancé s'il s'arrête ;
-3. Nami (`npm run dev`), sauf s'il tourne déjà.
+1. le Chrome dédié de l'agent (profil `~/chrome-for-agents`, port 9333 par défaut), réglé pour ne jamais se mettre en veille quand sa fenêtre est cachée, sans la bulle de traduction. Si un autre navigateur (par exemple ton Chrome perso) occupe déjà le port, le script s'arrête au lieu de le confier à l'agent ;
+2. `holo local browser` sur ce port, avec un identifiant de session fixe (gardé dans `~/.config/nami/local-browser-session-id`), relancé s'il s'arrête. S'il échoue 3 fois de suite, le script arrête tout ;
+3. Nami (`npm run dev`), sauf s'il tourne déjà. Si une autre app occupe le port 3000, le script s'arrête.
 
 Il affiche l'identifiant à coller dans « Local browser session » (`http://localhost:3000/?demo=1`) et n'affiche jamais la clé H (prise dans `HAI_API_KEY` ou `.env.local`). Prérequis : `pip install "hai-agents[cli,browser]"`. Ctrl+C arrête le pont et Nami ; le Chrome de l'agent reste ouvert.
 
