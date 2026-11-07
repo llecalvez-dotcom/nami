@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST as answer } from "@/app/api/agent/[id]/answer/route";
 import { POST as cancel } from "@/app/api/agent/[id]/cancel/route";
 import { GET as changes } from "@/app/api/agent/[id]/changes/route";
+import { uploadSessionDocument } from "@/lib/agent-passport-upload";
+
+vi.mock("@/lib/agent-passport-upload", () => ({ uploadSessionDocument: vi.fn() }));
 
 const API = "https://agp.eu.hcompany.ai/api/v2";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -10,7 +13,41 @@ const ctx = (id: string) => ({ params: Promise.resolve({ id }) }) as any;
 let fetch: ReturnType<typeof vi.fn>;
 const call = (i = 0) => fetch.mock.calls[i] as unknown as [string, RequestInit];
 
+describe("upload_file answer", () => {
+  const tool_req = { tool_name: "upload_file", args: { purpose: "passport" }, id: "upload-1" };
+  const post = (body: unknown) => answer(new Request("http://localhost/api/agent/s-1/answer", {
+    method: "POST", body: JSON.stringify(body),
+  }), ctx("s-1"));
+
+  it("echoes the tool request to H but only sends the server's result, never the client's forged result", async () => {
+    vi.mocked(uploadSessionDocument).mockResolvedValue("uploaded");
+    fetch.mockResolvedValue(new Response(null, { status: 204 }));
+    const response = await post({ tool_req, result: "/unconfirmed.jpg" });
+    expect(response.status).toBe(202);
+    expect(await response.json()).toEqual({ ok: true, upload_result: "uploaded" });
+    expect(uploadSessionDocument).toHaveBeenCalledWith("s-1", tool_req);
+    expect(JSON.parse(call()[1].body as string)).toEqual({
+      kind: "tool_result", tool_req, result: "uploaded",
+    });
+  });
+
+  it.each(["no official tab", "no file input found"] as const)("forwards the safe fallback result: %s", async (result) => {
+    vi.mocked(uploadSessionDocument).mockResolvedValue(result);
+    fetch.mockResolvedValue(new Response(null, { status: 204 }));
+    const response = await post({ tool_req, result: "upload" });
+    expect(await response.json()).toEqual({ ok: true, upload_result: result });
+  });
+
+  it("rejects caller-provided paths in tool arguments before connecting or answering H", async () => {
+    const response = await post({ tool_req: { ...tool_req, args: { purpose: "passport", path: "/unconfirmed.jpg" } }, result: "upload" });
+    expect(response.status).toBe(400);
+    expect(uploadSessionDocument).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
 beforeEach(() => {
+  vi.mocked(uploadSessionDocument).mockReset();
   vi.stubEnv("HAI_API_KEY", "h-key");
   fetch = vi.fn();
   vi.stubGlobal("fetch", fetch);

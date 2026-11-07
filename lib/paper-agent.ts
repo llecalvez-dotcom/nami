@@ -52,7 +52,18 @@ export const PICK_OPTION_TOOL: ToolSpec = {
   },
 };
 
-export const PAPER_TOOLS: ToolSpec[] = [ASK_USER_TOOL, REPORT_READY_TOOL, PICK_OPTION_TOOL];
+export const UPLOAD_FILE_TOOL: ToolSpec = {
+  name: "upload_file",
+  description: "Ask Nami to give the confirmed passport file to the official form. Never open the OS file picker. If unavailable, call ask_user for a manual upload.",
+  input_schema: {
+    type: "object",
+    properties: { purpose: { type: "string", enum: ["passport", "photo"] } },
+    required: ["purpose"],
+    additionalProperties: false,
+  },
+};
+
+export const PAPER_TOOLS: ToolSpec[] = [ASK_USER_TOOL, REPORT_READY_TOOL, PICK_OPTION_TOOL, UPLOAD_FILE_TOOL];
 
 export const LOCAL_SESSION_ID = z
   .string()

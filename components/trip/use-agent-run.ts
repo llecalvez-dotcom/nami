@@ -5,7 +5,7 @@ import type { AgentChanges } from "@/lib/agent-changes";
 import type { ToolRequest } from "@/lib/h-agent";
 import { getTrip, saveTrip } from "@/lib/trip-store";
 import { toolCallKey } from "@/lib/agent-changes";
-import { applyAgentChanges, askUserFromAgent, markToolHandled, pushAgentMessage, reportReady } from "@/lib/trip-state";
+import { applyAgentChanges, askUserFromAgent, markToolHandled, pushAgentMessage, reportReady, recordPassportUpload } from "@/lib/trip-state";
 
 type Secrets = readonly (string | null | undefined)[];
 const MAX_FAILURES = 5;
@@ -27,13 +27,15 @@ async function readError(response: Response): Promise<string> {
   return body?.error ?? `Request failed (${response.status})`;
 }
 
-export async function sendAgentAnswer(sessionId: string, toolReq: ToolRequest, result: string): Promise<void> {
+export async function sendAgentAnswer(sessionId: string, toolReq: ToolRequest, result: string): Promise<string | null> {
   const response = await fetch(`/api/agent/${encodeURIComponent(sessionId)}/answer`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tool_req: toolReq, result }),
   });
   if (!response.ok) throw new Error(await readError(response));
+  const body = await response.json() as { upload_result?: string };
+  return body.upload_result ?? null;
 }
 
 async function pickInChrome(sessionId: string, toolReq: ToolRequest): Promise<void> {
@@ -74,8 +76,10 @@ async function handleToolCall(tripId: string, sessionId: string, call: ToolReque
     return;
   }
   // The poll loop awaits this call, so the same call id is never sent twice at once. It is marked handled once H accepted it.
+  let uploadResult: string | null = null;
   try {
-    await sendAgentAnswer(sessionId, call, call.tool_name === "report_ready" ? "ok" : "Unknown tool: not available.");
+    uploadResult = await sendAgentAnswer(sessionId, call,
+      call.tool_name === "report_ready" ? "ok" : call.tool_name === "upload_file" ? "upload" : "Unknown tool: not available.");
   } catch (error) {
     const key = toolCallKey(call);
     const latest = getTrip(tripId);
@@ -85,7 +89,8 @@ async function handleToolCall(tripId: string, sessionId: string, call: ToolReque
     return;
   }
   const latest = getTrip(tripId);
-  if (latest) saveTrip(call.tool_name === "report_ready" ? reportReady(latest, call, secrets) : markToolHandled(latest, call));
+  if (latest) saveTrip(call.tool_name === "report_ready" ? reportReady(latest, call, secrets)
+    : call.tool_name === "upload_file" ? recordPassportUpload(latest, call, uploadResult) : markToolHandled(latest, call));
 }
 
 // Polls route 6 while the live session is not drained (terminal and every event read).
