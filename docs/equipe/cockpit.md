@@ -49,7 +49,7 @@ Un dossier = un propriétaire, pour ne jamais se marcher dessus. **Chaque propri
 | 2 | [04](../tickets/04-voix.md) | Voix Gladia, boucle vocale | Nathan | `app/api/voice/`, `components/voice/` |
 | 2 | (sans ticket) | Design premium des écrans, conversation, dossier du voyage | Léon | `app/` (pages), `components/` (hors voix) |
 | 2 | (sans ticket) | Tests F1, F6, F8 avec l'agent H, scripts de test | Clément | `scripts/feasibility/` |
-| 3 | 05 (écrit après les tests de Clément) | Agent H sur le visa e-VOA, Agent Activity, mode démo préparé | Clément | `lib/agent-task.ts`, `app/api/papers/`, `app/api/agent/` |
+| 3 | [05](../tickets/05-agent-visa.md) | Agent H sur le visa e-VOA, Agent Activity, question vocale de l'agent | Clément | `lib/agent-task.ts`, `app/api/papers/`, `app/api/agent/` |
 | 4 | 06 (P1) | Module Vol | Clément | `app/api/flights/` |
 
 Les étapes 2 partent en parallèle dès que le ticket 01 est fusionné.
