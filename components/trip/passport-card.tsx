@@ -66,11 +66,11 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
   const complete = values !== null && FIELDS.every((f) => values[f.key].trim());
 
   return (
-    <section className="space-y-3 rounded-2xl border bg-card p-5">
+    <section className="space-y-4 rounded-[28px] bg-card p-6 shadow-soft">
       <div className="flex items-start justify-between gap-3">
-        <p className="font-heading text-2xl leading-tight">Send me a photo of your passport</p>
+        <p className="text-lg leading-snug font-semibold tracking-tight">Send me a photo of your passport</p>
         {confirmed ? (
-          <span className="inline-flex items-center gap-1 text-sm text-primary">
+          <span className="inline-flex items-center gap-1 rounded-full bg-success/12 px-2.5 py-1 text-xs font-medium text-success">
             <Check className="size-4" /> Confirmed
           </span>
         ) : null}
@@ -78,7 +78,7 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
       <p className="text-sm text-muted-foreground">
         The identity page, sharp and flat. It is read in memory and never stored.
       </p>
-      <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground has-[:disabled]:opacity-50">
+      <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground shadow-glow has-[:disabled]:opacity-50">
         <Camera className="size-4" /> {busy ? "Reading…" : values ? "Send another photo" : "Choose a photo"}
         <input
           type="file"
@@ -97,9 +97,9 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
           Type the fields instead
         </Button>
       )}
-      {error ? <p className="text-sm text-attention">{error}</p> : null}
+      {error ? <p className="text-sm text-attention-foreground">{error}</p> : null}
       {extraction?.warnings.map((w) => (
-        <p key={w} className="text-sm text-attention">
+        <p key={w} className="text-sm text-attention-foreground">
           {w}
         </p>
       ))}
@@ -119,9 +119,10 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
               <label key={key} className="space-y-1">
                 <span className="text-xs text-muted-foreground">
                   {label}
-                  {low ? <span className="text-attention"> · check this</span> : null}
+                  {low ? <span className="text-attention-foreground"> · check this</span> : null}
                 </span>
                 <Input
+                  className="h-10 rounded-xl border-transparent bg-muted px-3"
                   type={masked ? "password" : "text"}
                   autoComplete="off"
                   value={values[key]}
@@ -142,7 +143,7 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
             );
           })}
           <div className="flex items-center gap-3 sm:col-span-2">
-            <Button type="submit" size="lg" className="h-9 rounded-full" disabled={!complete || confirmed}>
+            <Button type="submit" size="lg" className="h-10 rounded-full px-5 shadow-glow disabled:shadow-none" disabled={!complete || confirmed}>
               <Check /> These are right
             </Button>
           </div>
