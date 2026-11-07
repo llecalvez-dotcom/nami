@@ -14,6 +14,20 @@ const sameSite = (tabUrl, host) => {
   }
 };
 
+const officialHosts = new Set(["evisa.imigrasi.go.id", "allindonesia.imigrasi.go.id", "lovebali.baliprov.go.id"]);
+
+async function relayAgentState(message) {
+  const tabs = await chrome.tabs.query({});
+  await Promise.all(tabs.map(async (tab) => {
+    if (tab.id === undefined || !tab.url) return;
+    try {
+      const url = new URL(tab.url);
+      if (url.protocol !== "https:" || !officialHosts.has(url.hostname)) return;
+      await chrome.tabs.sendMessage(tab.id, { type: "nami:agent-state", active: message.active, step: message.step.slice(0, 320) });
+    } catch { return; }
+  }));
+}
+
 async function bringToFront(url) {
   const host = url.hostname;
   const tabs = await chrome.tabs.query({});
@@ -32,6 +46,10 @@ async function bringToFront(url) {
 
 window.addEventListener("message", async (event) => {
   if (event.source !== frame.contentWindow || event.origin !== origin) return;
+  if (event.data?.type === "nami:agent-state") {
+    if (typeof event.data.active === "boolean" && typeof event.data.step === "string") await relayAgentState(event.data);
+    return;
+  }
   const { type, url } = event.data ?? {};
   if (type !== "nami:focus-official" || typeof url !== "string") return;
   let target;

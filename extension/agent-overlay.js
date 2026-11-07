@@ -1,0 +1,91 @@
+(() => {
+  const host = document.createElement("div");
+  host.id = "nami-agent-overlay";
+  host.setAttribute("aria-hidden", "true");
+  host.style.cssText = "position:fixed!important;inset:0!important;z-index:2147483647!important;pointer-events:none!important;";
+  const shadow = host.attachShadow({ mode: "closed" });
+  const style = document.createElement("style");
+  style.textContent = `
+    :host, *, *::before, *::after { pointer-events: none !important; box-sizing: border-box; }
+    :host { all: initial; font-family: system-ui, sans-serif; }
+    .cursor { position: fixed; left: 0; top: 0; width: 24px; height: 24px; opacity: 0;
+      transition: transform 300ms ease-out, opacity 200ms ease-out; filter: drop-shadow(0 1px 3px #3b176e66); }
+    .ripple { position: fixed; width: 18px; height: 18px; margin: -9px; border: 2px solid #8b5cf6;
+      border-radius: 50%; background: #8b5cf633; animation: ripple 400ms ease-out forwards; }
+    @keyframes ripple { from { transform: scale(.5); opacity: 1; } to { transform: scale(3); opacity: 0; } }
+    .field { position: fixed; border: 2px solid #8b5cf6; border-radius: 6px; box-shadow: 0 0 12px #8b5cf688; }
+    .frame { position: fixed; inset: 0; border: 3px solid #8b5cf6; box-shadow: inset 0 0 16px #8b5cf655; }
+    .label { position: fixed; top: 3px; left: 50%; transform: translateX(-50%); padding: 5px 12px;
+      border-radius: 0 0 10px 10px; background: #6d28d9; color: white; font: 600 12px system-ui, sans-serif; }
+    .bubble { position: fixed; bottom: 16px; left: 16px; max-width: min(320px, calc(100vw - 32px));
+      padding: 12px 16px; border: 1px solid #c4b5fd; border-radius: 16px; background: #f5f3fff2;
+      color: #3b176e; box-shadow: 0 4px 20px #3b176e22; font: 14px/1.4 system-ui, sans-serif;
+      overflow-wrap: anywhere; white-space: pre-wrap; }
+    [hidden] { display: none !important; }
+  `;
+  shadow.append(style);
+  const layer = (className) => {
+    const element = document.createElement("div");
+    element.className = className;
+    shadow.append(element);
+    return element;
+  };
+  const frame = layer("frame");
+  const label = layer("label");
+  label.textContent = "Nami is filling this in";
+  const bubble = layer("bubble");
+  frame.hidden = label.hidden = bubble.hidden = true;
+  const field = layer("field");
+  field.hidden = true;
+  const cursor = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  cursor.setAttribute("class", "cursor");
+  cursor.setAttribute("viewBox", "0 0 24 24");
+  const arrow = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  arrow.setAttribute("d", "M2 2 20 12 12 14 9 22Z");
+  arrow.setAttribute("fill", "#8b5cf6");
+  arrow.setAttribute("stroke", "white");
+  arrow.setAttribute("stroke-width", "1.5");
+  cursor.append(arrow);
+  shadow.append(cursor);
+  document.documentElement.append(host);
+
+  let cursorTimer;
+  let fieldTimer;
+  const move = (event) => {
+    cursor.style.transform = `translate(${event.clientX}px, ${event.clientY}px)`;
+    cursor.style.opacity = "1";
+    clearTimeout(cursorTimer);
+    cursorTimer = setTimeout(() => { cursor.style.opacity = "0"; }, 1500);
+  };
+  const highlight = (event) => {
+    if (!(event.target instanceof Element)) return;
+    const rect = event.target.getBoundingClientRect();
+    field.style.left = `${rect.left}px`;
+    field.style.top = `${rect.top}px`;
+    field.style.width = `${rect.width}px`;
+    field.style.height = `${rect.height}px`;
+    field.hidden = false;
+    clearTimeout(fieldTimer);
+    fieldTimer = setTimeout(() => { field.hidden = true; }, 800);
+  };
+  for (const type of ["pointermove", "pointerdown", "click", "input", "focusin"]) {
+    document.addEventListener(type, (event) => {
+      if (!event.isTrusted) return;
+      if (type === "pointermove" || type === "pointerdown" || type === "click") move(event);
+      if (type === "pointerdown") {
+        const ripple = layer("ripple");
+        ripple.style.left = `${event.clientX}px`;
+        ripple.style.top = `${event.clientY}px`;
+        ripple.addEventListener("animationend", () => ripple.remove(), { once: true });
+      }
+      if (type === "input" || type === "focusin") highlight(event);
+    }, true);
+  }
+  chrome.runtime.onMessage.addListener((message, sender) => {
+    if (sender.id !== chrome.runtime.id || message?.type !== "nami:agent-state"
+      || typeof message.active !== "boolean" || typeof message.step !== "string") return;
+    frame.hidden = label.hidden = !message.active;
+    bubble.textContent = message.step.slice(0, 320).replace(/[–—]/g, ", ");
+    bubble.hidden = !message.active || !message.step.trim();
+  });
+})();

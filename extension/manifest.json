@@ -11,5 +11,11 @@
   "background": { "service_worker": "background.js" },
   "side_panel": { "default_path": "panel.html" },
   "options_page": "options.html",
-  "permissions": ["sidePanel", "storage", "tabs"]
+  "permissions": ["sidePanel", "storage", "tabs"],
+  "content_scripts": [{
+    "matches": ["https://evisa.imigrasi.go.id/*", "https://allindonesia.imigrasi.go.id/*", "https://lovebali.baliprov.go.id/*"],
+    "js": ["agent-overlay.js"],
+    "run_at": "document_idle",
+    "all_frames": false
+  }]
 }
