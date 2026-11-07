@@ -79,6 +79,7 @@ describe("POST /api/papers/start (route 5)", () => {
     expect(task).toContain("private/passeport.jpg, private/photo.jpg");
     expect(task).toContain("Passport number: 24AB12345");
     expect(task).toContain("Arrival: 2026-11-10T14:30+08:00");
+    expect(task).toContain("Purpose: tourism.");
   });
 
   it("logs nothing and never sends the task back", async () => {
