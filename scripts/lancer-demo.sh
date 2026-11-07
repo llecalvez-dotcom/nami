@@ -80,10 +80,21 @@ find_chrome() {
   done
 }
 
+# Only reuse a Chrome started with the agent's own profile, never a personal one.
+agent_chrome_running() {
+  local line
+  while IFS= read -r line; do
+    case " $line " in
+      *" --remote-debugging-port=$PORT "*" --user-data-dir=$PROFILE "* | \
+        *" --user-data-dir=$PROFILE "*" --remote-debugging-port=$PORT "*) return 0 ;;
+    esac
+  done < <(ps -A -o args= 2> /dev/null)
+  return 1
+}
+
 if chrome_up; then
-  PROFILE="(Chrome already running)"
-  say "A Chrome already listens on port $PORT: reusing it."
-  say "If it was not started by this script, quit it and run the script again (it needs the no-sleep flags)."
+  agent_chrome_running || die "Port $PORT is used by a browser that is not the agent's Chrome (profile $PROFILE). Quit it, or use --port."
+  say "The agent's Chrome already listens on port $PORT: reusing it."
 else
   CHROME="$(find_chrome)"
   [ -n "$CHROME" ] || die "Chrome not found (set CHROME_BIN)"
@@ -115,6 +126,7 @@ BRIDGE_LOG="$LOG_DIR/holo-local-browser.log"
     if [ "$quick" -ge 3 ]; then
       say "The H bridge keeps failing (code $code), giving up. Last lines of $BRIDGE_LOG:" >&2
       tail -n 5 "$BRIDGE_LOG" >&2
+      kill -TERM $$ 2> /dev/null
       exit 1
     fi
     say "H bridge stopped (code $code), restarting in 2 s with the same session id."
@@ -123,12 +135,18 @@ BRIDGE_LOG="$LOG_DIR/holo-local-browser.log"
 ) &
 BRIDGE_PID=$!
 
+# npm run dev starts next as a grandchild: stop the whole tree, not just npm.
+kill_tree() {
+  local child
+  for child in $(pgrep -P "$1" 2> /dev/null); do kill_tree "$child"; done
+  kill -TERM "$1" 2> /dev/null || true
+}
+
+NAMI_PID=""
 cleanup() {
   trap - EXIT INT TERM
-  if kill -0 "$BRIDGE_PID" 2> /dev/null; then
-    pkill -P "$BRIDGE_PID" 2> /dev/null || true
-    kill "$BRIDGE_PID" 2> /dev/null || true
-  fi
+  [ -n "$NAMI_PID" ] && kill_tree "$NAMI_PID"
+  kill_tree "$BRIDGE_PID"
   say "H bridge stopped. The agent's Chrome stays open (port $PORT)."
 }
 trap cleanup EXIT INT TERM
@@ -150,7 +168,11 @@ INFO
 
 # --- 3. Nami
 cd "$ROOT"
-if curl -fsS --max-time 2 -o /dev/null http://localhost:3000; then
+if home="$(curl -fsS --max-time 5 http://localhost:3000 2> /dev/null)"; then
+  case "$home" in
+    *"Nami prepares your trip"*) ;;
+    *) die "Port 3000 is used by another app. Stop it, then run the script again." ;;
+  esac
   say "Nami already runs on http://localhost:3000: keeping only the H bridge alive. Ctrl+C to stop it."
   wait "$BRIDGE_PID" || exit 1
   exit 0
@@ -160,4 +182,7 @@ if ! command -v npm > /dev/null 2>&1 && [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; 
   . "${NVM_DIR:-$HOME/.nvm}/nvm.sh"
 fi
 command -v npm > /dev/null 2>&1 || die "npm not found"
-npm run dev
+# In the background so that a bridge that gives up stops the whole demo (it signals this script).
+npm run dev &
+NAMI_PID=$!
+wait "$NAMI_PID"
