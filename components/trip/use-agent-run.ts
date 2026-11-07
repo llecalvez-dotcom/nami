@@ -54,9 +54,32 @@ export async function cancelAgent(sessionId: string): Promise<void> {
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function handleToolCall(tripId: string, sessionId: string, call: ToolRequest, secrets: Secrets, failedAcks: Set<string>) {
+export async function handleToolCall(tripId: string, sessionId: string, call: ToolRequest, secrets: Secrets, failedAcks: Set<string>, signal?: AbortSignal) {
   const trip = getTrip(tripId);
-  if (!trip) return;
+  if (!trip || trip.agent_run?.session_id !== sessionId || trip.agent_run.drained) return;
+  if (call.tool_name === "report_ready") {
+    const key = toolCallKey(call);
+    while (!signal?.aborted) {
+      const current = getTrip(tripId);
+      if (!current || current.agent_run?.session_id !== sessionId || current.agent_run.drained
+        || current.agent_run.handled_tool_ids?.includes(key)) return;
+      try {
+        await cancelAgent(sessionId);
+      } catch {
+        const latest = getTrip(tripId);
+        if (latest?.agent_run?.session_id === sessionId && !failedAcks.has(key)) {
+          saveTrip(pushAgentMessage(latest, "Nami could not stop the agent at the payment page. Retrying. Do not pay yet. Watch Chrome, and run holo local stop if needed."));
+        }
+        failedAcks.add(key);
+        await sleep(RETRY_MS);
+        continue;
+      }
+      const latest = getTrip(tripId);
+      if (latest?.agent_run?.session_id === sessionId) saveTrip(reportReady(latest, call, secrets));
+      return;
+    }
+    return;
+  }
   if (call.tool_name === "ask_user") {
     rawCalls.set(rawKey(sessionId, call), call);
     saveTrip(askUserFromAgent(trip, call, secrets));
@@ -79,7 +102,7 @@ async function handleToolCall(tripId: string, sessionId: string, call: ToolReque
   let uploadResult: string | null = null;
   try {
     uploadResult = await sendAgentAnswer(sessionId, call,
-      call.tool_name === "report_ready" ? "ok" : call.tool_name === "upload_file" ? "upload" : "Unknown tool: not available.");
+      call.tool_name === "upload_file" ? "upload" : "Unknown tool: not available.");
   } catch (error) {
     const key = toolCallKey(call);
     const latest = getTrip(tripId);
@@ -89,8 +112,7 @@ async function handleToolCall(tripId: string, sessionId: string, call: ToolReque
     return;
   }
   const latest = getTrip(tripId);
-  if (latest) saveTrip(call.tool_name === "report_ready" ? reportReady(latest, call, secrets)
-    : call.tool_name === "upload_file" ? recordPassportUpload(latest, call, uploadResult) : markToolHandled(latest, call));
+  if (latest) saveTrip(call.tool_name === "upload_file" ? recordPassportUpload(latest, call, uploadResult) : markToolHandled(latest, call));
 }
 
 // Polls route 6 while the live session is not drained (terminal and every event read).
@@ -122,9 +144,11 @@ export function useAgentRun(tripId: string, sessionId: string | null, enabled: b
           saveTrip(trip);
           failures = 0;
           if (changes.cancel_failed) await sleep(RETRY_MS);
-          for (const call of toolCalls) {
+          const ready = toolCalls.find((call) => call.tool_name === "report_ready");
+          for (const call of ready ? [ready] : toolCalls) {
             if (controller.signal.aborted) return;
-            await handleToolCall(tripId, sessionId, call, secretsRef.current, failedAcks);
+            await handleToolCall(tripId, sessionId, call, secretsRef.current, failedAcks, controller.signal);
+            if (getTrip(tripId)?.agent_run?.drained) return;
           }
         } catch (error) {
           if (controller.signal.aborted) return;

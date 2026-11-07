@@ -5,14 +5,14 @@ import { uploadSessionDocument } from "@/lib/agent-passport-upload";
 
 const AnswerSchema = z.object({
   tool_req: z.object({
-    tool_name: z.enum(["ask_user", "report_ready", "upload_file"]),
+    tool_name: z.enum(["ask_user", "upload_file"]),
     args: z.record(z.string(), z.unknown()).default({}),
     id: z.string().min(1).nullable(),
   }),
   result: z.string().trim().min(1).max(2000),
 });
 
-// Route 7: answer of the human (ask_user) or "ok" (report_ready). The answer is never logged.
+// Route 7: human answers and upload results. The answer is never logged.
 export async function POST(request: Request, ctx: RouteContext<"/api/agent/[id]/answer">) {
   const { id } = await ctx.params;
   if (!SESSION_ID.safeParse(id).success) return fail("Invalid session id.", 400);

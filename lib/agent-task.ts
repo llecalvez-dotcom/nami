@@ -26,7 +26,7 @@ export function buildPaperTask(input: PaperTaskInput): string {
     `You must NEVER click on: ${forbidden}. Never tick a final declaration on honour.`,
     "If a captcha, an account creation or an e-mail code appears, stop and call ask_user so that the human handles it.",
     `Never leave the domain ${input.domain}. Do not invent any information. If a piece of information is missing, call ask_user with a short question.`,
-    `${input.stopCondition} Then call report_ready.`,
+    `${input.stopCondition} Then call report_ready as your last action. After calling it the session ends. Do not take any further action.`,
     `Traveller: ${input.traveller}`,
     `Trip: ${input.trip}`,
     UNTRUSTED_CONTENT_RULE,

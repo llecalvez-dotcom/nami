@@ -177,11 +177,10 @@ describe("POST /api/agent/[id]/answer (route 7)", () => {
     expect(JSON.parse(call()[1].body as string)).toEqual({ kind: "tool_result", tool_req: toolReq, result: "me@example.com" });
   });
 
-  it("answers report_ready with ok", async () => {
-    fetch.mockResolvedValue(new Response(null, { status: 202 }));
+  it("refuses report_ready without sending any tool result to H", async () => {
     const report = { tool_name: "report_ready", args: { summary: "Stopped", filled_fields: ["surname"] }, id: "c2" };
-    await post("s-1", { tool_req: report, result: "ok" });
-    expect(JSON.parse(call()[1].body as string)).toMatchObject({ tool_req: report, result: "ok" });
+    expect((await post("s-1", { tool_req: report, result: "ok" })).status).toBe(400);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("refuses an unknown tool or an empty answer", async () => {

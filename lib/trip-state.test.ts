@@ -142,6 +142,7 @@ describe("agent tasks", () => {
     }
     expect(task).toContain("Never leave the domain evisa.imigrasi.go.id");
     expect(task).toContain(paper.stop_condition);
+    expect(task).toContain("call report_ready as your last action. After calling it the session ends. Do not take any further action.");
   });
 
   it("handles delayed custom dropdowns and hands blocked fields to the human", () => {
