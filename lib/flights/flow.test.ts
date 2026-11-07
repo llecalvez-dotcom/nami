@@ -227,6 +227,8 @@ describe("the flights session", () => {
     expect(matchFlight("the fastest", options, "cheapest")?.index).toBe(1);
     expect(matchFlight("Qatar or Emirates", options, "cheapest")).toBeNull();
     expect(matchFlight("hmm", options, "cheapest")).toBeNull();
+    expect(matchFlight("the one at 200 euros", options, "cheapest")).toBeNull();
+    expect(matchFlight("2", options, "cheapest")?.index).toBe(1);
     const unclear = answerQuestionWithText(offered, item.id, "hmm", REQUEST);
     expect(pendingFlightChoice(unclear)).toBeNull();
     expect(agentTexts(unclear)).toContain("Sorry, I didn't catch that.");

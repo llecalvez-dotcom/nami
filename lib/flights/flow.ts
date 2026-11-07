@@ -141,8 +141,10 @@ export function isChoiceQuestion(item: ConversationItem | undefined): boolean {
 }
 
 const spokenWords = (text: string) => normalizeText(text).replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
-// "cheap" also covers "cheapest": a word of the list starts a word of what was said.
-const saidWord = (said: string, word: string) => new RegExp(`(^|\\s)${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(said);
+// "cheap" also covers "cheapest": a word of the list starts a word of what was said. A digit ("2") is a whole word,
+// so "200" is a price, not the second flight.
+const saidWord = (said: string, word: string) =>
+  new RegExp(`(^|\\s)${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}${/^\d+$/.test(word) ? "(\\s|$)" : ""}`).test(said);
 
 // "Qatar" for "Qatar Airways", "France" for "Air France", "Garuda" for "KLM, Garuda Indonesia".
 const GENERIC_AIRLINE_WORDS = new Set(["air", "airways", "airlines", "airline", "lines", "fly", "jet"]);
