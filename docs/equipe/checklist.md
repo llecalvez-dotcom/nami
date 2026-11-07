@@ -16,7 +16,7 @@
 | F4 | Propositions : « Prepare my entry papers », vol, hôtel « soon » | ✅ | Nathan | 02 |
 | F5 | Cartes des papiers avec heure, source, officiel ou non | ✅ (testé par Devin avec les vraies clés : Bali, Tanzanie, Japon, Kenya) | Ali | 03 |
 | F6 | Champ « Try another country » pour le jury (visible avec `?demo=1`) | ✅ | Ali | 03 |
-| F7 | Passeport : saisie à la main par défaut ; lecture de la photo seulement si `PASSPORT_READER=h` et case de consentement cochée | 🟡 (testé par Devin sur un faux passeport ; vrai passeport pas testé, voir T8) | Ali | 03, PR #12 |
+| F7 | Passeport : saisie à la main par défaut ; lecture de la photo seulement si `PASSPORT_READER=h` et case de consentement cochée | 🟡 (cette PR : contrôle MRZ par champ et alerte de validité en direct, même en saisie manuelle ; données fictives uniquement) | Ali | 03, PR #12 |
 | F8 | Masquage des données sensibles en démo (`?demo=1`) | ✅ (2 derniers caractères du numéro, date de naissance cachée) | Ali | 03 |
 | F9 | Réglages de démo : « Local browser session », chemins des fichiers | 🔵 PR #14, test réel à faire | Clément | 05 |
 | F10 | Agent Activity en direct + « Stop agent » qui arrête vraiment la session H | 🔵 PR #14, test réel à faire | Clément | 05 |
@@ -34,7 +34,7 @@
 | B2 | `/api/trip/parse` : la phrase devient une demande structurée (modèle H) | ✅ | Nathan | 02 |
 | B3 | `lib/planner/` : quelles questions, quels modules, fenêtres d'ouverture | ✅ | Nathan | 02 |
 | B4 | `/api/formalities` : papiers cherchés en direct (Linkup) + contrôle des domaines officiels | ✅ (PR #6, L1 réussi) | Ali | 03 |
-| B5 | `/api/documents/extract` : lecture du passeport (vision H), un seul fournisseur, consentement exigé par le serveur | 🟡 (sur une fausse image, « Z » lu « 2 » sans alerte : à juger en T8) | Ali | 03, PR #12 |
+| B5 | `/api/documents/extract` : lecture du passeport (vision H), un seul fournisseur, consentement exigé par le serveur | 🟡 (cette PR : chiffres de contrôle MRZ et comparaison aux champs imprimés ; divergence signalée, jamais corrigée en silence) | Ali | 03, PR #12 |
 | B6 | `lib/h-agent.ts` + `/api/papers/start` + routes `agent` (suivre, répondre, arrêter) | 🔵 PR #14 : relue par Claude, arrêt hors domaine ajouté, à jour avec `main` (222 tests, lint, compilation OK) ; test réel à faire | Clément | 05 |
 | B6b | `/api/papers/start` accepte un papier en direct de n'importe quel pays, domaine officiel revérifié par le serveur | ⬜ (après la partie A) | Clément | 05, partie B |
 | B7 | Mode démo préparé (sessions lancées 5 min avant, heure réelle affichée) | ⬜ (ticket 06 à écrire) | Nathan | 06 |
@@ -53,7 +53,7 @@
 | T6 | F1 agent : l'agent remplit le visa jusqu'au paiement, 3 fois sur 3, une fois arrêté par « Stop agent » | ⬜ (PR #14) | Clément | `docs/tests/f1-evoa.md` |
 | T6b | Autre pays en beta (Kenya ou Tanzanie) : l'agent s'arrête avant le paiement ou passe la main, 1 passage | ⬜ (après T6) | Clément | `docs/tests/f1-autres-pays.md` |
 | T7 | L1 : Linkup trouve les papiers justes (Bali + 5 pays) | ✅ 5 pays sur 5 pour le papier principal, Bali identique à la table | Ali | `docs/tests/l1-linkup.md` |
-| T8 | F7 : lecture du vrai passeport, 7 champs justes (avec `PASSPORT_READER=h` en local) | ❓ | Ali | `docs/tests/f7-passeport.md` |
+| T8 | F7 : contrôle de lecture sur données fictives uniquement | 🟡 (cette PR : test de régression injectant 1 erreur « Z » lu « 2 », 1 détectée par le MRZ ; autres divergences et chiffres invalides couverts en tests unitaires, pas de nouveau test vision) | Ali | `docs/tests/f7-passeport.md` |
 
 ## 4. Sécurité et données
 

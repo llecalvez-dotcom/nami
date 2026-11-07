@@ -5,6 +5,7 @@ import { Camera, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { DocumentExtraction, PassportFieldKey } from "@/lib/contracts";
+import { expiryWarning } from "@/lib/passport-dates";
 
 const FIELDS: { key: PassportFieldKey; label: string; placeholder: string }[] = [
   { key: "surname", label: "Surname", placeholder: "MARTIN" },
@@ -38,6 +39,7 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
   const [values, setValues] = useState<Values | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const [consent, setConsent] = useState(false);
+  const [edited, setEdited] = useState<PassportFieldKey[]>([]);
   const requestId = useRef(0);
 
   useEffect(() => {
@@ -79,6 +81,7 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
       if (!response.ok) throw new Error(json.error ?? "The passport could not be read.");
       const result = json as DocumentExtraction;
       setExtraction(result);
+      setEdited([]);
       setValues(Object.fromEntries(FIELDS.map((f) => [f.key, result.fields[f.key] ?? ""])) as Values);
     } catch (e) {
       if (id !== requestId.current) return;
@@ -93,6 +96,8 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
 
   const manual = reader === "off" || values !== null;
   const displayedValues = values ?? EMPTY;
+  const trip = { return_date: returnDate, arrival_at: arrivalAt };
+  const liveExpiryWarning = expiryWarning(displayedValues.expiry_date, trip);
   const complete = manual && FIELDS.every((f) => displayedValues[f.key].trim());
   const hasData = Boolean(
     error || extraction || confirmed || (values && FIELDS.some((field) => values[field.key].trim())),
@@ -103,6 +108,7 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
     setBusy(false);
     setValues(null);
     setExtraction(null);
+    setEdited([]);
     setError(null);
     setConfirmed(false);
     setConsent(false);
@@ -163,7 +169,8 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
         </>
       )}
       {error ? <p className="text-sm text-attention-foreground">{error}</p> : null}
-      {extraction?.warnings.map((w) => (
+      {liveExpiryWarning ? <p className="text-sm text-attention-foreground">{liveExpiryWarning}</p> : null}
+      {extraction?.warnings.filter((w) => !w.startsWith("Your passport expires on ")).map((w) => (
         <p key={w} className="text-sm text-attention-foreground">
           {w}
         </p>
@@ -184,6 +191,9 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
               <label key={key} className="space-y-1">
                 <span className="text-xs text-muted-foreground">
                   {label}
+                  {extraction?.mrz_verified?.includes(key) && !edited.includes(key) ? (
+                    <span className="ml-1 text-success">Checked against MRZ</span>
+                  ) : null}
                   {low ? <span className="text-attention-foreground"> · check this</span> : null}
                 </span>
                 <Input
@@ -196,6 +206,7 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
                   aria-invalid={!displayedValues[key].trim() || undefined}
                   onChange={(e) => {
                     setConfirmed(false);
+                    setEdited((keys) => keys.includes(key) ? keys : [...keys, key]);
                     setValues({ ...displayedValues, [key]: e.target.value });
                   }}
                 />
