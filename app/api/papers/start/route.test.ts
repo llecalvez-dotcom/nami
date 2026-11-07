@@ -6,6 +6,7 @@ import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { findDocuments } from "@/lib/documents";
+import { uploadSessionDocument } from "@/lib/agent-passport-upload";
 
 const PASSPORT = {
   surname: "MARTIN",
@@ -97,6 +98,17 @@ describe("passport document handoff", () => {
     expect(task.split(path)).toHaveLength(2);
   });
 
+  it("binds the created session to the confirmed document for later server-side uploads", async () => {
+    expect((await start({ ...BODY, document_id: documentId })).status).toBe(201);
+    const connect = vi.fn(async () => ({
+      send: vi.fn(async () => ({ targetInfos: [] })),
+      close: vi.fn(),
+    }));
+    expect(await uploadSessionDocument("s-1",
+      { tool_name: "upload_file", args: { purpose: "passport" }, id: "upload-bound" }, connect)).toBe("no official tab");
+    expect(connect).toHaveBeenCalledOnce();
+  });
+
   it.each(["unknown", "../passport.jpg", "", "x".repeat(101)])("rejects an invalid id without calling H: %s", async (document_id) => {
     const response = await start({ ...BODY, document_id });
     expect(response.status).toBe(400);
@@ -154,7 +166,7 @@ describe("POST /api/papers/start (route 5)", () => {
     expect(body.max_time_s).toBe(900);
     expect(body.max_steps).toBe(80);
     expect(body.agent.environments).toEqual([{ id: "browser", kind: "web", host: "user_device", session_id: "local-42" }]);
-    expect(body.agent.tools.map((t: { name: string }) => t.name)).toEqual(["ask_user", "report_ready"]);
+    expect(body.agent.tools.map((t: { name: string }) => t.name)).toEqual(["ask_user", "report_ready", "upload_file"]);
     expect(body.agent.tools[0].input_schema.required).toEqual(["question", "field"]);
     expect(body.agent.tools[1].input_schema.required).toEqual(["summary", "filled_fields"]);
   });

@@ -11,6 +11,7 @@ import {
   decideProposal,
   reopenAgentQuestion,
   reportReady,
+  recordPassportUpload,
   startVisaRun,
   stopAgent,
   VISA_READY_MESSAGE,
@@ -48,6 +49,14 @@ function liveTrip(passportFileReady = false): Trip {
 }
 
 describe("real Bali trip", () => {
+  it("records a successful upload once without any file metadata, but not failed uploads", () => {
+    const call = { tool_name: "upload_file", args: { purpose: "passport" }, id: "upload-1" };
+    const trip = liveTrip();
+    const uploaded = recordPassportUpload(trip, call, "uploaded");
+    expect(uploaded.agent_steps.at(-1)).toBe("Nami gave the passport to the agent");
+    expect(recordPassportUpload(uploaded, call, "uploaded")).toBe(uploaded);
+    expect(recordPassportUpload(trip, call, "no official tab").agent_steps).toEqual(trip.agent_steps);
+  });
   it("proposes Create my visa and starts a live run", () => {
     const trip = liveTrip();
     expect(trip.agent_run).toMatchObject({ session_id: "s-1", state: "pending", next_index: 0, handled_tool_ids: [] });

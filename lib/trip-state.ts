@@ -544,3 +544,11 @@ export function reportReady(trip: Trip, call: ToolRequest, secrets: readonly (st
 export function markToolHandled(trip: Trip, call: ToolRequest): Trip {
   return markHandled(trip, call);
 }
+
+export function recordPassportUpload(trip: Trip, call: ToolRequest, result: string | null): Trip {
+  if (!trip.agent_run || (trip.agent_run.handled_tool_ids ?? []).includes(toolCallKey(call))) return trip;
+  const next = markToolHandled(trip, call);
+  return result === "uploaded"
+    ? { ...next, agent_steps: [...next.agent_steps, "Nami gave the passport to the agent"] }
+    : next;
+}
