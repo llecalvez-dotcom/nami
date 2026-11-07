@@ -43,7 +43,8 @@ export const BALI_PAPERS: readonly BaliPaper[] = [
       "Proceed to payment",
       "any button that chooses a payment method (card, bank transfer, e-wallet, virtual account)",
     ],
-    stop_condition: "Stop on the summary screen or the payment screen, without clicking anything on it.",
+    // Decision of 2026-11-07, 21 h: the demo stops before any data is sent to the government.
+    stop_condition: "Stop on step 1 of the application form, once the passport and the photo are uploaded or the page refuses them: never click Next there, because the next steps send the traveller's data to the government.",
     route_hint:
       "The e-VOA is applied for on this visa selection page: do not look for another page or site. Pick, in this order: the passport country (for example FRANCE), then General, Family, or Social, then Tourism, Family Visit, and Transit, then B1 - Tourist (Visa On Arrival). The length of stay (30 Days) fills itself. Then click Detail & Apply: a window with the visa conditions opens; click Apply in it to reach the application form. On the form, step 1 asks for the passport and the profile photo: use upload_file for each. The site fills some fields from the passport and shows countries in Indonesian: for a French passport, Passport/Country/Region and Issuing Country show PRANCIS, which is France; that is correct, leave it. For any other passport, check that both fields match the passport's country. If the site puts the whole name in First Name, set First Name to the given names and Last Name to every word of the passport surname (for example LE CALVEZ, not CALVEZ). Address in Indonesia: after the Postal Code is typed, Province, City, District and Village fill themselves; if they stay empty, call ask_user. Port of Entry Mode is Airport; for Bali, Port of Entry is listed as NGURAH RAI AIRPORT: pick it with pick_option.",
     observed_on: OBSERVED_ON,
