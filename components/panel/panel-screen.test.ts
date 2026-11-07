@@ -39,7 +39,7 @@ const visa: ConversationItem = {
 describe("the side panel shows one thing at a time", () => {
   it("shows Nami's sentence as a title on the wall, and the two answers", () => {
     const html = stage({ item: visa });
-    expect(html).toContain("For Bali you need an e-VOA.");
+    expect(html).toMatch(/For Bali you need an e.VOA\./);
     expect(html).toContain("Create my visa");
     expect(html).toContain("Not now");
   });

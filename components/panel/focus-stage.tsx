@@ -72,11 +72,11 @@ function sentenceOf(item: ConversationItem | null): string {
   return item.text;
 }
 
-// Nami's sentence: a large bold title on the wall, never on the painting.
+// Nami's sentence: a large bold title on the wall, never on the painting. "e-VOA" never breaks at its hyphen.
 export function Sentence({ text, size }: { text: string; size?: "xl" | "lg" | "md" }) {
   return (
     <p className="np-title" data-size={size ?? sentenceSize(text)}>
-      {text}
+      {text.replace(/\be-VOA\b/g, "e\u2011VOA")}
     </p>
   );
 }
@@ -141,7 +141,7 @@ function AgentChecklist({ agent }: { agent: AgentView }) {
           </li>
         ))}
       </ol>
-      <p role="status" aria-live="polite" className="mt-4 line-clamp-2 text-[13px] leading-snug text-[var(--np-ink-soft)]">
+      <p role="status" aria-live="polite" className="mt-4 line-clamp-2 text-[14px] leading-snug text-[var(--np-ink-soft)]">
         {agent.step}
       </p>
     </>
@@ -223,8 +223,8 @@ export function WaveMic({ voice, t, large }: { voice: VoiceInput; t: Translate; 
       aria-label={listening ? t("Listening…") : t("Speak")}
       className={cn(
         "np-press grid place-items-center rounded-full text-[var(--np-on-accent)] shadow-[0_6px_20px_rgb(21_35_43/0.18)] ring-4 ring-[var(--np-wall)] outline-none focus-visible:ring-[var(--paper-soft)]",
-        large ? "size-[68px]" : "size-14",
-        listening ? "bg-[var(--np-ink)]" : "bg-[var(--paper)]",
+        large ? "size-[68px]" : "size-[52px]",
+        listening ? "bg-[var(--np-ink)]" : large ? "bg-[var(--paper)]" : "bg-[var(--np-wall)] text-[var(--paper)]",
       )}
     >
       {voice.status === "transcribing" ? <Loader2 className="size-5 animate-spin" /> : listening ? <Square className="size-5 fill-current" /> : <Mic className={large ? "size-7" : "size-6"} />}
@@ -251,7 +251,7 @@ export function VoiceHint({ voice, t, unclear }: { voice: VoiceInput; t: Transla
             ? `${t("I heard:")} “${unclear}”. ${t("Say yes or no, or tap.")}`
             : null;
   return (
-    <p role="status" className="mb-2 min-h-5 text-center text-[13px] text-[var(--np-ink-soft)]">
+    <p role="status" className="mb-2 min-h-5 text-center text-[14px] text-[var(--np-ink-soft)]">
       {text}
     </p>
   );
@@ -296,8 +296,8 @@ export function TypeInstead({ onSubmit, t, placeholder }: { onSubmit: (text: str
 }
 
 // The item Nami waits for: its microphone, on the wave, opens by itself once Nami has read it aloud.
-function Answering(props: Props & { item: ConversationItem; compact: boolean }) {
-  const { item, t, compact, scene, ...handlers } = props;
+function Answering(props: Props & { item: ConversationItem }) {
+  const { item, t, scene, ...handlers } = props;
   const speaking = useSpeaking();
   const [unclear, setUnclear] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -326,7 +326,7 @@ function Answering(props: Props & { item: ConversationItem; compact: boolean }) 
 
   return (
     <>
-      <Painting scene={scene} compact={compact} wave={waveState(typed ? null : voice, speaking, working)} mic={typed ? undefined : <WaveMic voice={voice} t={t} />} />
+      <Painting scene={scene} wave={waveState(typed ? null : voice, speaking, working)} mic={typed ? undefined : <WaveMic voice={voice} t={t} />} />
       <Wall {...props} />
       <div className="px-5 pb-5">
         {typed ? (
@@ -366,12 +366,12 @@ function Answering(props: Props & { item: ConversationItem; compact: boolean }) 
 }
 
 // Nothing to answer: the wave follows Nami's voice and the agent; Stop while the agent works.
-function Resting(props: Props & { compact: boolean }) {
-  const { agent, busy, t, onStop, scene, compact } = props;
+function Resting(props: Props) {
+  const { agent, busy, t, onStop, scene } = props;
   const speaking = useSpeaking();
   return (
     <>
-      <Painting scene={scene} compact={compact} wave={waveState(null, speaking, agent !== null || busy !== null)} />
+      <Painting scene={scene} wave={waveState(null, speaking, agent !== null || busy !== null)} />
       <Wall {...props} />
       <div className="flex min-h-[76px] items-end px-5 pb-5">
         {agent ? (
@@ -385,12 +385,10 @@ function Resting(props: Props & { compact: boolean }) {
 }
 
 export function FocusStage(props: Props) {
-  const { item, agent, visual } = props;
-  // The painting gets shorter when there is more to read (the agent's steps, a document).
-  const compact = (agent !== null && !awaiting(item)) || visual !== null;
+  const { item } = props;
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      {item && awaiting(item) ? <Answering key={item.id} {...props} item={item} compact={compact} /> : <Resting {...props} compact={compact} />}
+      {item && awaiting(item) ? <Answering key={item.id} {...props} item={item} /> : <Resting {...props} />}
     </div>
   );
 }

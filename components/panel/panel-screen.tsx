@@ -218,7 +218,7 @@ function StartView({ onTrip, t }: { onTrip: (trip: Trip) => void; t: Translate }
 
   return (
     <>
-      <Painting scene="aube" compact={false} wave={busy ? "working" : waveState(voice, speaking, false)} mic={<WaveMic voice={voice} t={t} large />} />
+      <Painting scene="aube" hero wave={busy ? "working" : waveState(voice, speaking, false)} mic={<WaveMic voice={voice} t={t} large />} />
       <section className="min-h-0 flex-1 overflow-y-auto px-6 pt-12 pb-4">
         <Sentence text={busy ? t("Reading your trip…") : t("Tell me where you're going. I'll take care of the papers.")} size="xl" />
         <p className="mt-3 text-[15px] leading-snug text-[var(--np-ink-soft)]">{t("Speak, in any language. You keep the last word.")}</p>

@@ -590,7 +590,7 @@
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
   font-weight: 700;
   letter-spacing: -0.022em;
-  text-wrap: pretty;
+  text-wrap: balance;
 }
 .nami-panel .np-title[data-size="xl"] { font-size: 29px; line-height: 1.12; }
 .nami-panel .np-title[data-size="lg"] { font-size: 23px; line-height: 1.2; }
@@ -609,19 +609,18 @@
 .nami-panel .np-frame { position: relative; margin: 0 12px; flex: none; }
 .nami-panel .np-picture {
   position: relative;
-  height: clamp(190px, 40vh, 360px);
+  height: clamp(150px, 27vh, 240px);
   border-radius: 22px;
   overflow: hidden;
   background: #cfe2e8;
   transition: height 520ms var(--np-ease);
 }
-.nami-panel .np-frame[data-compact="true"] .np-picture { height: clamp(110px, 17vh, 160px); }
-.nami-panel .np-frame[data-compact="true"] .np-scene { background-position: center 50%; }
+.nami-panel .np-frame[data-hero="true"] .np-picture { height: clamp(190px, 35vh, 340px); }
 .nami-panel .np-scene {
   position: absolute;
   inset: 0;
   background-size: cover;
-  background-position: center 62%;
+  background-position: center 52%;
   opacity: 0;
   transition: opacity 1600ms var(--np-ease);
 }
