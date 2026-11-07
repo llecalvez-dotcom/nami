@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { filePaths, readAgentSettings } from "@/components/trip/agent-settings";
 import { cancelAgent, rawToolReq, sendAgentAnswer, sendFlightChoice } from "@/components/trip/use-agent-run";
-import { flightsStartBody, FLIGHTS_RETRY_PROPOSAL, isChoiceQuestion, isCriterionQuestion, pendingFlightChoice, startFlightsSession } from "@/lib/flights/flow";
+import { flightsStartBody, FLIGHTS_RETRY_PROPOSAL, isChoiceQuestion, isCriterionQuestion, openFlightQuestion, pendingFlightChoice, startFlightsSession } from "@/lib/flights/flow";
 import { googleFlightsUrl } from "@/lib/flights-agent";
 import type { PassportFields } from "@/lib/contracts";
 import { createVisaStartAttempt } from "@/lib/paper-start-client";
@@ -174,13 +174,19 @@ export function useTripActions({
     }
   };
 
+  // Spoken or tapped, the same follow-up: the search once the criterion is settled, the choice once a flight is.
+  const followFlights = (item: Trip["conversation"][number] | undefined, next: Trip) => {
+    if (isCriterionQuestion(item) && !openFlightQuestion(next, "flight_criterion")) void startFlightsRun();
+    if (isChoiceQuestion(item) && pendingFlightChoice(next)) void sendChoice();
+  };
+
   const answer = (itemId: string, value: string, label: string) => {
     const current = latest();
     if (!current) return;
     const item = current.conversation.find((i) => i.id === itemId);
-    update(answerQuestion(current, itemId, value, label));
-    if (isCriterionQuestion(item)) void startFlightsRun();
-    if (isChoiceQuestion(item)) void sendChoice();
+    const next = answerQuestion(current, itemId, value, label);
+    update(next);
+    followFlights(item, next);
   };
 
   const answerWithText = async (itemId: string, text: string) => {
@@ -192,7 +198,9 @@ export function useTripActions({
       current_request: current.request,
       question: item?.kind === "question" ? item.question : undefined,
     });
-    update(answerQuestionWithText(latest() ?? current, itemId, text, request));
+    const next = answerQuestionWithText(latest() ?? current, itemId, text, request);
+    update(next);
+    followFlights(item, next);
   };
 
   const answerAgent = async (itemId: string, value: string) => {

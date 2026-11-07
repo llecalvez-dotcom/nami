@@ -12,13 +12,16 @@ import {
   isCriterionQuestion,
   isFlightReadyMessage,
   longDate,
+  matchCriterion,
+  matchFlight,
+  openFlightQuestion,
   offerFlights,
   pendingFlightChoice,
   startFlightsSession,
 } from "@/lib/flights/flow";
 import { agentOfficialUrl } from "@/lib/official-tab";
 import { paperInFocus, readyPaper, agentChecklist } from "@/lib/panel-focus";
-import { answerQuestion, answerQuestionWithText, applyAgentChanges, createTripFromRequest, decideProposal, pushProposal, reportReady, stopAgent, type Trip } from "@/lib/trip-state";
+import { answerQuestion, answerQuestionWithText, applyAgentChanges, createTripFromRequest, decideProposal, needsPassportReconfirm, pushProposal, reportReady, stopAgent, type Trip } from "@/lib/trip-state";
 import { spokenShort } from "@/lib/voice/conversation-speech";
 import { matchOption } from "@/lib/voice/short-answers";
 
@@ -132,6 +135,42 @@ describe("yes to the flights", () => {
     expect(flightsStartBody({ ...trip, request: { ...trip.request, return_date: null } })).toBeNull();
   });
 
+  it("no to the proposed dates asks for the return date instead of keeping it", () => {
+    let trip = decideProposal(proposed(), last(proposed()).id, true, NOW);
+    const dates = last(trip);
+    trip = answerQuestionWithText(trip, dates.id, "non", REQUEST);
+    expect(agentTexts(trip)).toContain("Okay, tell me your return date.");
+    const again = last(trip);
+    if (again.kind !== "question") throw new Error("no question");
+    expect(again.question).toBe("You leave on Monday 23 November. When do you want to come back?");
+    expect(again.options).toHaveLength(3);
+    trip = answerQuestionWithText(trip, again.id, "no, the fifth of December", { ...REQUEST, return_date: "2026-12-05" });
+    expect(trip.request.return_date).toBe("2026-12-05");
+    expect(isCriterionQuestion(last(trip))).toBe(true);
+  });
+
+  it("a spoken criterion is matched on its words; unknown words ask the same question again, and the search starts once", () => {
+    let trip = decideProposal(proposed(), last(proposed()).id, true, NOW);
+    const dates = last(trip) as Extract<Trip["conversation"][number], { kind: "question" }>;
+    trip = answerQuestion(trip, dates.id, dates.options[0].value, dates.options[0].label);
+    const criterion = last(trip) as Extract<Trip["conversation"][number], { kind: "question" }>;
+    const unclear = answerQuestionWithText(trip, criterion.id, "euh je sais pas trop", REQUEST);
+    expect(agentTexts(unclear)).toContain("Sorry, I didn't catch that.");
+    expect(agentTexts(unclear)).not.toContain(FLIGHTS_SEARCHING_MESSAGE);
+    const again = last(unclear) as Extract<Trip["conversation"][number], { kind: "question" }>;
+    expect(again.question).toBe(criterion.question);
+    expect(again.options).toEqual(criterion.options);
+    expect(openFlightQuestion(unclear, "flight_criterion")).toBe(true);
+    const settled = answerQuestionWithText(unclear, again.id, "I want the cheapest one", REQUEST);
+    expect(openFlightQuestion(settled, "flight_criterion")).toBe(false);
+    expect(flightCriterion(settled)).toBe("cheapest");
+    expect(agentTexts(settled).filter((t) => t === FLIGHTS_SEARCHING_MESSAGE)).toHaveLength(1);
+    expect(matchCriterion("sans escale si possible")).toBe("fewest_stops");
+    expect(matchCriterion("le plus rapide")).toBe("fastest");
+    expect(matchCriterion("the best balance")).toBe("best");
+    expect(matchCriterion("le moins cher et le plus rapide")).toBeNull();
+  });
+
   it("longDate is deterministic and in English", () => {
     expect(longDate("2026-11-23")).toBe("Monday 23 November");
   });
@@ -175,6 +214,34 @@ describe("the flights session", () => {
     expect(last(trip)).toMatchObject({ kind: "agent", text: "I'm opening Qatar Airways, 912 €, 1 stop in Doha, 18 h 30, leaves at 13:50, watch the tab on the left." });
     expect(trip.agent_steps).toContain("You chose Qatar Airways, 912 €");
     expect(pendingFlightChoice(trip)).toEqual({ tool_req: REPORT, flight: FLIGHTS[0] });
+  });
+
+  it("a spoken choice is matched by airline, ordinal or criterion; unknown words ask again with the same report_flights call", () => {
+    const offered = offerFlights(searching(), REPORT, FLIGHTS);
+    const item = last(offered) as Extract<Trip["conversation"][number], { kind: "question" }>;
+    const options = flightsResult(offered.agent_run)!.options;
+    expect(matchFlight("Qatar", options, "cheapest")?.index).toBe(1);
+    expect(matchFlight("le deuxième", options, "cheapest")?.index).toBe(1);
+    expect(matchFlight("the third one", options, "cheapest")?.index).toBe(3);
+    expect(matchFlight("the cheapest one", options, "cheapest")?.index).toBe(2);
+    expect(matchFlight("the fastest", options, "cheapest")?.index).toBe(1);
+    expect(matchFlight("Qatar or Emirates", options, "cheapest")).toBeNull();
+    expect(matchFlight("hmm", options, "cheapest")).toBeNull();
+    const unclear = answerQuestionWithText(offered, item.id, "hmm", REQUEST);
+    expect(pendingFlightChoice(unclear)).toBeNull();
+    expect(agentTexts(unclear)).toContain("Sorry, I didn't catch that.");
+    const again = last(unclear) as Extract<Trip["conversation"][number], { kind: "question" }>;
+    expect(again.field).toBe("flight_choice");
+    expect(again.options).toEqual(item.options);
+    const chosen = answerQuestionWithText(unclear, again.id, "Qatar please", REQUEST);
+    expect(pendingFlightChoice(chosen)).toEqual({ tool_req: REPORT, flight: FLIGHTS[0] });
+    expect(again.id).not.toBe(item.id);
+    expect(chosen.conversation.find((i) => i.id === again.id)).toMatchObject({ answer: item.options[1].label });
+    expect(chosen.request).toEqual(offered.request);
+  });
+
+  it("a flights run needs no passport reconfirmation after a reload", () => {
+    expect(needsPassportReconfirm(searching().agent_run, false)).toBe(false);
   });
 
   it("report_ready ends the run on the booking page with the final message, no proposal", () => {
