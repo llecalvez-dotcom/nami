@@ -264,3 +264,14 @@ describe("findFormalities: Linkup wording wins over its own flags", () => {
     expect(result.formalities[0].official_cost).toBe("Not stated on the source");
   });
 });
+
+describe("findFormalities: Bali cost not stated live", () => {
+  it("shows the cost of our last check, said as such, without calling it a difference", async () => {
+    const unknown = structuredClone(BALI_LIVE);
+    unknown.formalities[1].official_cost = "Not stated";
+    const result = await run(BALI, fakeFetch({ linkup: answer(unknown) }));
+    expect(result.formalities[1].official_cost).toBe("Free (not stated live; our last check)");
+    expect(result.formalities[1].differs).toEqual([]);
+    expect(result.differs_from_last_check).toBe(false);
+  });
+});

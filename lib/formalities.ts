@@ -171,7 +171,7 @@ function compareWithTable(item: LiveFormality, paper: BaliPaper): string[] {
   const differs: string[] = [];
   const live = costAmount(item.official_cost);
   const table = costAmount(paper.official_cost);
-  if (live !== table) differs.push(`cost: ${item.official_cost} live, ${paper.official_cost} on our last check`);
+  if (live !== null && live !== table) differs.push(`cost: ${item.official_cost} live, ${paper.official_cost} on our last check`);
   const host = hostOf(item.official_url);
   if (host !== paper.domain) differs.push(`site: ${host ?? "none"} live, ${paper.domain} on our last check`);
   return differs;
@@ -185,9 +185,11 @@ function applyBaliTable(formalities: LiveFormality[], input: FormalitiesInput) {
     if (!paper) return item;
     taken.add(paper.id);
     const window = windows.find((w) => w.id === paper.id);
+    const costUnknown = costAmount(item.official_cost) === null;
     return {
       ...item,
       id: paper.id,
+      official_cost: costUnknown ? `${paper.official_cost} (not stated live; our last check)` : item.official_cost,
       opens_at: window?.opens_at ?? null,
       closes_at: window?.closes_at ?? null,
       differs: compareWithTable(item, paper),
