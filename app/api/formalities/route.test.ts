@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "@/app/api/formalities/route";
+import { resetGuards } from "@/lib/api-guard";
 
 function call(body: unknown) {
   return POST(new Request("http://localhost/api/formalities", { method: "POST", body: JSON.stringify(body) }));
@@ -9,6 +10,10 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
+});
+
+beforeEach(() => {
+  resetGuards();
 });
 
 describe("POST /api/formalities", () => {

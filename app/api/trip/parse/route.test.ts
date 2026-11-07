@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CompleteJson } from "@/lib/llm";
+import { resetGuards } from "@/lib/api-guard";
 
 const complete = vi.fn<CompleteJson>();
 vi.mock("@/lib/llm", () => ({ completeJson: () => complete }));
@@ -23,6 +24,7 @@ function call(body: unknown) {
 }
 
 beforeEach(() => {
+  resetGuards();
   complete.mockReset();
 });
 

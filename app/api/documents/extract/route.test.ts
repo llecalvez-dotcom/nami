@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { POST } from "@/app/api/documents/extract/route";
+import { GET, POST } from "@/app/api/documents/extract/route";
+import { resetGuards } from "@/lib/api-guard";
 
 const SPECIMEN = {
   surname: "MARTIN",
@@ -12,19 +13,26 @@ const SPECIMEN = {
   confidence: { surname: 0.9 },
 };
 
-function form(image: Blob | null, extra: Record<string, string> = {}) {
+async function form(image: Blob | null, extra: Record<string, string> = {}, consentProvider: string | null = "h") {
   const body = new FormData();
   if (image) body.set("image", image, "specimen.jpg");
+  if (consentProvider !== null) body.set("consent_provider", consentProvider);
   for (const [k, v] of Object.entries(extra)) body.set(k, v);
-  return POST(new Request("http://localhost/api/documents/extract", { method: "POST", body }));
+  const source = new Request("http://localhost/api/documents/extract", { method: "POST", body });
+  const bytes = await source.arrayBuffer();
+  const headers = new Headers(source.headers);
+  headers.set("content-length", String(bytes.byteLength));
+  return POST(new Request(source.url, { method: "POST", headers, body: bytes }));
 }
 
 const jpeg = (bytes = 16) => new Blob([new Uint8Array(bytes)], { type: "image/jpeg" });
 const hAnswer = (content: unknown) => Response.json({ choices: [{ message: { content: JSON.stringify(content) } }] });
 
 beforeEach(() => {
+  resetGuards();
   vi.stubEnv("HAI_API_KEY", "h-key");
   vi.stubEnv("ANTHROPIC_API_KEY", "");
+  vi.stubEnv("PASSPORT_READER", "h");
 });
 
 afterEach(() => {
@@ -58,18 +66,45 @@ describe("POST /api/documents/extract (route 12)", () => {
     expect(body.warnings[0]).toContain("less than 6 months");
   });
 
-  it("falls back to Claude when H fails", async () => {
+  it("does not fall back to Anthropic when the selected H reader fails", async () => {
     vi.stubEnv("ANTHROPIC_API_KEY", "a-key");
     vi.spyOn(console, "error").mockImplementation(() => {});
     const fetch = vi.fn(async (url: string | URL | Request) =>
       String(url).includes("hcompany")
-        ? new Response("no", { status: 401 })
+        ? new Response("secret response", { status: 401 })
         : Response.json({ content: [{ type: "text", text: JSON.stringify(SPECIMEN) }] }),
     );
     vi.stubGlobal("fetch", fetch);
     const response = await form(jpeg());
-    expect(response.status).toBe(200);
-    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(response.status).toBe(502);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(String(fetch.mock.calls[0][0])).toContain("hcompany");
+    expect(await response.text()).not.toContain("secret response");
+  });
+
+  it("calls only Anthropic when Anthropic is selected", async () => {
+    vi.stubEnv("PASSPORT_READER", "anthropic");
+    vi.stubEnv("ANTHROPIC_API_KEY", "a-key");
+    const fetch = vi.fn(async (url: string | URL | Request) => {
+      if (!String(url).includes("api.anthropic.com")) throw new Error("Unexpected provider");
+      return Response.json({ content: [{ type: "text", text: JSON.stringify(SPECIMEN) }] });
+    });
+    vi.stubGlobal("fetch", fetch);
+    expect((await form(jpeg(), {}, "anthropic")).status).toBe(200);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(String(fetch.mock.calls[0][0])).toContain("api.anthropic.com");
+  });
+
+  it.each([
+    ["missing", null],
+    ["mismatched", "anthropic"],
+  ])("rejects %s consent before calling a provider", async (_label, consentProvider) => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    const response = await form(jpeg(), {}, consentProvider);
+    expect(response.status).toBe(403);
+    expect((await response.json()).error).toBe("Confirm that the photo may be sent to H Company first.");
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -83,7 +118,26 @@ describe("POST /api/documents/extract (route 12)", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("answers 503 when no vision model is configured", async () => {
+  it("requires a content length for multipart uploads", async () => {
+    const request = new Request("http://localhost/api/documents/extract", {
+      method: "POST",
+      headers: { "content-type": "multipart/form-data; boundary=test" },
+      body: "--test--",
+    });
+    expect(request.headers.has("content-length")).toBe(false);
+    const response = await POST(request);
+    expect(response.status).toBe(411);
+    expect(await response.json()).toEqual({ error: "Length required." });
+  });
+
+  it("answers 503 when passport reading is off by default", async () => {
+    vi.stubEnv("PASSPORT_READER", "");
+    const response = await form(jpeg());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: "Automatic reading is off. Type the fields." });
+  });
+
+  it("answers 503 when H is selected without its key", async () => {
     vi.stubEnv("HAI_API_KEY", "");
     expect((await form(jpeg())).status).toBe(503);
   });
@@ -94,5 +148,13 @@ describe("POST /api/documents/extract (route 12)", () => {
     const response = await form(jpeg());
     expect(response.status).toBe(502);
     expect(await response.text()).not.toContain("secret body");
+  });
+});
+
+describe("GET /api/documents/extract", () => {
+  it("returns the selected reader", async () => {
+    vi.stubEnv("PASSPORT_READER", "anthropic");
+    vi.stubEnv("ANTHROPIC_API_KEY", "a-key");
+    expect(await (await GET()).json()).toEqual({ reader: "anthropic" });
   });
 });
