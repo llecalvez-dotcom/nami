@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, mkdir, rename, rm, symlink, truncate, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, realpath, rename, rm, symlink, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
@@ -15,7 +15,7 @@ let root: string;
 const request = (path: string) => new Request(`http://localhost/api/documents/${path}`);
 
 beforeEach(async () => {
-  base = await mkdtemp(join(tmpdir(), "nami-fictitious-documents-"));
+  base = await realpath(await mkdtemp(join(tmpdir(), "nami-fictitious-documents-")));
   root = join(base, "documents");
   await mkdir(root);
   vi.stubEnv("NODE_ENV", "test");
