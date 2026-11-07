@@ -22,7 +22,8 @@ export default function AccessPage() {
         body: JSON.stringify({ code }),
       });
       if (!response.ok) throw new Error("Invalid access code.");
-      router.replace("/");
+      const next = new URLSearchParams(window.location.search).get("next");
+      router.replace(next && next.startsWith("/") && !next.startsWith("//") ? next : "/");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to verify access code.");
     } finally {
