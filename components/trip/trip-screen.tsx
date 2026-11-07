@@ -273,7 +273,7 @@ export function TripScreen({ id }: { id: string }) {
             />
           </section>
           <aside aria-label="Trip folder" className="min-w-0 lg:sticky lg:top-24 lg:self-start">
-            <Dossier trip={trip} onStop={() => void stop()} livePapers={livePapers}>
+            <Dossier trip={trip} onStop={() => void stop()} livePapers={livePapers} demo={demo}>
               {reconfirm ? (
                 <p role="status" className="rounded-2xl border border-primary/40 bg-background p-4 text-sm">
                   The agent may still be running in Chrome. Confirm your passport fields again: I show its progress here

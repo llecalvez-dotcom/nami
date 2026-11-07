@@ -6,6 +6,7 @@ export const API_LIMITS = {
   access: 1024,
   papers: 16 * 1024,
   documents: 1024,
+  screen: 1024,
 } as const;
 
 const QUOTA_LIMITS = {
@@ -17,6 +18,7 @@ const QUOTA_LIMITS = {
   // Each call starts a paid H agent session in the traveller's Chrome.
   papers: 5,
   documents: 100,
+  screen: 180,
 } as const;
 
 const CONCURRENCY_LIMITS = {
@@ -27,6 +29,7 @@ const CONCURRENCY_LIMITS = {
   access: 2,
   papers: 1,
   documents: 4,
+  screen: 2,
 } as const;
 
 const WINDOW_MS = 10 * 60 * 1000;
