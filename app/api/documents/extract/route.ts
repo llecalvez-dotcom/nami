@@ -1,12 +1,5 @@
-import {
-  ACCEPTED_IMAGE_TYPES,
-  configuredReader,
-  extractPassport,
-  MAX_IMAGE_BYTES,
-  type PassportImage,
-  readerName,
-  TripDatesSchema,
-} from "@/lib/passport";
+import { configuredReader, readerName } from "@/lib/passport";
+import { extractPassportImage, passportConsentError } from "@/lib/passport-extraction";
 import { guard } from "@/lib/api-guard";
 
 const fail = (error: string, status: number) => Response.json({ error }, { status });
@@ -30,31 +23,12 @@ export async function POST(request: Request) {
     } catch {
       return fail("Expected a multipart form with an image.", 400);
     }
-    if (form.get("consent_provider") !== reader.name) {
-      const provider = reader.name === "h" ? "H Company" : "Anthropic";
-      return fail(`Confirm that the photo may be sent to ${provider} first.`, 403);
-    }
-
-    const image = form.get("image");
-    if (!(image instanceof Blob) || image.size === 0) return fail("No image received.", 400);
-    if (!(ACCEPTED_IMAGE_TYPES as readonly string[]).includes(image.type)) return fail("Send a JPEG or PNG photo.", 415);
-    if (image.size > MAX_IMAGE_BYTES) return fail("Photo too large (5 MB max).", 413);
-
-    const trip = TripDatesSchema.safeParse({
+    const consentError = passportConsentError(reader, form.get("consent_provider"));
+    if (consentError) return consentError;
+    return await extractPassportImage(form.get("image"), {
       return_date: form.get("return_date") || null,
       arrival_at: form.get("arrival_at") || null,
-    });
-    if (!trip.success) return fail("Invalid trip dates.", 400);
-
-    const passport: PassportImage = {
-      base64: Buffer.from(await image.arrayBuffer()).toString("base64"),
-      mimeType: image.type as PassportImage["mimeType"],
-    };
-    try {
-      return Response.json(await extractPassport(passport, trip.data, reader));
-    } catch {
-      return fail("The passport could not be read. Try a sharper photo, or type the fields.", 502);
-    }
+    }, reader);
   } finally {
     lease.release();
   }
