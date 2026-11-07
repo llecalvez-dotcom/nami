@@ -60,4 +60,10 @@ describe("map countries", () => {
   it("home falls back to France without trips", () => {
     expect(homeCountry([])).toBe("FR");
   });
+  it("ignores the sample trip when choosing home if real trips exist", () => {
+    const sample = { sample: true, request: { origin_country: "FR", nationality: "FR" } } as never;
+    const real = { sample: false, request: { origin_country: "BE", nationality: "BE" } } as never;
+    expect(homeCountry([sample, real])).toBe("BE");
+    expect(homeCountry([sample])).toBe("FR");
+  });
 });

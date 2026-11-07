@@ -66,9 +66,10 @@ export function progressRatio(trip: Trip): number {
   return steps.filter((s) => s.state === "done").length / steps.length;
 }
 
-export function homeCountry(trips: Pick<Trip, "request">[], fallback = "FR"): string {
+export function homeCountry(trips: (Pick<Trip, "request"> & { sample?: boolean })[], fallback = "FR"): string {
+  const real = trips.filter((t) => !t.sample);
   const counts = new Map<string, number>();
-  for (const t of trips) {
+  for (const t of real.length ? real : trips) {
     const iso = t.request.origin_country ?? t.request.nationality;
     if (iso) counts.set(iso, (counts.get(iso) ?? 0) + 1);
   }
