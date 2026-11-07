@@ -21,7 +21,8 @@ import {
 import { getTrip, saveTrip } from "@/lib/trip-store";
 
 // An empty local session lets the server use NAMI_LOCAL_SESSION_ID (the side panel shows no settings).
-async function startVisaSession(trip: Trip, passport: PassportFields, documentId: string | null): Promise<string> {
+// photoDocumentId: the ID photo confirmed in the side panel, resolved on the server like the passport (ticket 16).
+async function startVisaSession(trip: Trip, passport: PassportFields, documentId: string | null, photoDocumentId?: string): Promise<string> {
   const settings = readAgentSettings();
   const attempt = createVisaStartAttempt({
     request: trip.request,
@@ -30,6 +31,7 @@ async function startVisaSession(trip: Trip, passport: PassportFields, documentId
     local_session_id: settings.local_session_id.trim(),
     file_paths: filePaths(settings.files),
     ...(documentId ? { document_id: documentId } : {}),
+    ...(photoDocumentId ? { photo_document_id: photoDocumentId } : {}),
   }, { scope: trip.id });
   return attempt();
 }
@@ -62,10 +64,14 @@ export function useTripActions({
   const update = (next: Trip) => saveTrip(next);
   const latest = () => (trip ? getTrip(trip.id) ?? trip : null);
 
-  // confirmedPassport: the fields confirmed in this very event, before the next render carries them.
-  const createVisa = async (itemId: string, confirmedPassport?: PassportFields) => {
+  // confirmed: what the side panel confirmed in this very event, before the next render carries it.
+  const createVisa = async (
+    itemId: string,
+    confirmed?: { passport: PassportFields; documentId: string | null; photoDocumentId?: string },
+  ) => {
     const current = latest();
-    const fields = confirmedPassport ?? passport;
+    const fields = confirmed?.passport ?? passport;
+    const passportDocument = confirmed ? confirmed.documentId : documentId;
     if (starting || !current) return;
     if (!fields) {
       const documentsAvailable = await discover("/api/documents/find", (json) => json.enabled === true);
@@ -79,8 +85,8 @@ export function useTripActions({
     }
     setStarting(true);
     try {
-      const sessionId = await startVisaSession(current, fields, documentId);
-      const started = startVisaRun(latest() ?? current, itemId, sessionId, new Date(), documentId !== null);
+      const sessionId = await startVisaSession(current, fields, passportDocument, confirmed?.photoDocumentId);
+      const started = startVisaRun(latest() ?? current, itemId, sessionId, new Date(), passportDocument !== null);
       update(started);
       onStarted?.(started);
     } catch (error) {

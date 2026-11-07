@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowRight, Check, Plus, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Conversation } from "@/components/trip/conversation";
@@ -10,10 +10,19 @@ import { useTripActions } from "@/components/trip/use-trip-actions";
 import { MicButton, VoiceStatusLine } from "@/components/voice/mic-button";
 import { MuteToggle } from "@/components/voice/mute-toggle";
 import { useVoiceInput } from "@/components/voice/use-voice-input";
-import type { PassportFields } from "@/lib/contracts";
+import type { DocumentExtraction, PassportFields } from "@/lib/contracts";
+import { bestFirst, foundPassportText, foundPhotoText, readSummary, type Reader } from "@/lib/panel-documents";
 import { requestTripParse } from "@/lib/trip-parse-client";
-import { createTripFromRequest, isAgentActive, needsPassportReconfirm, pushAgentMessage, type Trip } from "@/lib/trip-state";
-import { saveTrip, useTrips } from "@/lib/trip-store";
+import {
+  acceptProposal,
+  createTripFromRequest,
+  isAgentActive,
+  needsPassportReconfirm,
+  pushAgentMessage,
+  pushProposal,
+  type Trip,
+} from "@/lib/trip-state";
+import { getTrip, saveTrip, useTrips } from "@/lib/trip-store";
 import { cn } from "@/lib/utils";
 
 const CURRENT_TRIP_KEY = "nami.panel.trip";
@@ -125,13 +134,45 @@ function StartView({ onTrip }: { onTrip: (trip: Trip) => void }) {
   );
 }
 
+type Found = { id: string; name: string; score: number };
+
+async function findDocuments(kind: "passport" | "photo"): Promise<Found[]> {
+  try {
+    const response = await fetch(`/api/documents/find?kind=${kind}`, { cache: "no-store" });
+    if (!response.ok) return [];
+    const body = (await response.json()) as { documents?: Found[] };
+    return bestFirst(body.documents ?? []);
+  } catch {
+    return [];
+  }
+}
+
+async function documentReader(): Promise<Reader | null> {
+  try {
+    const response = await fetch("/api/documents/extract", { cache: "no-store" });
+    const body = (await response.json()) as { reader?: string };
+    return body.reader === "h" || body.reader === "anthropic" ? body.reader : null;
+  } catch {
+    return null;
+  }
+}
+
 function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
   const [passport, setPassport] = useState<PassportFields | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [searchRequest, setSearchRequest] = useState(0);
+  const [manual, setManual] = useState(false);
   const [editing, setEditing] = useState(false);
-  // The visa proposal the traveller accepted before the passport was there: it starts once the passport is confirmed.
-  const waitingVisa = useRef<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  // The spoken passport and photo steps, in memory only (never in the saved trip).
+  const flow = useRef<{
+    visaItem: string | null;
+    passports: Found[];
+    reader: Reader | null;
+    offered: string | null;
+    read: { fields: PassportFields; documentId: string } | null;
+    photos: Found[];
+  }>({ visaItem: null, passports: [], reader: null, offered: null, read: null, photos: [] });
   const secrets = useMemo(() => [passport?.passport_number, passport?.birth_date], [passport]);
   const run = trip.agent_run;
   const reconfirm = needsPassportReconfirm(run, passport !== null);
@@ -146,14 +187,107 @@ function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
     // before the agent reaches it would create a second official tab, and upload_file refuses to choose between two.
     onStarted: (started) => saveTrip(pushAgentMessage(started, WATCH_MESSAGE)),
   });
+  const latest = () => getTrip(trip.id) ?? trip;
+  const say = (text: string) => saveTrip(pushAgentMessage(latest(), text));
+  const ask = (action: "read_passport" | "confirm_passport" | "use_photo", text: string, yes: string, no: string) =>
+    saveTrip(pushProposal(latest(), action, text, yes, no));
+
+  // The visa first: the entry papers are accepted for the traveller, the visa proposal follows right away.
+  useEffect(() => {
+    const papers = trip.conversation.find((i) => i.kind === "proposal" && i.action === "papers" && i.decision === null);
+    if (papers) actions.decide(papers.id, true);
+  });
+
+  const fallBackToCard = (text: string) => {
+    say(text);
+    setManual(true);
+    setSearchRequest((request) => request + 1);
+  };
+
+  const startAgent = (photoDocumentId?: string) => {
+    const read = flow.current.read;
+    const visaItem = flow.current.visaItem;
+    if (!read || !visaItem) return;
+    void actions.createVisa(visaItem, { passport: read.fields, documentId: read.documentId, photoDocumentId });
+  };
+
+  const offerPassport = () => {
+    const next = flow.current.passports.shift();
+    if (!next || !flow.current.reader) {
+      fallBackToCard("I could not find your passport on this computer. Send me a photo of it, or type its fields below.");
+      return;
+    }
+    flow.current.offered = next.id;
+    ask("read_passport", foundPassportText(next, flow.current.reader), "Yes, read it", "Not this one");
+  };
+
+  const lookForPassport = async () => {
+    setBusy("Looking for your passport…");
+    const [passports, reader] = await Promise.all([findDocuments("passport"), documentReader()]);
+    setBusy(null);
+    flow.current.passports = passports;
+    flow.current.reader = reader;
+    offerPassport();
+  };
+
+  const readPassport = async () => {
+    const documentToRead = flow.current.offered;
+    const reader = flow.current.reader;
+    if (!documentToRead || !reader) return;
+    setBusy("Reading your passport…");
+    try {
+      const response = await fetch("/api/documents/extract-found", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: documentToRead, consent_provider: reader }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error ?? "The passport could not be read.");
+      const summary = readSummary(body as DocumentExtraction);
+      if (!summary.ok) return fallBackToCard(summary.text);
+      flow.current.read = { fields: summary.fields, documentId: documentToRead };
+      ask("confirm_passport", summary.text, "Yes, that's me", "Let me check");
+    } catch (error) {
+      fallBackToCard(`${(error as Error).message} Send me a photo of your passport, or type its fields below.`);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const confirmPassport = async () => {
+    const read = flow.current.read;
+    if (!read) return;
+    setPassport(read.fields);
+    setDocumentId(read.documentId);
+    setBusy("Looking for your ID photo…");
+    const photos = await findDocuments("photo");
+    setBusy(null);
+    flow.current.photos = photos;
+    const photo = photos[0];
+    if (photo) ask("use_photo", foundPhotoText(photo), "Yes, use it", "No");
+    else startAgent();
+  };
 
   const decide = (itemId: string, accepted: boolean) => {
-    const item = trip.conversation.find((i) => i.id === itemId);
-    if (accepted && item?.kind === "proposal" && item.action === "create_visa" && !passport) waitingVisa.current = itemId;
+    const current = latest();
+    const item = current.conversation.find((i) => i.id === itemId);
+    if (item?.kind !== "proposal") return actions.decide(itemId, accepted);
+    if (item.action === "create_visa" && accepted && !passport) {
+      flow.current.visaItem = itemId;
+      saveTrip(pushAgentMessage(acceptProposal(current, itemId), "I need your passport: I am looking for it on this computer."));
+      void lookForPassport();
+      return;
+    }
+    if (item.action === "read_passport" || item.action === "confirm_passport" || item.action === "use_photo") {
+      actions.decide(itemId, accepted);
+      if (item.action === "read_passport") return void (accepted ? readPassport() : offerPassport());
+      if (item.action === "confirm_passport") return accepted ? void confirmPassport() : fallBackToCard("Check the fields below, then confirm them.");
+      return startAgent(accepted ? flow.current.photos[0]?.id : undefined);
+    }
     actions.decide(itemId, accepted);
   };
 
-  const showPassport = searchRequest > 0 || passport !== null || reconfirm;
+  const showCard = manual || reconfirm;
   const compact = passport !== null && !editing;
 
   return (
@@ -178,42 +312,47 @@ function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
           onAnswerAgent={(itemId, value) => void actions.answerAgent(itemId, value)}
           onDecide={decide}
         />
+        {busy ? (
+          <p role="status" className="px-2 text-sm text-muted-foreground">
+            {busy}
+          </p>
+        ) : null}
         {reconfirm ? (
           <p role="status" className="rounded-2xl bg-muted p-4 text-sm">
             The agent may still be running. Confirm your passport again so I can follow it here; Stop works meanwhile.
           </p>
         ) : null}
-        {showPassport ? (
-          <section aria-label="Passport">
-            {compact ? (
-              <div className="flex items-center gap-3 rounded-2xl bg-card p-4 shadow-soft">
-                <Check className="size-5 shrink-0 text-success" />
-                <p className="min-w-0 flex-1 truncate text-sm">
-                  Passport confirmed · {passport.surname} · expires {passport.expiry_date}
-                </p>
-                <Button type="button" variant="ghost" size="sm" className="rounded-full" onClick={() => setEditing(true)}>
-                  Edit
-                </Button>
-              </div>
-            ) : null}
-            {/* Kept mounted while compact: the photo and the fields live in its memory only. */}
-            <div className={compact ? "hidden" : undefined}>
-              <PassportCard
-                demo
-                returnDate={trip.request.return_date}
-                arrivalAt={trip.request.arrival_at}
-                searchRequest={searchRequest}
-                onDocumentConfirmed={setDocumentId}
-                onConfirm={(fields) => {
-                  setPassport(fields);
-                  if (!fields) return;
-                  setEditing(false);
-                  const itemId = waitingVisa.current;
-                  waitingVisa.current = null;
-                  if (itemId) void actions.createVisa(itemId, fields);
-                }}
-              />
-            </div>
+        {compact ? (
+          <div className="flex items-center gap-3 rounded-2xl bg-card p-4 shadow-soft">
+            <Check className="size-5 shrink-0 text-success" />
+            <p className="min-w-0 flex-1 truncate text-sm">
+              Passport confirmed · {passport.surname} · expires {passport.expiry_date}
+            </p>
+            <Button type="button" variant="ghost" size="sm" className="rounded-full" onClick={() => { setEditing(true); setManual(true); }}>
+              Edit
+            </Button>
+          </div>
+        ) : null}
+        {showCard ? (
+          // Only when the spoken path fails or the traveller asks to edit: kept mounted, its fields live in its memory.
+          <section aria-label="Passport" className={compact ? "hidden" : undefined}>
+            <PassportCard
+              demo
+              returnDate={trip.request.return_date}
+              arrivalAt={trip.request.arrival_at}
+              searchRequest={searchRequest}
+              onDocumentConfirmed={setDocumentId}
+              onConfirm={(fields) => {
+                setPassport(fields);
+                if (!fields) return;
+                setEditing(false);
+                const visaItem = flow.current.visaItem;
+                if (visaItem && !isAgentActive(latest().agent_run)) {
+                  flow.current.visaItem = null;
+                  void actions.createVisa(visaItem, { passport: fields, documentId });
+                }
+              }}
+            />
           </section>
         ) : null}
       </main>

@@ -235,11 +235,13 @@ describe("report_ready", () => {
     expect(trip.agent_run?.result).toMatchObject({ summary: "Stopped on payment", filled_fields: ["surname", "passport_number"] });
     expect(trip.agent_run).toMatchObject({ state: "interrupted", drained: true });
     expect(trip.agent_steps.at(-1)).toBe("Nami stopped the agent at the payment page so you can check and pay");
-    expect(trip.conversation.at(-1)).toMatchObject({ kind: "agent", text: VISA_READY_MESSAGE, list: ["surname", "passport_number"] });
+    expect(trip.conversation.at(-2)).toMatchObject({ kind: "agent", text: VISA_READY_MESSAGE, list: ["surname", "passport_number"] });
+    // The flights come only now, once the visa is ready.
+    expect(trip.conversation.at(-1)).toMatchObject({ kind: "proposal", action: "flights", text: "Do you also want me to help you find your flights?", decision: null });
     expect(reportReady(trip, REPORT, SECRETS)).toBe(trip);
 
     const done = applyAgentChanges(trip, changes({ status: "completed" }), SECRETS).trip;
-    expect(done.conversation.at(-1)).toMatchObject({ text: VISA_READY_MESSAGE });
+    expect(done.conversation.filter((i) => i.kind === "agent" && i.text === VISA_READY_MESSAGE)).toHaveLength(1);
   });
 });
 

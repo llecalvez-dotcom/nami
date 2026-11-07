@@ -93,7 +93,9 @@ describe("parsed request flow", () => {
       closes_at: "2026-11-10T14:30+08:00",
     });
     expect(trip.agent_run).toBeNull();
-    expect(open(trip, "proposal")).toMatchObject({ action: "flights" });
+    // The visa first: no flight proposal until the visa is ready.
+    expect(open(trip, "proposal")).toMatchObject({ action: "create_visa" });
+    expect(trip.conversation.some((i) => i.kind === "proposal" && i.action === "flights")).toBe(false);
   });
 
   it("asks again when the answer did not fill the field", () => {
