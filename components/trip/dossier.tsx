@@ -111,7 +111,7 @@ function AgentActivity({ trip, onStop }: { trip: Trip; onStop: () => void }) {
   const officialUrl = agentOfficialUrl(trip);
   return (
     <div className="rounded-[18px] bg-foreground p-6 text-background">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <SectionTitle>Agent Activity</SectionTitle>
@@ -137,8 +137,8 @@ function AgentActivity({ trip, onStop }: { trip: Trip; onStop: () => void }) {
           onClick={() => void showOfficialSite(officialUrl)}
           className="mt-4 inline-flex h-10 max-w-full items-center gap-2 rounded-full bg-white/10 px-4 text-sm text-background transition-colors hover:bg-white/20"
         >
-          <ExternalLink className="size-4 shrink-0" /> Open the official site
-          <span className="truncate font-mono text-[11px] text-background/60">{new URL(officialUrl).hostname}</span>
+          <ExternalLink className="size-4 shrink-0" /> <span className="whitespace-nowrap">Open the official site</span>
+          <span className="min-w-0 truncate font-mono text-[11px] text-background/60">{new URL(officialUrl).hostname}</span>
         </button>
       ) : null}
       {trip.agent_steps.length > 0 ? (

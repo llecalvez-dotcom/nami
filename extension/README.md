@@ -36,7 +36,7 @@ Le bouton de la carte Agent Activity ne clique rien et ne remplit rien : c'est l
 
 ## Points vérifiés
 
-- **Micro** : à remplir après le test dans le Chrome dédié (voir la PR du ticket 08).
+- **Micro** : dans le panneau, le micro dépend de l'autorisation donnée à l'extension, pas à `localhost:3000`. Autoriser le micro une fois dans un onglet normal ne suffit pas. Ouvrir les options de l'extension, cliquer sur « Allow the microphone », accepter, puis rouvrir le panneau (vérifié dans Chrome 156 avec un micro simulé ; à confirmer avec le vrai micro du portable).
 - **Cookie d'accès** : `nami_access` est `SameSite=Strict`, donc refusé dans l'`iframe` du panneau. En démo, Nami tourne en local sans `NAMI_ACCESS_CODE` : le contrôle d'accès est alors désactivé en développement. Le cookie n'est pas affaibli.
 - **Stockage** : dans l'`iframe`, le `localStorage` de Nami est séparé de celui d'un onglet normal (stockage partitionné par l'extension). Les voyages créés dans un onglet n'apparaissent pas dans le panneau : faire tout le parcours de démo dans le panneau.
 - **L'agent H et le panneau** : à vérifier au test réel avec Clément (l'agent doit piloter l'onglet et ignorer le panneau).

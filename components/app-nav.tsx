@@ -48,14 +48,14 @@ export function AppNav({ children }: { children?: React.ReactNode }) {
 
   return (
     <header className="app-header sticky top-0 z-30 px-3 py-3 sm:px-7 sm:py-4">
-      <div ref={root} className="relative mx-auto flex h-[50px] max-w-6xl items-center gap-2">
+      <div ref={root} className="relative mx-auto flex h-[50px] max-w-6xl items-center gap-1.5 sm:gap-2">
         <button
           type="button"
           aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
           aria-controls="main-menu"
           onClick={() => setOpen((o) => !o)}
-          className="glass grid size-[50px] shrink-0 place-items-center"
+          className="glass grid size-11 shrink-0 place-items-center sm:size-[50px]"
         >
           {open ? <X className="size-5" /> : <Menu className="size-5" />}
         </button>
@@ -79,8 +79,8 @@ export function AppNav({ children }: { children?: React.ReactNode }) {
             </Link>
           ))}
         </nav>
-        <Logo className="ml-1 sm:absolute sm:left-1/2 sm:ml-0 sm:-translate-x-1/2" />
-        <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+        <Logo className="ml-0.5 sm:absolute sm:left-1/2 sm:ml-0 sm:-translate-x-1/2" />
+        <div className="ml-auto flex items-center gap-1 sm:gap-2">
           {children}
           <ThemeToggle />
         </div>
