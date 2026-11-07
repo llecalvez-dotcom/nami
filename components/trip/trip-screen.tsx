@@ -28,31 +28,21 @@ export function TripScreen({ id }: { id: string }) {
   const found = trips?.find((t) => t.id === id) ?? null;
   const { destination, country_iso2, arrival_at } = found?.request ?? {};
   const livePapers = useLivePapers(
-    found &&
-      !found.sample &&
-      found.formalities.length > 0 &&
-      destination &&
-      country_iso2
+    found && !found.sample && found.formalities.length > 0 && destination && country_iso2
       ? { destination, country_iso2, arrival_at }
       : null,
   );
 
   if (trips === null) return <div className="flex-1" aria-busy="true" />;
 
-  const trip =
-    found ?? (id === SAMPLE_TRIP_ID ? createSampleTrip(new Date()) : null);
+  const trip = found ?? (id === SAMPLE_TRIP_ID ? createSampleTrip(new Date()) : null);
 
   if (!trip) {
     return (
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col items-start gap-4 px-6 py-24">
         <h1 className="font-heading text-5xl">Trip not found</h1>
-        <p className="text-muted-foreground">
-          It may have been saved in another browser.
-        </p>
-        <Link
-          href="/"
-          className="text-primary underline-offset-4 hover:underline"
-        >
+        <p className="text-muted-foreground">It may have been saved in another browser.</p>
+        <Link href="/" className="text-primary underline-offset-4 hover:underline">
           Back to your trips
         </Link>
       </main>
@@ -81,9 +71,7 @@ export function TripScreen({ id }: { id: string }) {
           >
             <ArrowLeft className="size-4" /> Trips
           </Link>
-          <p className="text-sm font-medium tracking-[0.18em] text-primary uppercase">
-            Nami
-          </p>
+          <p className="text-sm font-medium tracking-[0.18em] text-primary uppercase">Nami</p>
           <div className="ml-auto flex items-center gap-3">
             {trip.sample ? (
               <>
@@ -109,31 +97,16 @@ export function TripScreen({ id }: { id: string }) {
           </h1>
           <Conversation
             items={trip.conversation}
-            onAnswer={(itemId, value, label) =>
-              update(answerQuestion(trip, itemId, value, label))
-            }
+            onAnswer={(itemId, value, label) => update(answerQuestion(trip, itemId, value, label))}
             onAnswerText={answerWithText}
-            onDecide={(itemId, accepted) =>
-              update(decideProposal(trip, itemId, accepted, new Date()))
-            }
+            onDecide={(itemId, accepted) => update(decideProposal(trip, itemId, accepted, new Date()))}
           />
         </section>
-        <aside
-          aria-label="Trip folder"
-          className="min-w-0 lg:sticky lg:top-20 lg:self-start"
-        >
+        <aside aria-label="Trip folder" className="min-w-0 lg:sticky lg:top-20 lg:self-start">
           <div className="rounded-3xl border bg-[#efebe4]/60 p-6">
-            <Dossier
-              trip={trip}
-              onStop={() => update(stopAgent(trip))}
-              livePapers={livePapers}
-            >
+            <Dossier trip={trip} onStop={() => update(stopAgent(trip))} livePapers={livePapers}>
               {trip.formalities.length > 0 || demo ? (
-                <PassportCard
-                  demo={demo}
-                  returnDate={trip.request.return_date}
-                  arrivalAt={trip.request.arrival_at}
-                />
+                <PassportCard demo={demo} returnDate={trip.request.return_date} arrivalAt={trip.request.arrival_at} />
               ) : null}
               {demo ? <TryAnotherCountry /> : null}
             </Dossier>

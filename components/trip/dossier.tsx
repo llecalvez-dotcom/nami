@@ -2,23 +2,11 @@
 
 import { ExternalLink, Octagon, ShieldAlert, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  ModuleStateBadge,
-  SampleBadge,
-  StatusBadge,
-} from "@/components/status-badge";
+import { ModuleStateBadge, SampleBadge, StatusBadge } from "@/components/status-badge";
 import { getBaliPaper, type BaliPaperId } from "@/lib/bali-papers";
-import type {
-  Formality,
-  ModuleKind,
-  ModuleSuggestion,
-  TripRequestDraft,
-} from "@/lib/contracts";
+import type { Formality, ModuleKind, ModuleSuggestion, TripRequestDraft } from "@/lib/contracts";
 import { formatDate, formatDateTime, formatTime } from "@/lib/format";
-import {
-  LivePapersList,
-  type LivePapersState,
-} from "@/components/trip/live-papers";
+import { LivePapersList, type LivePapersState } from "@/components/trip/live-papers";
 import { isAgentActive, type Trip } from "@/lib/trip-state";
 
 const MODULES: { module: ModuleKind; label: string }[] = [
@@ -28,25 +16,13 @@ const MODULES: { module: ModuleKind; label: string }[] = [
 ];
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <h3 className="text-xs font-medium tracking-[0.18em] text-muted-foreground uppercase">
-      {children}
-    </h3>
-  );
+  return <h3 className="text-xs font-medium tracking-[0.18em] text-muted-foreground uppercase">{children}</h3>;
 }
 
 function Summary({ request }: { request: TripRequestDraft }) {
   const rows: [string, string | null][] = [
-    [
-      "Departure",
-      request.departure_date ? formatDate(request.departure_date) : null,
-    ],
-    [
-      "Landing",
-      request.arrival_at
-        ? `${formatDateTime(request.arrival_at)} (Bali time)`
-        : null,
-    ],
+    ["Departure", request.departure_date ? formatDate(request.departure_date) : null],
+    ["Landing", request.arrival_at ? `${formatDateTime(request.arrival_at)} (Bali time)` : null],
     ["Return", request.return_date ? formatDate(request.return_date) : null],
     ["Purpose", request.purpose],
     ["Passport", request.nationality],
@@ -57,15 +33,7 @@ function Summary({ request }: { request: TripRequestDraft }) {
       {rows.map(([label, value]) => (
         <div key={label}>
           <dt className="text-xs text-muted-foreground">{label}</dt>
-          <dd
-            className={
-              value
-                ? "text-sm font-medium"
-                : "text-sm text-muted-foreground/70 italic"
-            }
-          >
-            {value ?? "To confirm"}
-          </dd>
+          <dd className={value ? "text-sm font-medium" : "text-sm text-muted-foreground/70 italic"}>{value ?? "To confirm"}</dd>
         </div>
       ))}
     </dl>
@@ -76,14 +44,9 @@ function Modules({ modules }: { modules: ModuleSuggestion[] }) {
   return (
     <ul className="grid gap-2 sm:grid-cols-3">
       {MODULES.map(({ module, label }) => (
-        <li
-          key={module}
-          className="flex items-center justify-between gap-2 rounded-xl border bg-card px-3.5 py-3"
-        >
+        <li key={module} className="flex items-center justify-between gap-2 rounded-xl border bg-card px-3.5 py-3">
           <span className="text-sm font-medium">{label}</span>
-          <ModuleStateBadge
-            state={modules.find((m) => m.module === module)?.state ?? null}
-          />
+          <ModuleStateBadge state={modules.find((m) => m.module === module)?.state ?? null} />
         </li>
       ))}
     </ul>
@@ -92,8 +55,7 @@ function Modules({ modules }: { modules: ModuleSuggestion[] }) {
 
 function windowText(formality: Formality): string {
   const paper = getBaliPaper(formality.id as BaliPaperId);
-  if (formality.opens_at)
-    return `Opens ${formatDateTime(formality.opens_at)} (Bali time)`;
+  if (formality.opens_at) return `Opens ${formatDateTime(formality.opens_at)} (Bali time)`;
   return paper.window_note;
 }
 
@@ -103,17 +65,10 @@ function PaperCard({ formality }: { formality: Formality }) {
     <li className="rounded-2xl border bg-card p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-heading text-2xl leading-tight">
-            {formality.name}
-          </p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {windowText(formality)}
-          </p>
+          <p className="font-heading text-2xl leading-tight">{formality.name}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{windowText(formality)}</p>
         </div>
-        <StatusBadge
-          status={formality.status}
-          checkedAt={formality.checked_at}
-        />
+        <StatusBadge status={formality.status} checkedAt={formality.checked_at} />
       </div>
       <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
         <span>
@@ -131,26 +86,19 @@ function PaperCard({ formality }: { formality: Formality }) {
       </div>
       <ul className="mt-3 flex flex-wrap gap-2">
         {formality.sources.map((source) => (
-          <li
-            key={source.url}
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground"
-          >
+          <li key={source.url} className="inline-flex items-center gap-1 text-xs text-muted-foreground">
             {source.official ? (
               <>
-                <ShieldCheck className="size-3.5 text-primary" /> Official
-                source
+                <ShieldCheck className="size-3.5 text-primary" /> Official source
               </>
             ) : (
               <>
-                <ShieldAlert className="size-3.5 text-attention" /> Non-official
-                source
+                <ShieldAlert className="size-3.5 text-attention" /> Non-official source
               </>
             )}
           </li>
         ))}
-        <li className="text-xs text-muted-foreground">
-          · Read on official sites on {formatDate(paper.observed_on)}
-        </li>
+        <li className="text-xs text-muted-foreground">· Read on official sites on {formatDate(paper.observed_on)}</li>
       </ul>
     </li>
   );
@@ -165,14 +113,10 @@ function AgentActivity({ trip, onStop }: { trip: Trip; onStop: () => void }) {
         <div>
           <div className="flex items-center gap-2">
             <SectionTitle>Agent Activity</SectionTitle>
-            {trip.sample && run ? (
-              <SampleBadge className="h-5 text-[10px]" />
-            ) : null}
+            {trip.sample && run ? <SampleBadge className="h-5 text-[10px]" /> : null}
           </div>
           <p className="mt-1 text-sm text-[#f7f5f1]/70">
-            {run
-              ? `Started at ${formatTime(run.started_at)} · ${run.state.replaceAll("_", " ")}`
-              : "No agent running."}
+            {run ? `Started at ${formatTime(run.started_at)} · ${run.state.replaceAll("_", " ")}` : "No agent running."}
           </p>
         </div>
         <Button
@@ -189,9 +133,7 @@ function AgentActivity({ trip, onStop }: { trip: Trip; onStop: () => void }) {
         <ol className="mt-4 space-y-2 border-t border-white/10 pt-4">
           {trip.agent_steps.map((step, i) => (
             <li key={`${i}-${step}`} className="flex gap-3 text-sm">
-              <span className="w-5 shrink-0 text-right font-mono text-xs leading-5 text-[#f7f5f1]/50">
-                {i + 1}
-              </span>
+              <span className="w-5 shrink-0 text-right font-mono text-xs leading-5 text-[#f7f5f1]/50">{i + 1}</span>
               <span>{step}</span>
             </li>
           ))}

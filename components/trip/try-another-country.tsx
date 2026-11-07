@@ -4,11 +4,7 @@ import { useState } from "react";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  LivePapersList,
-  useLivePapers,
-  type PapersQuery,
-} from "@/components/trip/live-papers";
+import { LivePapersList, useLivePapers, type PapersQuery } from "@/components/trip/live-papers";
 import { countryFromName, countryName } from "@/lib/countries";
 
 // Demo only (?demo=1): live papers for any country. Bali is the only one filled in by the agent.
@@ -27,18 +23,12 @@ export function TryAnotherCountry() {
       return;
     }
     setError(null);
-    setQuery({
-      destination:
-        text.trim().toLowerCase() === "bali" ? "Bali" : countryName(iso2),
-      country_iso2: iso2,
-    });
+    setQuery({ destination: text.trim().toLowerCase() === "bali" ? "Bali" : countryName(iso2), country_iso2: iso2 });
   };
 
   return (
     <section className="space-y-3">
-      <h3 className="text-xs font-medium tracking-[0.18em] text-muted-foreground uppercase">
-        Try another country
-      </h3>
+      <h3 className="text-xs font-medium tracking-[0.18em] text-muted-foreground uppercase">Try another country</h3>
       <form onSubmit={submit} className="flex gap-2">
         <Input
           value={text}
@@ -47,12 +37,7 @@ export function TryAnotherCountry() {
           aria-label="Try another country"
           className="h-9 bg-card"
         />
-        <Button
-          type="submit"
-          size="lg"
-          className="h-9 rounded-full"
-          disabled={!text.trim() || papers?.state === "loading"}
-        >
+        <Button type="submit" size="lg" className="h-9 rounded-full" disabled={!text.trim() || papers?.state === "loading"}>
           <Search /> Search
         </Button>
       </form>
