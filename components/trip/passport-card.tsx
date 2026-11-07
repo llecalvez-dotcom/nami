@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Camera, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,71 +31,136 @@ const SENSITIVE: PassportFieldKey[] = ["passport_number", "birth_date"];
 
 // The photo and the fields stay in this component's memory: never stored in the browser nor on the server.
 export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; returnDate: string | null; arrivalAt: string | null }) {
+  const [reader, setReader] = useState<"off" | "h" | "anthropic">("off");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [extraction, setExtraction] = useState<DocumentExtraction | null>(null);
   const [values, setValues] = useState<Values | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [consent, setConsent] = useState(false);
+  const requestId = useRef(0);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/documents/extract")
+      .then(async (response) => {
+        if (!response.ok) throw new Error();
+        return response.json();
+      })
+      .then((result: { reader?: string }) => {
+        if (active) setReader(result.reader === "h" || result.reader === "anthropic" ? result.reader : "off");
+      })
+      .catch(() => {
+        if (active) setReader("off");
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const upload = async (file: File) => {
+    const id = ++requestId.current;
     setError(null);
     setConfirmed(false);
+    if (reader === "off" || !consent) return;
     if (!["image/jpeg", "image/png"].includes(file.type)) return setError("Send a JPEG or PNG photo.");
     if (file.size > MAX_BYTES) return setError("Photo too large (5 MB max).");
     const body = new FormData();
+    body.set("consent_provider", reader);
     body.set("image", file);
     if (returnDate) body.set("return_date", returnDate);
     if (arrivalAt) body.set("arrival_at", arrivalAt);
     setBusy(true);
     try {
       const response = await fetch("/api/documents/extract", { method: "POST", body });
+      if (id !== requestId.current) return;
       const json = await response.json();
+      if (id !== requestId.current) return;
       if (!response.ok) throw new Error(json.error ?? "The passport could not be read.");
       const result = json as DocumentExtraction;
       setExtraction(result);
       setValues(Object.fromEntries(FIELDS.map((f) => [f.key, result.fields[f.key] ?? ""])) as Values);
     } catch (e) {
+      if (id !== requestId.current) return;
       setError(`${(e as Error).message} You can type the fields instead.`);
       setExtraction(null);
       setValues((v) => v ?? EMPTY);
     } finally {
+      if (id !== requestId.current) return;
       setBusy(false);
     }
   };
 
-  const complete = values !== null && FIELDS.every((f) => values[f.key].trim());
+  const manual = reader === "off" || values !== null;
+  const displayedValues = values ?? EMPTY;
+  const complete = manual && FIELDS.every((f) => displayedValues[f.key].trim());
+  const hasData = Boolean(
+    error || extraction || confirmed || (values && FIELDS.some((field) => values[field.key].trim())),
+  );
+  const provider = reader === "h" ? "H Company" : "Anthropic";
+  const clear = () => {
+    requestId.current++;
+    setBusy(false);
+    setValues(null);
+    setExtraction(null);
+    setError(null);
+    setConfirmed(false);
+    setConsent(false);
+  };
 
   return (
     <section className="space-y-4 rounded-[28px] bg-card p-6 shadow-soft">
       <div className="flex items-start justify-between gap-3">
-        <p className="text-lg leading-snug font-semibold tracking-tight">Send me a photo of your passport</p>
-        {confirmed ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-success/12 px-2.5 py-1 text-xs font-medium text-success">
-            <Check className="size-4" /> Confirmed
-          </span>
-        ) : null}
+        <p className="text-lg leading-snug font-semibold tracking-tight">{reader === "off" ? "Enter passport details" : "Send me a photo of your passport"}</p>
+        <div className="flex items-center gap-2">
+          {confirmed ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-success/12 px-2.5 py-1 text-xs font-medium text-success">
+              <Check className="size-4" /> Confirmed
+            </span>
+          ) : null}
+          {hasData ? (
+            <Button type="button" variant="ghost" size="sm" className="rounded-full" onClick={clear}>
+              Clear passport data
+            </Button>
+          ) : null}
+        </div>
       </div>
-      <p className="text-sm text-muted-foreground">
-        The identity page, sharp and flat. It is read in memory and never stored.
-      </p>
-      <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground shadow-glow has-[:disabled]:opacity-50">
-        <Camera className="size-4" /> {busy ? "Reading…" : values ? "Send another photo" : "Choose a photo"}
-        <input
-          type="file"
-          accept="image/jpeg,image/png"
-          className="sr-only"
-          disabled={busy}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            e.target.value = "";
-            if (file) void upload(file);
-          }}
-        />
-      </label>
-      {values ? null : (
-        <Button type="button" variant="ghost" size="sm" className="ml-2 rounded-full" onClick={() => setValues(EMPTY)}>
-          Type the fields instead
-        </Button>
+      {reader === "off" ? (
+        <p className="text-sm text-muted-foreground">
+          Automatic reading is off: nothing leaves this device. Type the fields from your passport.
+        </p>
+      ) : (
+        <>
+          <p className="text-sm text-muted-foreground">The identity page, sharp and flat. It is read in memory and never stored.</p>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={consent}
+              disabled={busy}
+              onChange={(event) => setConsent(event.target.checked)}
+            />
+            <span>I agree that this photo is sent to {provider} to read it (not stored by Nami)</span>
+          </label>
+          <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground shadow-glow has-[:disabled]:opacity-50">
+            <Camera className="size-4" /> {busy ? "Reading…" : values ? "Send another photo" : "Choose a photo"}
+            <input
+              type="file"
+              accept="image/jpeg,image/png"
+              className="sr-only"
+              disabled={busy || !consent}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) void upload(file);
+              }}
+            />
+          </label>
+          {values ? null : (
+            <Button type="button" variant="ghost" size="sm" className="ml-2 rounded-full" onClick={() => setValues(EMPTY)}>
+              Type the fields instead
+            </Button>
+          )}
+        </>
       )}
       {error ? <p className="text-sm text-attention-foreground">{error}</p> : null}
       {extraction?.warnings.map((w) => (
@@ -103,7 +168,7 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
           {w}
         </p>
       ))}
-      {values ? (
+      {manual ? (
         <form
           className="grid gap-3 sm:grid-cols-2"
           onSubmit={(e) => {
@@ -125,18 +190,18 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
                   className="h-10 rounded-xl border-transparent bg-muted px-3"
                   type={masked ? "password" : "text"}
                   autoComplete="off"
-                  value={values[key]}
+                  value={displayedValues[key]}
                   placeholder={masked ? undefined : placeholder}
                   aria-label={label}
-                  aria-invalid={!values[key].trim() || undefined}
+                  aria-invalid={!displayedValues[key].trim() || undefined}
                   onChange={(e) => {
                     setConfirmed(false);
-                    setValues({ ...values, [key]: e.target.value });
+                    setValues({ ...displayedValues, [key]: e.target.value });
                   }}
                 />
                 {masked ? (
                   <span className="text-xs text-muted-foreground">
-                    {maskField(key, values[key]) || "Not read yet: type it in"}
+                    {maskField(key, displayedValues[key]) || "Not read yet: type it in"}
                   </span>
                 ) : null}
               </label>

@@ -14,6 +14,7 @@ const READ_TIMEOUT_MS = 30_000;
 const STAY_DAYS_WHEN_NO_RETURN = 30;
 
 export type PassportImage = { base64: string; mimeType: (typeof ACCEPTED_IMAGE_TYPES)[number] };
+export type ReaderName = "off" | "h" | "anthropic";
 
 // Reads one passport image and returns the raw JSON text of the model. Never logs the image or the answer.
 export type PassportReader = { name: string; read: (image: PassportImage) => Promise<string> };
@@ -123,12 +124,15 @@ export function anthropicReader(apiKey: string, fetchImpl: typeof fetch = fetch)
   };
 }
 
-// H vision model first, Claude as fallback; only the configured ones.
-export function configuredReaders(env: Record<string, string | undefined> = process.env): PassportReader[] {
-  return [
-    ...(env.HAI_API_KEY ? [hReader(env.HAI_API_KEY)] : []),
-    ...(env.ANTHROPIC_API_KEY ? [anthropicReader(env.ANTHROPIC_API_KEY)] : []),
-  ];
+export function configuredReader(env: Record<string, string | undefined> = process.env): PassportReader | null {
+  if (env.PASSPORT_READER === "h" && env.HAI_API_KEY) return hReader(env.HAI_API_KEY);
+  if (env.PASSPORT_READER === "anthropic" && env.ANTHROPIC_API_KEY) return anthropicReader(env.ANTHROPIC_API_KEY);
+  return null;
+}
+
+export function readerName(env: Record<string, string | undefined> = process.env): ReaderName {
+  const reader = configuredReader(env);
+  return reader ? (reader.name as ReaderName) : "off";
 }
 
 function parseModelJson(text: string): Record<string, unknown> {
@@ -219,16 +223,11 @@ export function toExtraction(modelText: string, trip: TripDates): DocumentExtrac
   return DocumentExtractionSchema.parse({ fields, confidence_per_field, warnings });
 }
 
-export async function extractPassport(image: PassportImage, trip: TripDates, readers: PassportReader[]): Promise<DocumentExtraction> {
-  if (readers.length === 0) throw new PassportReadError("No vision model is configured");
-  let lastError: unknown = null;
-  for (const reader of readers) {
-    try {
-      return toExtraction(await reader.read(image), trip);
-    } catch (error) {
-      lastError = error;
-      console.error(`passport: ${reader.name} reader failed:`, error instanceof PassportReadError ? error.message : "request failed");
-    }
+export async function extractPassport(image: PassportImage, trip: TripDates, reader: PassportReader): Promise<DocumentExtraction> {
+  try {
+    return toExtraction(await reader.read(image), trip);
+  } catch (error) {
+    console.error(`passport: ${reader.name} reader failed:`, error instanceof PassportReadError ? error.message : "request failed");
+    throw error instanceof PassportReadError ? error : new PassportReadError("Passport reading failed");
   }
-  throw lastError instanceof PassportReadError ? lastError : new PassportReadError("Passport reading failed");
 }
