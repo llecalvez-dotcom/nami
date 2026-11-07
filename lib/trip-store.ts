@@ -53,3 +53,8 @@ export function saveTrip(trip: Trip) {
 export function deleteTrip(id: string) {
   writeTrips(readTrips().filter((t) => t.id !== id));
 }
+
+// « Nouveau voyage » in the side panel starts from zero: every saved trip is deleted.
+export function clearTrips() {
+  writeTrips([]);
+}
