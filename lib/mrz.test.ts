@@ -137,3 +137,10 @@ describe("live expiry date logic", () => {
     expect(expiryWarning("2027-02-28", { return_date: "2026-08-31" })).toBeNull();
   });
 });
+
+describe("nationalityCode", () => {
+  it("maps the German MRZ code D<< to DE", () => {
+    expect(nationalityCode("D<<")).toBe("DE");
+    expect(nationalityCode("FRA")).toBe("FR");
+  });
+});

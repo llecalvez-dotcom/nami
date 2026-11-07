@@ -1,7 +1,8 @@
 import { alpha3ToAlpha2 } from "i18n-iso-countries";
 
 export function nationalityCode(code: string): string {
-  const upper = code.toUpperCase();
+  const upper = code.toUpperCase().replace(/</g, "");
+  if (upper === "D") return "DE";
   return alpha3ToAlpha2(upper) ?? upper;
 }
 
