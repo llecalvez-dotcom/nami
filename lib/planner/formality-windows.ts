@@ -31,7 +31,7 @@ export function defaultBaliArrival(arrivalDate: string): string {
 }
 
 export function formalityWindows(
-  request: Pick<TripRequest, "arrival_at">,
+  request: { arrival_at: NonNullable<TripRequest["arrival_at"]> },
   formalities: readonly FormalityWindowInput[],
 ): FormalityWindow[] {
   const arrivalMs = Date.parse(request.arrival_at);

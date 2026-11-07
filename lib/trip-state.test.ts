@@ -68,6 +68,23 @@ describe("parsed request flow", () => {
     travellers: 1,
   });
 
+  it("settles passport and departure country with one answer when both are unknown", () => {
+    let trip = createTripFromRequest("t0", { ...bali, origin_country: null }, now);
+    const question = open(trip, "question");
+    expect(question).toMatchObject({ field: "nationality", question: "Do you travel with a French passport, leaving from France?" });
+    expect(question.kind === "question" && question.options).toEqual([{ label: "Yes, French passport, from France", value: "FR" }]);
+    trip = answerQuestion(trip, question.id, "FR", "Yes, French passport, from France");
+    expect(trip.request).toMatchObject({ nationality: "FR", origin_country: "FR" });
+    expect(open(trip, "question")).toMatchObject({ field: "arrival_at" });
+  });
+
+  it("asks nothing after the phrase for London once passport and departure are known, and checks the papers live", () => {
+    const london = createTripFromRequest("t-london", { ...bali, destination: "London", country_iso2: "GB", nationality: "FR", purpose: "tourism", arrival_at: null }, now);
+    expect(london.conversation.filter((i) => i.kind === "question")).toEqual([]);
+    expect(london.request.arrival_at).toBeNull();
+    expect(london.conversation.some((i) => i.kind === "agent" && i.text.includes("London"))).toBe(true);
+  });
+
   it("asks one question at a time, then proposes the papers with their windows", () => {
     let trip = createTripFromRequest("t1", bali, now);
     expect(trip.conversation.map((i) => i.kind)).toEqual(["user", "question"]);

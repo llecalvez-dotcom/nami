@@ -139,7 +139,7 @@ export function describeTrip(request: TripRequest): string {
     `Destination: ${request.destination} (country ${request.country_iso2}).`,
     `Purpose: ${request.purpose}.`,
     `Departure from ${request.origin_country} on ${request.departure_date}.`,
-    `Arrival: ${request.arrival_at} (local time).`,
+    `Arrival: ${request.arrival_at ? `${request.arrival_at} (local time)` : "time not known"}.`,
     `Return: ${request.return_date ?? "not known yet"}.`,
     `Travellers: ${request.travellers}.`,
   ].join(" ");

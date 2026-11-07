@@ -21,12 +21,22 @@ export const QUESTION_ORDER: readonly QuestionField[] = [
 
 export type PlannerQuestion = { field: QuestionField; question: string };
 
+export const FRENCH_FROM_FRANCE_QUESTION = "Do you travel with a French passport, leaving from France?";
+
+// The landing time only matters where a paper opens relative to it (the Bali arrival card): for another known
+// destination Nami does not ask for it. While the destination is unknown, it still counts as missing.
+export function landingTimeNeeded(draft: Pick<TripRequestDraft, "destination" | "country_iso2">): boolean {
+  if (draft.destination === null && draft.country_iso2 === null) return true;
+  return /bali/i.test(draft.destination ?? "") || draft.country_iso2 === "ID";
+}
+
 function questionText(field: QuestionField, draft: TripRequestDraft): string {
   switch (field) {
     case "destination":
       return "Where are you going?";
     case "nationality":
-      return "Do you travel with a French passport?";
+      // One question for the two most common facts (Nami proposes rather than asks): a "no" falls back to the two separate questions.
+      return draft.origin_country === null ? FRENCH_FROM_FRANCE_QUESTION : "Do you travel with a French passport?";
     case "origin_country":
       return "Are you leaving from France?";
     case "departure_date":
@@ -51,13 +61,12 @@ export function nextDay(isoDate: string): string {
 
 // Nami proposes rather than asks (Nathan, 2026-11-07): from France, the flight to Bali lands the next day in the evening.
 export function arrivalProposal(draft: TripRequestDraft): string | null {
-  const bali = /bali/i.test(draft.destination ?? "") || draft.country_iso2 === "ID";
-  if (!draft.departure_date || !bali) return null;
+  if (!draft.departure_date || draft.destination === null || !landingTimeNeeded(draft)) return null;
   return `You leave on ${longDate(draft.departure_date)}: from France you land in Bali the next day, ${longDate(nextDay(draft.departure_date))}, around 6 pm. Is that right? If you know your landing time, just tell me.`;
 }
 
 export function missingFields(draft: TripRequestDraft): QuestionField[] {
-  return QUESTION_ORDER.filter((field) => draft[field] === null);
+  return QUESTION_ORDER.filter((field) => draft[field] === null && (field !== "arrival_at" || landingTimeNeeded(draft)));
 }
 
 export function nextQuestion(draft: TripRequestDraft): PlannerQuestion | null {

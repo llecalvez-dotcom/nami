@@ -23,7 +23,7 @@ export const SAMPLE_TRIP: TripRequest = {
 export const SAMPLE_DRAFT: TripRequestDraft = { ...SAMPLE_TRIP, arrival_at: null };
 
 export const SAMPLE_LANDING_OPTIONS: { label: string; arrival_at: string }[] = [
-  { label: "Tue 10 Nov, 14:30", arrival_at: SAMPLE_TRIP.arrival_at },
+  { label: "Tue 10 Nov, 14:30", arrival_at: SAMPLE_TRIP.arrival_at! },
   { label: "I don't know yet", arrival_at: "2026-11-10T00:00+08:00" },
 ];
 
