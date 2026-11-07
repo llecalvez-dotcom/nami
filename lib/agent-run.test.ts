@@ -1,4 +1,5 @@
 import { toolCallKey } from "@/lib/agent-changes";
+import { INVALID_AGENT_ANSWER } from "@/lib/agent-answer";
 import { describe, expect, it } from "vitest";
 import { freshToolCalls, redact, toAgentChanges, type AgentChanges } from "@/lib/agent-changes";
 import { TripRequestDraftSchema } from "@/lib/contracts";
@@ -73,6 +74,40 @@ describe("real Bali trip", () => {
 });
 
 describe("applyAgentChanges", () => {
+  it("validates and masks structured final fields without treating the answer as payment readiness", () => {
+    const answer = JSON.stringify({ summary: "Typed 24AB12345", filled_fields: ["24AB12345"], missing_fields: ["1990-04-12"], blocked_reason: "24AB12345" });
+    const { trip } = applyAgentChanges(liveTrip(), changes({ status: "completed", answer }), SECRETS);
+    expect(trip.agent_run?.result).toMatchObject({ answer: "Typed •••••••45", final_answer: { summary: "Typed •••••••45" } });
+    expect(JSON.stringify(trip)).not.toContain("24AB12345");
+    expect(JSON.stringify(trip)).not.toContain("1990-04-12");
+    expect(trip.agent_run?.result).not.toHaveProperty("summary");
+    expect(trip.conversation.some((item) => item.kind === "agent" && item.text === VISA_READY_MESSAGE)).toBe(false);
+  });
+
+  it.each(["old plain answer", "{invalid", JSON.stringify({ summary: 42 })])("degrades safely for invalid final answer %s", (answer) => {
+    const patch = changes({ status: "completed", answer });
+    const { trip } = applyAgentChanges(liveTrip(), patch, SECRETS);
+    expect(trip.agent_run?.result?.answer).toBe(INVALID_AGENT_ANSWER);
+    expect(trip.conversation.at(-1)).toMatchObject({ kind: "agent", text: INVALID_AGENT_ANSWER });
+    const again = applyAgentChanges(trip, patch, SECRETS).trip;
+    expect(again.conversation).toHaveLength(trip.conversation.length);
+  });
+
+  it("waits for the settled answer before warning about an empty final response", () => {
+    const { trip } = applyAgentChanges(liveTrip(), changes({ status: "completed" }), SECRETS);
+    expect(trip.agent_run?.result?.answer).toBeUndefined();
+    const drained = applyAgentChanges(trip, changes({ status: "completed", no_change: true }), SECRETS).trip;
+    expect(drained.agent_run).toMatchObject({ drained: true, result: { answer: INVALID_AGENT_ANSWER } });
+  });
+
+  it("explains answer_validation even when the error code arrives after terminal status, only once", () => {
+    let { trip } = applyAgentChanges(liveTrip(), changes({ status: "failed" }), SECRETS);
+    const patch = changes({ status: "failed", error_code: "answer_validation" });
+    ({ trip } = applyAgentChanges(trip, patch, SECRETS));
+    expect(trip.conversation.at(-1)).toMatchObject({ text: INVALID_AGENT_ANSWER });
+    expect(applyAgentChanges(trip, patch, SECRETS).trip.conversation).toHaveLength(trip.conversation.length);
+  });
+
   it("adds masked steps, state, index and metrics", () => {
     const { trip } = applyAgentChanges(
       liveTrip(),
@@ -93,7 +128,7 @@ describe("applyAgentChanges", () => {
   it("keeps polling after the terminal state and takes the answer that arrives later", () => {
     let { trip } = applyAgentChanges(liveTrip(), changes({ status: "completed", next_index: 9, steps: ["Agent finished"] }), SECRETS);
     expect(trip.agent_run).toMatchObject({ state: "completed", drained: false });
-    ({ trip } = applyAgentChanges(trip, changes({ status: "completed", next_index: 10, steps: [], answer: "Stopped before payment" }), SECRETS));
+    ({ trip } = applyAgentChanges(trip, changes({ status: "completed", next_index: 10, steps: [], answer: JSON.stringify({ summary: "Stopped before payment" }) }), SECRETS));
     expect(trip.agent_run?.result).toMatchObject({ answer: "Stopped before payment" });
     expect(trip.agent_run?.drained).toBe(false);
     ({ trip } = applyAgentChanges(trip, changes({ status: "completed", no_change: true, next_index: 10 }), SECRETS));

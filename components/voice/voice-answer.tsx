@@ -26,7 +26,7 @@ export function VoiceAnswer({ itemId, onValidate, isValid = (v) => v.trim().leng
   return (
     <div className="mt-4">
       <form
-        className="flex gap-2"
+        className="grid grid-cols-[44px_minmax(0,1fr)] gap-2 sm:flex"
         onSubmit={(e) => {
           e.preventDefault();
           if (valid) onValidate(value.trim());
@@ -41,8 +41,8 @@ export function VoiceAnswer({ itemId, onValidate, isValid = (v) => v.trim().leng
           aria-label={label}
           className="h-11 min-w-0 flex-1 rounded-full bg-muted px-4 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
         />
-        <Button type="submit" size="lg" className="h-11 rounded-full px-5 shadow-glow disabled:shadow-none" disabled={!valid}>
-          Validate
+        <Button type="submit" size="lg" className="col-span-2 h-11 rounded-full px-5 shadow-glow disabled:shadow-none sm:col-auto" disabled={!valid}>
+          Send answer
         </Button>
       </form>
       <VoiceStatusLine voice={voice} className="mt-2" />

@@ -93,8 +93,9 @@ export function AppNav({ children }: { children?: React.ReactNode }) {
       >
         <MobileLink href="/" label="Explore" active={isActive(pathname, "/")} icon={<Compass className="size-5" />} />
         <MobileLink href="/trips" label="Trips" active={isActive(pathname, "/trips")} icon={<Plane className="size-5" />} />
-        <Link href="/#ask" aria-label="New trip" className="grid size-12 place-items-center rounded-full bg-[#ff7a1a] text-[#1b1b1b] ring-1 ring-white/60">
-          <Plus className="size-6" />
+        <Link href="/#ask" aria-label="New trip" className="flex min-h-12 min-w-14 flex-col items-center justify-center gap-0.5 rounded-2xl bg-[#ff7a1a] px-2 text-[#1b1b1b] ring-1 ring-white/60">
+          <Plus className="size-5" />
+          <span className="text-[10px] font-medium">New trip</span>
         </Link>
         <MobileLink href="/map" label="Map" active={isActive(pathname, "/map")} icon={<Globe2 className="size-5" />} />
         <MobileLink href="/map#wishlist" label="Wishlist" active={false} icon={<Heart className="size-5" />} />
@@ -109,9 +110,10 @@ function MobileLink({ href, label, active, icon }: { href: string; label: string
       href={href}
       aria-label={label}
       aria-current={active ? "page" : undefined}
-      className={cn("grid size-11 place-items-center rounded-full transition-colors", active && "bg-white/30 ring-1 ring-white/70")}
+      className={cn("flex min-h-12 min-w-14 flex-col items-center justify-center gap-0.5 rounded-2xl px-1 text-[var(--icon)] transition-colors", active && "bg-white/30 ring-1 ring-white/70")}
     >
       {icon}
+      <span className="text-[10px] font-medium">{label}</span>
     </Link>
   );
 }

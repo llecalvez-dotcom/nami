@@ -9,6 +9,7 @@ import { formatDate, formatDateTime, formatTime } from "@/lib/format";
 import { LivePapersList, type LivePapersState } from "@/components/trip/live-papers";
 import { isAgentActive, type Trip } from "@/lib/trip-state";
 import { agentOfficialUrl, showOfficialSite } from "@/lib/official-tab";
+import { AgentScreen } from "@/components/trip/agent-screen";
 
 const MODULES: { module: ModuleKind; label: string }[] = [
   { module: "papers", label: "Entry papers" },
@@ -105,7 +106,7 @@ function PaperCard({ formality }: { formality: Formality }) {
   );
 }
 
-function AgentActivity({ trip, onStop }: { trip: Trip; onStop: () => void }) {
+function AgentActivity({ trip, onStop, demo }: { trip: Trip; onStop: () => void; demo: boolean }) {
   const run = trip.agent_run;
   const active = isAgentActive(run);
   const officialUrl = agentOfficialUrl(trip);
@@ -147,6 +148,7 @@ function AgentActivity({ trip, onStop }: { trip: Trip; onStop: () => void }) {
           <span className="min-w-0 truncate font-mono text-[11px] text-background/60">{new URL(officialUrl).hostname}</span>
         </button>
       ) : null}
+      {run?.session_id && !trip.sample ? <AgentScreen key={`${run.session_id}:${demo}`} sessionId={run.session_id} active={active} demo={demo} /> : null}
       {trip.agent_steps.length > 0 ? (
         <ol className="mt-5 space-y-2.5 border-t border-white/10 pt-5">
           {trip.agent_steps.map((step, i) => (
@@ -165,11 +167,13 @@ export function Dossier({
   trip,
   onStop,
   livePapers = null,
+  demo = false,
   children,
 }: {
   trip: Trip;
   onStop: () => void;
   livePapers?: LivePapersState | null;
+  demo?: boolean;
   children?: React.ReactNode;
 }) {
   return (
@@ -202,7 +206,7 @@ export function Dossier({
         </section>
       ) : null}
       {children}
-      <AgentActivity trip={trip} onStop={onStop} />
+      <AgentActivity trip={trip} onStop={onStop} demo={demo} />
     </div>
   );
 }

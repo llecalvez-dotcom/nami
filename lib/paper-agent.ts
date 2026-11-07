@@ -6,6 +6,8 @@ import { HAgentError, type ToolSpec } from "@/lib/h-agent";
 
 export const PAPER_MAX_TIME_S = 900;
 export const PAPER_MAX_STEPS = 80;
+import { H_SLOTS_BUSY } from "@/lib/paper-start-client";
+export { H_SLOTS_BUSY };
 
 // The only Bali paper the agent fills in (part A of ticket 05).
 export const PILOT_PAPER_ID = "evoa";
@@ -78,6 +80,8 @@ export const PaperStartSchema = z.object({
   paper_id: z.literal(PILOT_PAPER_ID),
   local_session_id: LOCAL_SESSION_ID,
   document_id: z.string().min(1).max(100).optional(),
+  idempotency_key: z.uuid().optional(),
+  resume: z.literal(true).optional(),
   file_paths: z.array(z.string().trim().min(1).max(500)).max(10).default([]),
 });
 export type PaperStart = z.infer<typeof PaperStartSchema>;
@@ -129,7 +133,7 @@ export function fail(error: string, status: number): Response {
 export function hErrorResponse(error: unknown): Response {
   if (error instanceof HAgentError) {
     if (error.status === 503) return fail("The H agent is not configured on this server (HAI_API_KEY).", 503);
-    if (error.status === 429) return fail("Another H agent session is running. Stop it, then try again.", 429);
+    if (error.status === 429) return fail(H_SLOTS_BUSY, 429);
     if (error.status === 404) return fail("This agent session was not found on H.", 404);
     if (error.status === 409) return fail("This agent session has already finished.", 409);
     if (error.status === 422 || error.status === 400) return fail("H refused the session settings.", 502);

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { agentName, cancelSession, createSession, getChanges, HAgentError, sendToolResult } from "@/lib/h-agent";
+import { agentName, cancelSession, createSession, getAvailableSessionSlots, getChanges, HAgentError, sendToolResult } from "@/lib/h-agent";
+import { PAPER_ANSWER_FORMAT } from "@/lib/agent-answer";
 
 const API = "https://agp.eu.hcompany.ai/api/v2";
 const TOOL = { name: "ask_user", description: "Ask", input_schema: { type: "object" } };
@@ -20,6 +21,95 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
+});
+
+describe("safe HTTP retries", () => {
+  const input = { task: "Fictitious task", tools: [TOOL], localBrowserSessionId: "local-42", maxTimeS: 900, maxSteps: 80 };
+  const key = "00000000-0000-4000-8000-000000000001";
+
+  it.each([408, 429, 500, 502, 503, 599])("retries GET twice with backoff on %s", async (status) => {
+    let attempt = 0;
+    const fetch = mockFetch(() => ++attempt < 3 ? new Response("private response", { status }) : Response.json({ status: "running" }));
+    const sleep = vi.fn(async () => {});
+    expect(await getChanges("s-1", 0, { sleep })).toMatchObject({ status: "running" });
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(sleep.mock.calls).toEqual([[250], [500]]);
+    expect(fetch.mock.calls[0][1].signal).not.toBe(fetch.mock.calls[1][1].signal);
+  });
+
+  it.each([400, 401, 403, 404, 409, 410, 412, 413, 422])("does not retry GET on %s", async (status) => {
+    const fetch = mockFetch(() => new Response("private response", { status, headers: { "Retry-After": "1" } }));
+    const sleep = vi.fn(async () => {});
+    await expect(getChanges("s-1", 0, { sleep })).rejects.toMatchObject({ status });
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("retries DELETE, capped at three attempts, without leaking the error body", async () => {
+    const fetch = mockFetch(() => new Response("passport 24AB12345 private task", { status: 503 }));
+    const sleep = vi.fn(async () => {});
+    const error = await cancelSession("s-1", { sleep }).catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(HAgentError);
+    expect(String(error)).not.toContain("24AB12345");
+    expect(String(error)).not.toContain("private task");
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(sleep).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries creation only with the same idempotency header and exact body", async () => {
+    let attempt = 0;
+    const fetch = mockFetch(() => ++attempt < 3 ? new Response(null, { status: 503 }) : Response.json({ id: "s-1" }));
+    const sleep = vi.fn(async () => {});
+    expect(await createSession({ ...input, idempotencyKey: key }, { sleep })).toMatchObject({ id: "s-1" });
+    expect(fetch).toHaveBeenCalledTimes(3);
+    for (const [, init] of fetch.mock.calls) {
+      expect(new Headers(init.headers).get("Idempotency-Key")).toBe(key);
+      expect(init.body).toBe(fetch.mock.calls[0][1].body);
+      expect(JSON.parse(init.body as string)).not.toHaveProperty("idempotencyKey");
+    }
+  });
+
+  it("never retries creation without a key, or tool-results POST even with transient failures", async () => {
+    const fetch = mockFetch(() => new Response(null, { status: 503 }));
+    const sleep = vi.fn(async () => {});
+    await expect(createSession(input, { sleep })).rejects.toMatchObject({ status: 503 });
+    await expect(sendToolResult("s-1", { tool_name: "ask_user", args: {}, id: "c1" }, "fictitious", { sleep })).rejects.toMatchObject({ status: 503 });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it.each([["2", 2000], ["999", 10000], ["0", 0], ["not a date", 250], ["-1", 250]])(
+    "honors bounded Retry-After %s", async (header, expected) => {
+      let attempt = 0;
+      mockFetch(() => ++attempt === 1 ? new Response(null, { status: 429, headers: { "Retry-After": String(header) } }) : Response.json({ status: "running" }));
+      const sleep = vi.fn(async () => {});
+      await getChanges("s-1", 0, { sleep });
+      expect(sleep.mock.calls).toEqual([[expected]]);
+    },
+  );
+
+  it.each([[-1000, 0], [5000, 5000], [60000, 10000]])("honors HTTP-date Retry-After offset %s", async (offset, expected) => {
+    const now = Date.UTC(2026, 10, 8, 12);
+    vi.spyOn(Date, "now").mockReturnValue(now);
+    let attempt = 0;
+    mockFetch(() => ++attempt === 1 ? new Response(null, { status: 503, headers: { "Retry-After": new Date(now + offset).toUTCString() } }) : Response.json({ status: "running" }));
+    const sleep = vi.fn(async () => {});
+    await getChanges("s-1", 0, { sleep });
+    expect(sleep.mock.calls).toEqual([[expected]]);
+  });
+
+  it("reads only verified numeric availability from the quota endpoint", async () => {
+    const fetch = mockFetch(() => Response.json({ scope: "organization", limit: 3, active: 1, available: 2 }));
+    expect(await getAvailableSessionSlots()).toBe(2);
+    expect(lastCall(fetch)[0]).toBe(`${API}/sessions/quota`);
+    expect(lastCall(fetch)[1].method).toBe("GET");
+  });
+
+  it.each([null, {}, { available: "2" }])("rejects malformed quota data: %j", async (body) => {
+    mockFetch(() => Response.json(body));
+    await expect(getAvailableSessionSlots()).rejects.toMatchObject({ status: 502 });
+  });
 });
 
 describe("createSession", () => {
@@ -37,6 +127,7 @@ describe("createSession", () => {
         description: expect.any(String),
         environments: [{ id: "browser", kind: "web", host: "user_device", session_id: "local-42", settle_s: 2, mode: { type: "visual", markdown: true } }],
         tools: [TOOL],
+        answer_format: PAPER_ANSWER_FORMAT,
       },
       messages: [{ type: "user_message", message: "Fill it" }],
       queue: false,

@@ -13,7 +13,10 @@ export function VisaProgress({ steps, compact = false }: { steps: ProgressStep[]
         <span>{Math.round((done / steps.length) * 100)}%</span>
       </div>
       <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-        <div className="h-full rounded-full bg-primary transition-[width] duration-700" style={{ width: `${(done / steps.length) * 100}%` }} />
+        <div
+          className="h-full w-full origin-left rounded-full bg-primary transition-transform duration-250 ease-[var(--ease-out)]"
+          style={{ transform: `scaleX(${steps.length ? done / steps.length : 0})` }}
+        />
       </div>
       <ol className={cn("mt-5", compact ? "space-y-3" : "grid gap-4 sm:grid-cols-5 sm:gap-3")}>
         {steps.map((step, i) => (
