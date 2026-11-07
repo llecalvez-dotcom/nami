@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { expiryWarning, extractPassport, hReader, type PassportReader, toExtraction } from "@/lib/passport";
+import {
+  configuredReader,
+  expiryWarning,
+  extractPassport,
+  hReader,
+  readerName,
+  type PassportReader,
+  toExtraction,
+} from "@/lib/passport";
 
 // Fictitious specimen values: never a real document.
 const SPECIMEN = {
@@ -67,30 +75,43 @@ describe("expiryWarning", () => {
   });
 });
 
+describe("configuredReader", () => {
+  it("is off unless an explicitly selected provider has a key", () => {
+    expect(configuredReader({})).toBeNull();
+    expect(readerName({})).toBe("off");
+    expect(configuredReader({ PASSPORT_READER: "h" })).toBeNull();
+    expect(readerName({ PASSPORT_READER: "h" })).toBe("off");
+    expect(configuredReader({ PASSPORT_READER: "anthropic", ANTHROPIC_API_KEY: "a-key" })?.name).toBe("anthropic");
+  });
+
+  it("selects only the explicitly enabled provider", () => {
+    expect(configuredReader({ PASSPORT_READER: "h", HAI_API_KEY: "h-key", ANTHROPIC_API_KEY: "a-key" })?.name).toBe("h");
+    expect(readerName({ PASSPORT_READER: "anthropic", HAI_API_KEY: "h-key", ANTHROPIC_API_KEY: "a-key" })).toBe("anthropic");
+    expect(configuredReader({ PASSPORT_READER: "other", HAI_API_KEY: "h-key", ANTHROPIC_API_KEY: "a-key" })).toBeNull();
+  });
+});
+
 describe("extractPassport", () => {
-  it("uses the H vision model first", async () => {
+  it("uses the configured H vision model", async () => {
     const h = vi.fn(async () => JSON.stringify(SPECIMEN));
-    const claude = vi.fn(async () => "{}");
-    await extractPassport(IMAGE, TRIP, [reader("h", h), reader("anthropic", claude)]);
+    await extractPassport(IMAGE, TRIP, reader("h", h));
     expect(h).toHaveBeenCalledWith(IMAGE);
-    expect(claude).not.toHaveBeenCalled();
   });
 
-  it("falls back to Claude when H fails, without logging the image", async () => {
+  it("throws on reader failure and logs no image or provider response body", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
-    const result = await extractPassport(IMAGE, TRIP, [
-      reader("h", async () => {
-        throw new Error("401");
+    await expect(
+      extractPassport(IMAGE, TRIP, {
+        name: "h",
+        read: async () => {
+          throw new Error("401 secret response");
+        },
       }),
-      reader("anthropic", async () => JSON.stringify(SPECIMEN)),
-    ]);
-    expect(result.fields.surname).toBe("MARTIN");
+    ).rejects.toThrow("Passport reading failed");
+    expect(JSON.stringify(log.mock.calls)).toContain("h");
     expect(JSON.stringify(log.mock.calls)).not.toContain(IMAGE.base64);
+    expect(JSON.stringify(log.mock.calls)).not.toContain("secret response");
     log.mockRestore();
-  });
-
-  it("fails when no model is configured", async () => {
-    await expect(extractPassport(IMAGE, TRIP, [])).rejects.toThrow("No vision model");
   });
 });
 

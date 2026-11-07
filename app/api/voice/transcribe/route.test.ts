@@ -1,5 +1,6 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "@/app/api/voice/transcribe/route";
+import { resetGuards } from "@/lib/api-guard";
 
 function request(audio?: Blob) {
   const form = new FormData();
@@ -18,6 +19,10 @@ function stubGladia(handler: (path: string) => Response | Promise<Response>) {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+});
+
+beforeEach(() => {
+  resetGuards();
 });
 
 describe("POST /api/voice/transcribe", () => {
