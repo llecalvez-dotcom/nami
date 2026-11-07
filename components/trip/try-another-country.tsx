@@ -27,17 +27,17 @@ export function TryAnotherCountry() {
   };
 
   return (
-    <section className="space-y-4 rounded-[18px] bg-card p-6 shadow-soft">
-      <h3 className="text-[20px] font-medium tracking-[-0.5px]">Try another country</h3>
+    <section className="space-y-3 rounded-[18px] border border-border p-5">
+      <h3 className="text-sm font-medium text-muted-foreground">Try another country</h3>
       <form onSubmit={submit} className="flex gap-2">
         <Input
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Japan, Tanzania, Kenya…"
           aria-label="Try another country"
-          className="h-10 rounded-full border-transparent bg-muted px-4"
+          className="h-11 rounded-full border-transparent bg-muted px-4"
         />
-        <Button type="submit" size="lg" className="h-10 rounded-full px-5 shadow-glow" disabled={!text.trim() || papers?.state === "loading"}>
+        <Button type="submit" variant="outline" size="lg" className="h-11 rounded-full px-4" disabled={!text.trim() || papers?.state === "loading"}>
           <Search /> Search
         </Button>
       </form>

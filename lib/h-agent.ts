@@ -1,6 +1,7 @@
 // REST client of the H Agents API (https://hub.hcompany.ai/agents-api), without the SDK's runSession.
 // Field names follow sessions/create, your-browser, sessions/changes and sessions/tool-results.
 // Nothing here logs the task, the tool arguments or the agent's answers.
+import { PAPER_ANSWER_FORMAT } from "@/lib/agent-answer";
 
 export const H_AGENTS_API = "https://agp.eu.hcompany.ai/api/v2";
 const DEFAULT_AGENT_NAME = "nami-paper-agent";
@@ -52,7 +53,17 @@ export class HAgentError extends Error {
   }
 }
 
-export type HClientOptions = { apiKey?: string; fetch?: typeof fetch; baseUrl?: string };
+export type HClientOptions = { apiKey?: string; fetch?: typeof fetch; baseUrl?: string; sleep?: (ms: number) => Promise<void> };
+
+function retryDelay(header: string | null, retry: number): number {
+  if (header !== null && header.trim() !== "") {
+    const seconds = Number(header);
+    if (Number.isFinite(seconds)) return seconds >= 0 ? Math.min(seconds * 1000, 10_000) : 250 * 2 ** retry;
+    const date = Date.parse(header);
+    if (Number.isFinite(date)) return Math.min(Math.max(0, date - Date.now()), 10_000);
+  }
+  return 250 * 2 ** retry;
+}
 
 function settings(options: HClientOptions) {
   const apiKey = options.apiKey ?? process.env.HAI_API_KEY;
@@ -64,16 +75,24 @@ function settings(options: HClientOptions) {
 async function call(path: string, init: RequestInit & { timeoutMs?: number }, options: HClientOptions): Promise<Response> {
   const { apiKey, fetchImpl, baseUrl } = settings(options);
   const { timeoutMs = REQUEST_TIMEOUT_MS, ...rest } = init;
-  const response = await fetchImpl(`${baseUrl}${path}`, {
-    ...rest,
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", ...rest.headers },
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  if (!response.ok) {
+  const method = rest.method ?? "GET";
+  const retryable = method === "GET" || method === "DELETE"
+    || (method === "POST" && path === "/sessions" && Boolean(new Headers(rest.headers).get("Idempotency-Key")));
+  for (let retry = 0; ; retry++) {
+    const response = await fetchImpl(`${baseUrl}${path}`, {
+      ...rest,
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", ...rest.headers },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (response.ok) return response;
     await response.body?.cancel().catch(() => {});
+    if (retryable && retry < 2 && (response.status === 408 || response.status === 429 || (response.status >= 500 && response.status < 600))) {
+      const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+      await sleep(retryDelay(response.headers.get("Retry-After"), retry));
+      continue;
+    }
     throw new HAgentError(`H Agents API answered ${response.status} on ${init.method ?? "GET"} ${path.split("?")[0]}`, response.status);
   }
-  return response;
 }
 
 const sessionPath = (id: string) => `/sessions/${encodeURIComponent(id)}`;
@@ -97,6 +116,7 @@ export type CreateSessionInput = {
   localBrowserSessionId: string;
   maxTimeS: number;
   maxSteps: number;
+  idempotencyKey?: string;
 };
 
 export function createSessionBody(input: CreateSessionInput) {
@@ -111,6 +131,7 @@ export function createSessionBody(input: CreateSessionInput) {
         { id: "browser", kind: "web", host: "user_device", session_id: input.localBrowserSessionId, settle_s: 2, mode: { type: "visual", markdown: true } },
       ],
       tools: input.tools,
+      answer_format: PAPER_ANSWER_FORMAT,
     },
     messages: [{ type: "user_message", message: input.task }],
     queue: false,
@@ -120,10 +141,20 @@ export function createSessionBody(input: CreateSessionInput) {
 }
 
 export async function createSession(input: CreateSessionInput, options: HClientOptions = {}): Promise<{ id: string; status: string | null }> {
-  const response = await call("/sessions", { method: "POST", body: JSON.stringify(createSessionBody(input)) }, options);
+  const response = await call("/sessions", {
+    method: "POST", body: JSON.stringify(createSessionBody(input)),
+    ...(input.idempotencyKey ? { headers: { "Idempotency-Key": input.idempotencyKey } } : {}),
+  }, options);
   const body = (await response.json()) as { id?: string; status?: { status?: string } };
   if (!body.id) throw new HAgentError("H Agents API returned no session id", 502);
   return { id: body.id, status: body.status?.status ?? null };
+}
+
+export async function getAvailableSessionSlots(options: HClientOptions = {}): Promise<number> {
+  const response = await call("/sessions/quota", { method: "GET" }, options);
+  const body = await response.json() as { available?: unknown };
+  if (typeof body?.available !== "number" || !Number.isFinite(body.available)) throw new HAgentError("H session quota is unavailable", 502);
+  return body.available;
 }
 
 // null = 204, nothing new within the wait.
