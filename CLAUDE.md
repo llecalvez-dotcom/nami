@@ -27,13 +27,13 @@ Note de projet de Nathan : `~/Code/perso/obsidian-vault/projets/_actifs/2026-11-
 - Aucun tiret cadratin ni demi-cadratin dans les textes de l'interface.
 
 ## Current Project State
-(vérifié le samedi 7 novembre à 14 h 35)
+(vérifié le samedi 7 novembre à 15 h 05)
 
 | Aspect | Status |
 |--------|--------|
-| Code | 🔄 Fusionnés : squelette (01), compréhension par le modèle H (02), papiers en direct Linkup + lecture du passeport + affichage (03, PR #6), voix Gladia (04). Ticket 05 élargi (PR #9) : partie A e-VOA de Bali, partie B tout papier officiel en beta ; pas encore lancé sur Devin. Ticket 06 (tout brancher + mode démo préparé) pas écrit. |
-| Config | ✅ Clés dans les secrets de Devin cloud (`HAI_API_KEY` remplacée à 14 h 25, vérifiée par Devin : `/api/trip/parse` en 200) ; `.env*` et `private/` ignorés ; accord écrit du titulaire du passeport. ❌ CLI de H (`hai-agents[cli,browser]`) et Chrome dédié pas encore installés sur le portable de Clément. ❓ Les `.env.local` locaux ont-ils la nouvelle clé H ? |
-| Tests | ✅ `main` : 131 tests, lint et compilation OK ; F0 (compréhension), F5 (voix) et L1 (Linkup, 5 pays sur 5) réussis en réel. ❓ F7 (vrai passeport, Ali), F6 et F8 (Clément) sans résultat sur GitHub. |
+| Code | 🔄 Fusionnés : 01, 02, 03 (PR #6), 04, routes protégées et passeport privé (PR #12). PR #13 (design + page World map, Léon) relue, testée et prête. PR #14 (ticket 05 partie A, agent H sur l'e-VOA, Clément) relue (172 tests) ; arrêt hors du domaine officiel et rebasage demandés à son Devin à 15 h 03 ; test réel 3 sur 3 à faire. Partie B et ticket 06 pas commencés. PR #11 (coffre chiffré) hors hackathon, laissée ouverte. |
+| Config | ✅ Clés dans les secrets de Devin cloud (`HAI_API_KEY` remplacée à 14 h 25) ; `.env*` et `private/` ignorés ; accord écrit du titulaire du passeport. Nouvelles variables : `PASSPORT_READER` (`off` par défaut, `h` pour la démo), `NAMI_ACCESS_CODE` (obligatoire en production). ❓ CLI de H et Chrome dédié sur le portable de Clément ; `.env.local` locaux avec la nouvelle clé H. |
+| Tests | ✅ `main` : 164 tests, lint et compilation OK ; F0, F5 (voix) et L1 (Linkup, 5 pays sur 5) réussis en réel. ❓ T8 (vrai passeport, Ali). ⬜ T4 à T6 (agent H sur le portable de Clément). |
 
 ## Next Immediate Action
-Relancer Clément : Devin cloud sur `docs/tickets/05-agent-visa.md` partie A (e-VOA de Bali, sans repérage manuel), et installer le CLI de H et le Chrome dédié sur son portable pendant que Devin code. Relire la PR 05 dès qu'elle arrive (tests, lint, compilation, fusion simulée). En parallèle : Ali fait le test F7 (`docs/tests/f7-passeport.md`), Claude écrit le ticket 06 et prépare le pitch avec Nathan.
+Relire les nouveaux commits de la PR #14 dès qu'ils arrivent (arrêt hors domaine, rebasage sur `main`) : `npm test`, `npm run lint`, `npm run build`, fusion simulée, puis feu vert au test réel de Clément. En parallèle, écrire `docs/tickets/06-demo.md` (tout brancher + mode démo préparé, avec `PASSPORT_READER=h`, `NAMI_ACCESS_CODE` si en ligne, redémarrage du serveur avant la démo pour les quotas) et préparer le pitch avec Nathan.
