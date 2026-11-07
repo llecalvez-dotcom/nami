@@ -16,6 +16,17 @@ Trois passages réels sur le Mac de Clément (densité 1, 0,44 $ au total) : l'a
 
 ## Ce qu'il faut faire
 
+État au 7 novembre (branche `feat/17-suite-agent-evoa`, code et tests seulement, aucun passage réel) :
+
+- [x] 1 côté Nami : `upload_file { purpose: "return_ticket" }` (recherche PDF, confirmation, champ `return_ticket`, `ask_user` sans billet).
+- [ ] 1 démo : vrai billet retour en PDF dans `private/` (Clément, sur son Mac).
+- [x] 2 : la photo et le scan du ticket 16 étaient déjà sur `main` (PR #50, #51, #53) ; rien refait ici, dépôt réel à voir au passage.
+- [x] 3 : `pickExpression` lit le libellé du bloc `.form-group` sans l'astérisque et préfère le libellé exact.
+- [x] 4 : outil `fill_field`, route `/api/agent/[id]/fill`, consigne pour le code postal.
+- [x] 5 : nom et prénoms lus par Nami transmis tels quels dans la tâche, avec la consigne de les écrire tels quels.
+- [ ] 6, 7, 8 : passages réels, relevés et nettoyage, sur le Mac de Clément.
+- [x] Tests vitest des trois points, `npm test`, `npm run lint`, `npm run build`.
+
 1. **Billet retour (bloquant).** Le champ Return Ticket (PDF) est obligatoire à l'étape 2.
    - Pour la démo, mettre dans `private/` un vrai billet retour en PDF (réservation réelle, accord du titulaire). Ne jamais fabriquer de faux document pour un site officiel.
    - Côté Nami : `upload_file { purpose: "return_ticket" }`, avec un fichier PDF trouvé dans `NAMI_DOCUMENTS_DIR` (mots du nom : `billet`, `ticket`, `retour`, `return`, `flight`) et confirmé comme le passeport. Champ de la page à relever au prochain passage (nom et `accept` du champ fichier du Return Ticket), puis choix par nom comme dans le ticket 16.

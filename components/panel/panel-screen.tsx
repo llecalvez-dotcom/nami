@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Conversation } from "@/components/trip/conversation";
 import { PassportCard } from "@/components/trip/passport-card";
 import { PhotoCard } from "@/components/trip/photo-card";
+import { ReturnTicketCard } from "@/components/trip/return-ticket-card";
 import { useAgentRun } from "@/components/trip/use-agent-run";
 import { useTripActions } from "@/components/trip/use-trip-actions";
 import { MicButton, VoiceStatusLine } from "@/components/voice/mic-button";
@@ -15,7 +16,7 @@ import { speakLine } from "@/components/voice/speech";
 import { useSpokenLanguage } from "@/lib/voice/language";
 import { requestTranslations, translated, useTranslatedConversation, useTranslationsVersion } from "@/lib/voice/translations";
 import type { DocumentExtraction, PassportFields } from "@/lib/contracts";
-import { bestFirst, foundPassportText, foundPhotoText, readSummary, type Reader } from "@/lib/panel-documents";
+import { bestFirst, foundPassportText, foundPhotoText, foundReturnTicketText, readSummary, type Reader } from "@/lib/panel-documents";
 import { requestTripParse } from "@/lib/trip-parse-client";
 import {
   acceptProposal,
@@ -148,7 +149,7 @@ function StartView({ onTrip }: { onTrip: (trip: Trip) => void }) {
 
 type Found = { id: string; name: string; score: number };
 
-async function findDocuments(kind: "passport" | "photo"): Promise<Found[]> {
+async function findDocuments(kind: "passport" | "photo" | "return_ticket"): Promise<Found[]> {
   try {
     const response = await fetch(`/api/documents/find?kind=${kind}`, { cache: "no-store" });
     if (!response.ok) return [];
@@ -174,6 +175,7 @@ function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
   const [documentId, setDocumentId] = useState<string | null>(null);
   // Set by the photo card when the spoken path falls back to the cards.
   const [photoDocumentId, setPhotoDocumentId] = useState<string | null>(null);
+  const [returnTicketDocumentId, setReturnTicketDocumentId] = useState<string | null>(null);
   const [searchRequest, setSearchRequest] = useState(0);
   const [manual, setManual] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -186,7 +188,9 @@ function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
     offered: string | null;
     read: { fields: PassportFields; documentId: string } | null;
     photos: Found[];
-  }>({ visaItem: null, passports: [], reader: null, offered: null, read: null, photos: [] });
+    photoDocumentId?: string;
+    tickets: Found[];
+  }>({ visaItem: null, passports: [], reader: null, offered: null, read: null, photos: [], tickets: [] });
   const secrets = useMemo(() => [passport?.passport_number, passport?.birth_date], [passport]);
   const run = trip.agent_run;
   const reconfirm = needsPassportReconfirm(run, passport !== null);
@@ -220,6 +224,7 @@ function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
     passport,
     documentId,
     photoDocumentId,
+    returnTicketDocumentId,
     onNeedPassport: () => setSearchRequest((request) => request + 1),
     // No tab is opened here: the agent drives the tab already open next to the panel. Opening the official site
     // before the agent reaches it would create a second official tab, and upload_file refuses to choose between two.
@@ -227,7 +232,7 @@ function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
   });
   const latest = () => getTrip(trip.id) ?? trip;
   const say = (text: string) => saveTrip(pushAgentMessage(latest(), text));
-  const ask = (action: "read_passport" | "confirm_passport" | "use_photo", text: string, yes: string, no: string) =>
+  const ask = (action: "read_passport" | "confirm_passport" | "use_photo" | "use_return_ticket", text: string, yes: string, no: string) =>
     saveTrip(pushProposal(latest(), action, text, yes, no));
 
   // The visa first: the entry papers are accepted for the traveller, the visa proposal follows right away.
@@ -242,11 +247,25 @@ function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
     setSearchRequest((request) => request + 1);
   };
 
-  const startAgent = (photoDocumentId?: string) => {
+  const startAgent = (returnTicketDocumentId?: string) => {
     const read = flow.current.read;
     const visaItem = flow.current.visaItem;
     if (!read || !visaItem) return;
-    void actions.createVisa(visaItem, { passport: read.fields, documentId: read.documentId, photoDocumentId });
+    void actions.createVisa(visaItem, {
+      passport: read.fields, documentId: read.documentId, photoDocumentId: flow.current.photoDocumentId, returnTicketDocumentId,
+    });
+  };
+
+  // The Return Ticket field of the e-VOA is required and takes a PDF only: without a confirmed one, the agent asks.
+  const lookForReturnTicket = async (photoDocumentId?: string) => {
+    flow.current.photoDocumentId = photoDocumentId;
+    setBusy("Looking for your return ticket…");
+    const tickets = await findDocuments("return_ticket");
+    setBusy(null);
+    flow.current.tickets = tickets;
+    const ticket = tickets[0];
+    if (ticket) ask("use_return_ticket", foundReturnTicketText(ticket), "Yes, use it", "No");
+    else startAgent();
   };
 
   const offerPassport = () => {
@@ -303,7 +322,7 @@ function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
     flow.current.photos = photos;
     const photo = photos[0];
     if (photo) ask("use_photo", foundPhotoText(photo), "Yes, use it", "No");
-    else startAgent();
+    else void lookForReturnTicket();
   };
 
   const decide = (itemId: string, accepted: boolean) => {
@@ -316,11 +335,12 @@ function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
       void lookForPassport();
       return;
     }
-    if (item.action === "read_passport" || item.action === "confirm_passport" || item.action === "use_photo") {
+    if (item.action === "read_passport" || item.action === "confirm_passport" || item.action === "use_photo" || item.action === "use_return_ticket") {
       actions.decide(itemId, accepted);
       if (item.action === "read_passport") return void (accepted ? readPassport() : offerPassport());
       if (item.action === "confirm_passport") return accepted ? void confirmPassport() : fallBackToCard("Check the fields below, then confirm them.");
-      return startAgent(accepted ? flow.current.photos[0]?.id : undefined);
+      if (item.action === "use_photo") return void lookForReturnTicket(accepted ? flow.current.photos[0]?.id : undefined);
+      return startAgent(accepted ? flow.current.tickets[0]?.id : undefined);
     }
     actions.decide(itemId, accepted);
   };
@@ -392,6 +412,7 @@ function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
               }}
             />
             {documentId ? <div className="mt-4"><PhotoCard demo onConfirm={setPhotoDocumentId} /></div> : null}
+            {documentId ? <div className="mt-4"><ReturnTicketCard demo onConfirm={setReturnTicketDocumentId} /></div> : null}
           </section>
         ) : null}
       </main>

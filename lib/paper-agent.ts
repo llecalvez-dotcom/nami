@@ -70,18 +70,34 @@ export const PICK_OPTION_TOOL: ToolSpec = {
   },
 };
 
-export const UPLOAD_FILE_TOOL: ToolSpec = {
-  name: "upload_file",
-  description: "Ask Nami to give the confirmed passport file (purpose passport) or the confirmed identity photo (purpose photo) to the official form. Never open the OS file picker. After success, take a screenshot to verify the file is shown; do not reload or refresh the page or navigate away. If unavailable, call ask_user for a manual upload.",
+export const FILL_FIELD_TOOL: ToolSpec = {
+  name: "fill_field",
+  description:
+    "Write a value in a text field of the current page and fire the events the page listens to (input, change, keyup). Use it for the Postal Code, whose lookup only runs on keyup: the page then fills Province, City, District and Village. The result tells the value read back and the fields the page filled. Do not reload or refresh the page or navigate away; take a screenshot and continue with the next field.",
   input_schema: {
     type: "object",
-    properties: { purpose: { type: "string", enum: ["passport", "photo"] } },
+    properties: {
+      field: { type: "string", description: "Label of the field as shown on the page, for example Postal Code." },
+      value: { type: "string", description: "Value to write, for example 80361." },
+    },
+    required: ["field", "value"],
+  },
+};
+
+export const UPLOAD_PURPOSES = ["passport", "photo", "return_ticket"] as const;
+
+export const UPLOAD_FILE_TOOL: ToolSpec = {
+  name: "upload_file",
+  description: "Ask Nami to give a confirmed file to the official form: the passport (purpose passport), the identity photo (purpose photo) or the return flight ticket in PDF (purpose return_ticket). Never open the OS file picker. After success, take a screenshot to verify the file is shown; do not reload or refresh the page or navigate away. If unavailable, call ask_user for a manual upload: never upload another file in its place.",
+  input_schema: {
+    type: "object",
+    properties: { purpose: { type: "string", enum: [...UPLOAD_PURPOSES] } },
     required: ["purpose"],
     additionalProperties: false,
   },
 };
 
-export const PAPER_TOOLS: ToolSpec[] = [ASK_USER_TOOL, REPORT_READY_TOOL, PICK_OPTION_TOOL, UPLOAD_FILE_TOOL];
+export const PAPER_TOOLS: ToolSpec[] = [ASK_USER_TOOL, REPORT_READY_TOOL, PICK_OPTION_TOOL, FILL_FIELD_TOOL, UPLOAD_FILE_TOOL];
 
 export const LOCAL_SESSION_ID = z
   .string()
@@ -97,16 +113,18 @@ export const PaperStartSchema = z.object({
   local_session_id: LOCAL_SESSION_ID,
   document_id: z.string().min(1).max(100).optional(),
   photo_document_id: z.string().min(1).max(100).optional(),
+  return_ticket_document_id: z.string().min(1).max(100).optional(),
   idempotency_key: z.uuid().optional(),
   resume: z.literal(true).optional(),
   file_paths: z.array(z.string().trim().min(1).max(500)).max(10).default([]),
 });
 export type PaperStart = z.infer<typeof PaperStartSchema>;
 
+// The surname and given names read by Nami go in as they are: a surname with a particle (LE CALVEZ) keeps every word.
 export function describeTraveller(passport: PassportFields): string {
   return [
-    `Surname: ${passport.surname}.`,
-    `Given names: ${passport.given_names}.`,
+    `Surname (Last Name), to write exactly as given, every word, nothing removed: ${passport.surname}.`,
+    `Given names (First Name), to write exactly as given: ${passport.given_names}.`,
     `Nationality: ${passport.nationality}.`,
     `Date of birth: ${passport.birth_date}.`,
     `Passport number: ${passport.passport_number}.`,

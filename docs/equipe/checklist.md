@@ -37,6 +37,7 @@
 | F21 | Couche visuelle dans l'onglet officiel : curseur, onde, contour du champ, cadre et bulle ; état masqué relayé par le panneau | 🟡 PR #49 fusionnée, ticket 13 : [tests automatiques et contrôle CDP sur e-VOA](../tests/13-couche-visuelle.md) ; passage réel H et vidéo avec ticket 15 encore requis | Léon | 13 |
 | F22 | Panneau épuré : parcours visa, passeport et photo à la voix | 🟡 PR #52 et #53 fusionnées ; parcours complet à la voix dans le panneau jusqu'au paiement non testé | Nathan | 14 |
 | F23 | Photo d'identité et scan du passeport : recherche, confirmation et dépôt dans les bons champs | 🟡 PR #50, #51 et #53 fusionnées ; dépôts fictifs dans les bons champs rapportés OK par Ali ; page 1 non franchie, scan et photo de démo à préparer manuellement ([résultat](../tests/t12-depot-fichier-cdp.md)) | Ali | 16 |
+| F24 | Suite de l'agent e-VOA (ticket 17) : billet retour PDF (`upload_file return_ticket`), libellé du bloc dans `pick_option` (Port of Entry contre Port of Entry Mode), outil `fill_field` pour le code postal (`keyup`), nom à particule transmis tel quel | 🔵 branche `feat/17-suite-agent-evoa` en relecture (713 tests, lint et compilation OK) ; passages réels, étapes 3 et suivantes et relevés dans `docs/tests/f1-evoa.md` à faire sur le Mac de Clément | Clément | 17 |
 
 ## 2. Back (routes serveur et logique)
 
@@ -99,9 +100,10 @@
 ## 6. Ce que chacun fait maintenant, dans l'ordre
 
 **Clément (agent H)**
-1. Ticket 15 : relire la PR `feat/15-agent-evoa-complet`, puis 3 passages réels sur son portable (`scripts/lancer-demo.sh`, Chrome en densité 1) : arrêt devant le paiement, une fois « Stop agent » en cours de route ; résultat dans `docs/tests/f1-evoa.md` (T4, T5, T6), puis ajuster `route_hint` ou `stop_condition`. Tout le recadrage en dépend.
-2. Si l'agent s'arrête avec « it left the official site (….imigrasi.go.id) » alors que le site l'y a envoyé normalement : élargir le domaine de l'e-VOA à `imigrasi.go.id` dans `lib/bali-papers.ts`.
-3. Si T9 réussit : ticket 10 (avec Ali).
+1. Ticket 17 : relire la PR `feat/17-suite-agent-evoa` (billet retour, `fill_field`, libellés des menus, nom à particule), mettre un vrai billet retour en PDF dans `private/` (nom contenant `billet`, `ticket`, `retour`, `return` ou `flight`), puis passages réels (points 6 et 7 du ticket) : relever les étapes 3 et suivantes dans `docs/tests/f1-evoa.md`.
+2. Ticket 15 : relire la PR `feat/15-agent-evoa-complet`, puis 3 passages réels sur son portable (`scripts/lancer-demo.sh`, Chrome en densité 1) : arrêt devant le paiement, une fois « Stop agent » en cours de route ; résultat dans `docs/tests/f1-evoa.md` (T4, T5, T6), puis ajuster `route_hint` ou `stop_condition`. Tout le recadrage en dépend.
+3. Si l'agent s'arrête avec « it left the official site (….imigrasi.go.id) » alors que le site l'y a envoyé normalement : élargir le domaine de l'e-VOA à `imigrasi.go.id` dans `lib/bali-papers.ts`.
+4. Si T9 réussit : ticket 10 (avec Ali).
 
 **Ali (papiers, passeport, sécurité)**
 1. Fusionner la PR #18 (contrôle MRZ, relue par Claude).

@@ -48,7 +48,7 @@ async function start(request: Request): Promise<Response> {
   }
   const input = PaperStartSchema.safeParse(body);
   if (!input.success) {
-    if (input.error.issues.some((issue) => issue.path[0] === "document_id" || issue.path[0] === "photo_document_id")) {
+    if (input.error.issues.some((issue) => issue.path[0] === "document_id" || issue.path[0] === "photo_document_id" || issue.path[0] === "return_ticket_document_id")) {
       return fail("The passport document is no longer available. Search for your passport again.", 400);
     }
     return fail(`Invalid request: ${input.error.issues.map((i) => i.path.join(".") || "body").join(", ")}.`, 400);
@@ -61,6 +61,10 @@ async function start(request: Request): Promise<Response> {
   const photoPaths = input.data.photo_document_id === undefined ? [] : await documentFilePaths([input.data.photo_document_id], "photo");
   if (photoPaths === null) {
     return fail("The identity photo is no longer available. Search for your photo again.", 400);
+  }
+  const ticketPaths = input.data.return_ticket_document_id === undefined ? [] : await documentFilePaths([input.data.return_ticket_document_id], "return_ticket");
+  if (ticketPaths === null) {
+    return fail("The return ticket is no longer available. Search for your return ticket again.", 400);
   }
   let browser: Awaited<ReturnType<typeof preflightBrowser>> | undefined;
   try {
@@ -82,7 +86,7 @@ async function start(request: Request): Promise<Response> {
     });
     browser.commit(session.id, input.data.idempotency_key);
     bindSessionPaper(session.id, input.data.paper_id);
-    if (input.data.document_id) bindSessionDocument(session.id, documentPaths[0], photoPaths[0]);
+    if (input.data.document_id) bindSessionDocument(session.id, documentPaths[0], photoPaths[0], ticketPaths[0]);
     return Response.json({ session_id: session.id, status: session.status }, { status: 201 });
   } catch (error) {
     if (error instanceof AgentPreflightError) return fail(error.message, error.status);

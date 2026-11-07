@@ -221,6 +221,30 @@ describe("passport document handoff", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("binds the confirmed PDF return ticket too, and rejects a ticket id that is not a ticket token (ticket 17)", async () => {
+    await writeFile(join(root, "billet-retour.pdf"), "fictitious pdf bytes");
+    const [ticket] = await findDocuments("return_ticket");
+    const wrongKind = await start({ ...BODY, document_id: documentId, return_ticket_document_id: documentId });
+    expect(wrongKind.status).toBe(400);
+    expect((await wrongKind.json()).error).toContain("Search for your return ticket again.");
+    expect(fetch).not.toHaveBeenCalled();
+    expect((await start({ ...BODY, document_id: documentId, return_ticket_document_id: ticket.id })).status).toBe(201);
+    expect(JSON.stringify(sentBody())).not.toContain("billet-retour");
+    const send = vi.fn(async (method: string, params: Record<string, unknown> = {}) => {
+      if (method === "Target.getTargets") return {
+        targetInfos: [{ type: "page", targetId: "official", url: "https://evisa.imigrasi.go.id/form" }],
+      };
+      if (method === "Target.attachToTarget") return { sessionId: "target" };
+      if (method === "Runtime.evaluate") return { result: { objectId: "ticket-input" } };
+      if (method === "Runtime.callFunctionOn") return { result: params.returnByValue ? { value: true } : { objectId: "events" } };
+      return {};
+    });
+    vi.mocked(connectChrome).mockResolvedValue({ send, close: vi.fn() });
+    const result = await uploadSessionDocument("s-1", { tool_name: "upload_file", args: { purpose: "return_ticket" }, id: "u-ticket" });
+    expect(result).toBe("uploaded");
+    expect(send).toHaveBeenCalledWith("DOM.setFileInputFiles", { objectId: "ticket-input", files: [join(root, "billet-retour.pdf")] }, "target");
+  });
+
   it("binds the confirmed identity photo too, and rejects a photo id that is not a photo token", async () => {
     await writeFile(join(root, "photo-identite.jpg"), "fictitious photo bytes");
     const [photo] = await findDocuments("photo");
@@ -295,7 +319,9 @@ describe("POST /api/papers/start (route 5)", () => {
     expect(body.agent.environments).toEqual([
       { id: "browser", kind: "web", host: "user_device", session_id: "local-42", settle_s: 2, mode: { type: "visual", markdown: true } },
     ]);
-    expect(body.agent.tools.map((t: { name: string }) => t.name)).toEqual(["ask_user", "report_ready", "pick_option", "upload_file"]);
+    expect(body.agent.tools.map((t: { name: string }) => t.name)).toEqual(["ask_user", "report_ready", "pick_option", "fill_field", "upload_file"]);
+    expect(body.agent.tools[3].input_schema.required).toEqual(["field", "value"]);
+    expect(body.agent.tools[4].input_schema.properties.purpose.enum).toEqual(["passport", "photo", "return_ticket"]);
     expect(body.agent.tools[0].input_schema.required).toEqual(["question", "field"]);
     expect(body.agent.tools[1].input_schema.required).toEqual(["summary", "filled_fields"]);
   });
