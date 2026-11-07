@@ -2,6 +2,7 @@ import { API_LIMITS, guard, readJsonLimited } from "@/lib/api-guard";
 import { createSession, getAvailableSessionSlots } from "@/lib/h-agent";
 import { documentFilePaths } from "@/lib/documents";
 import { bindSessionDocument } from "@/lib/agent-passport-upload";
+import { AgentPreflightError, preflightBrowser } from "@/lib/agent-preflight";
 import {
   buildPilotTask,
   buildPilotInstructions,
@@ -47,13 +48,15 @@ async function start(request: Request): Promise<Response> {
   if (documentPaths === null) {
     return fail("The passport document is no longer available. Search for your passport again.", 400);
   }
-  // A keyed retry may belong to a session that already holds the last slot: let H return it.
-  if (!(input.data.resume && input.data.idempotency_key)) {
-    try {
-      if (await getAvailableSessionSlots() <= 0) return fail(H_SLOTS_BUSY, 429);
-    } catch {}
-  }
+  let browser: Awaited<ReturnType<typeof preflightBrowser>> | undefined;
   try {
+    browser = await preflightBrowser(input.data.local_session_id, undefined, input.data.resume ? input.data.idempotency_key : undefined);
+    // A keyed retry may belong to a session that already holds the last slot: let H return it.
+    if (!(input.data.resume && input.data.idempotency_key)) {
+      try {
+        if (await getAvailableSessionSlots() <= 0) return fail(H_SLOTS_BUSY, 429);
+      } catch {}
+    }
     const session = await createSession({
       task: buildPilotTask(input.data),
       instructions: buildPilotInstructions(),
@@ -63,9 +66,13 @@ async function start(request: Request): Promise<Response> {
       maxSteps: PAPER_MAX_STEPS,
       idempotencyKey: input.data.idempotency_key,
     });
+    browser.commit(session.id, input.data.idempotency_key);
     if (input.data.document_id) bindSessionDocument(session.id, documentPaths[0]);
     return Response.json({ session_id: session.id, status: session.status }, { status: 201 });
   } catch (error) {
+    if (error instanceof AgentPreflightError) return fail(error.message, error.status);
     return hErrorResponse(error);
+  } finally {
+    browser?.release();
   }
 }

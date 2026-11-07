@@ -29,7 +29,7 @@ export const ASK_USER_TOOL: ToolSpec = {
 export const REPORT_READY_TOOL: ToolSpec = {
   name: "report_ready",
   description:
-    "Call once the stop condition is reached, without clicking anything on that screen. Then return the final answer in the required format and stop.",
+    "Call once the stop condition is reached, without clicking anything on that screen. This is your last action: Nami ends the session after this call.",
   input_schema: {
     type: "object",
     properties: {

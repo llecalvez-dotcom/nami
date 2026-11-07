@@ -31,6 +31,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 [[ "$PORT" =~ ^[0-9]+$ ]] || die "Port must be a number, got: $PORT"
+export NAMI_AGENT_CHROME_PORT="$PORT"
 mkdir -p "$STATE_DIR" "$LOG_DIR"
 
 # --- H key: holo reads HAI_API_KEY, else ~/.config/hai/.env. Take it from .env.local if needed, without printing it.
@@ -175,6 +176,7 @@ if [ -n "$status" ] && [ "$status" != "000" ]; then
   grep -qF "Nami prepares your trip" "$LOG_DIR/port-3000.html" ||
     die "Port 3000 is used by another app. Stop it, then run the script again."
   say "Nami already runs on http://localhost:3000: keeping only the H bridge alive. Ctrl+C to stop it."
+  say "That Nami must use Chrome port $PORT: put NAMI_AGENT_CHROME_PORT=$PORT in .env.local and restart it, or stop it and run this script again."
   wait "$BRIDGE_PID" || exit 1
   exit 0
 fi

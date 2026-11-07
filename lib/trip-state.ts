@@ -548,8 +548,8 @@ export function reportReady(trip: Trip, call: ToolRequest, secrets: readonly (st
   const marked = markHandled(trip, call);
   return push(
     {
-      ...withRun(marked, { result: { ...marked.agent_run!.result, summary, filled_fields: filled } }),
-      agent_steps: [...marked.agent_steps, "Reached the payment screen, stopped, nothing clicked"],
+      ...withRun(closeAgentQuestions(marked, "Agent stopped"), { state: "interrupted", drained: true, pending_question: undefined, result: { ...marked.agent_run!.result, summary, filled_fields: filled } }),
+      agent_steps: [...marked.agent_steps, "Nami stopped the agent at the payment page so you can check and pay"],
       formalities: marked.formalities.map((f) => (f.id === "evoa" ? { ...f, status: "pending_approval" } : f)),
     },
     { kind: "agent", text: VISA_READY_MESSAGE, list: filled },

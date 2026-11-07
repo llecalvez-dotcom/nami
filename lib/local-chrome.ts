@@ -1,16 +1,17 @@
 // Local only: picks an option of a native <select> hidden behind a custom dropdown (Select2...) in the traveller's
 // own Chrome, through its DevTools port. The agent's clicks cannot open those menus.
 
+import { agentChromePort } from "@/lib/chrome-cdp";
+
 type CdpTab = { type: string; url: string; webSocketDebuggerUrl?: string };
 
 export function localChromeEnabled(env: Record<string, string | undefined> = process.env): boolean {
   return env.NODE_ENV !== "production";
 }
 
-// scripts/lancer-demo.sh opens the agent's Chrome on 9333 by default; a Chrome started by hand often uses 9222.
 export function cdpUrls(env: Record<string, string | undefined> = process.env): string[] {
-  const ports = [env.NAMI_AGENT_CHROME_PORT, "9333", "9222"].filter((p): p is string => Boolean(p && /^\d+$/.test(p)));
-  return [...new Set(ports)].map((port) => `http://127.0.0.1:${port}`);
+  const port = agentChromePort(env);
+  return port === null ? [] : [`http://127.0.0.1:${port}`];
 }
 
 async function listTabs(urls: string[]): Promise<CdpTab[]> {

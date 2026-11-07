@@ -144,7 +144,7 @@ describe("agent tasks", () => {
     expect(instructions).toContain("check on a fresh screenshot that the page shows the file");
     expect(instructions).toContain("If a captcha, an account creation or an e-mail code appears, stop and call ask_user");
     expect(instructions).toContain("Do not invent any information");
-    expect(instructions).toContain("Then call report_ready.");
+    expect(instructions).toContain("call report_ready as your last action. After calling it the session ends. Do not take any further action.");
   });
 
   it("handles delayed custom dropdowns and hands blocked fields to the human", () => {
