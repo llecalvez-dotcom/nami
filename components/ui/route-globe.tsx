@@ -84,10 +84,12 @@ export function RouteGlobe({
   const host = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const live = useRef({ hub, places, regions, onSelectCountry });
+  const redraw = useRef<() => void>(() => {});
   const [tip, setTip] = useState<Tip | null>(null);
 
   useEffect(() => {
     live.current = { hub, places, regions, onSelectCountry };
+    redraw.current();
   }, [hub, places, regions, onSelectCountry]);
 
   useEffect(() => {
@@ -370,8 +372,10 @@ export function RouteGlobe({
     document.addEventListener("visibilitychange", onVis);
     size();
     start();
+    redraw.current = () => reduced && alive && draw(performance.now());
     return () => {
       alive = false;
+      redraw.current = () => {};
       cancelAnimationFrame(raf);
       ro.disconnect();
       io.disconnect();
