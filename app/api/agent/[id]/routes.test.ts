@@ -5,6 +5,7 @@ import { GET as changes } from "@/app/api/agent/[id]/changes/route";
 import { POST as fill } from "@/app/api/agent/[id]/fill/route";
 import { uploadSessionDocument } from "@/lib/agent-passport-upload";
 import { fillField, waitForPageText } from "@/lib/local-chrome";
+import { resetAgentStall, STALL_MS } from "@/lib/agent-stall";
 
 vi.mock("@/lib/agent-passport-upload", () => ({ uploadSessionDocument: vi.fn() }));
 vi.mock("@/lib/local-chrome", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/local-chrome")>()), fillField: vi.fn(), waitForPageText: vi.fn() }));
@@ -127,6 +128,7 @@ beforeEach(() => {
   vi.mocked(uploadSessionDocument).mockReset();
   vi.mocked(fillField).mockReset();
   vi.mocked(waitForPageText).mockReset();
+  resetAgentStall();
   vi.stubEnv("HAI_API_KEY", "h-key");
   fetch = vi.fn();
   vi.stubGlobal("fetch", fetch);
@@ -140,6 +142,26 @@ afterEach(() => {
 
 describe("GET /api/agent/[id]/changes (route 6)", () => {
   const get = (id: string, from = "0") => changes(new Request(`http://localhost/api/agent/${id}/changes?from_index=${from}`), ctx(id));
+
+  it("gives up a session whose model never answers its screenshot, cancels it, and reports it failed for good", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    fetch.mockResolvedValueOnce(Response.json({
+      status: "running", first_index: 0,
+      new_events: [{ type: "AgentEvent", data: { kind: "observation_event", metadata: { url: "about:blank" } } }],
+    }));
+    expect((await (await get("stall-1")).json()).status).toBe("running");
+    now.mockReturnValue(1_000_000 + STALL_MS);
+    fetch.mockResolvedValueOnce(new Response(null, { status: 204 })).mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const body = await (await get("stall-1", "1")).json();
+    expect(body).toMatchObject({ status: "failed", error_code: "stalled", steps: ["The agent stopped answering"] });
+    expect(call(2)[0]).toBe(`${API}/sessions/stall-1`);
+    expect(call(2)[1].method).toBe("DELETE");
+    const after = await (await get("stall-1", "1")).json();
+    expect(after).toMatchObject({ no_change: true, status: "failed", error_code: "stalled" });
+    expect(fetch).toHaveBeenCalledTimes(3);
+    now.mockRestore();
+  });
 
   it("turns a 204 into no_change and keeps the index", async () => {
     fetch.mockResolvedValue(new Response(null, { status: 204 }));
