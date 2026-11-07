@@ -10,13 +10,13 @@ describe("translateTexts", () => {
   });
 
   it("returns one translation per text, in order", async () => {
-    const complete = vi.fn<CompleteJson>(async () => JSON.stringify({ translations: ["Bonjour", "Oui"] }));
+    const complete = vi.fn<CompleteJson>(async () => JSON.stringify({ t0: "Bonjour", t1: "Oui" }));
     expect(await translateTexts({ language: "fr", texts: ["Hello", "Yes"] }, complete)).toEqual(["Bonjour", "Oui"]);
-    expect(JSON.parse(complete.mock.calls[0]![0].user)).toEqual({ language: "fr", texts: ["Hello", "Yes"] });
+    expect(JSON.parse(complete.mock.calls[0]![0].user)).toEqual({ language: "fr", texts: { t0: "Hello", t1: "Yes" } });
   });
 
   it("refuses a model answer that does not match the texts", async () => {
-    const complete = vi.fn(async () => JSON.stringify({ translations: ["Bonjour"] }));
+    const complete = vi.fn(async () => JSON.stringify({ t0: "Bonjour" }));
     await expect(translateTexts({ language: "fr", texts: ["Hello", "Yes"] }, complete)).rejects.toThrow();
   });
 
