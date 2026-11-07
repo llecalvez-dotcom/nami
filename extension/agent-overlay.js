@@ -9,7 +9,7 @@
     :host, *, *::before, *::after { pointer-events: none !important; box-sizing: border-box; }
     :host { all: initial; font-family: system-ui, sans-serif; }
     .cursor { position: fixed; left: 0; top: 0; width: 24px; height: 24px; opacity: 0;
-      transition: transform 300ms ease-out, opacity 200ms ease-out; filter: drop-shadow(0 1px 3px #3b176e66); }
+      transition: transform 450ms cubic-bezier(0.23, 1, 0.32, 1), opacity 200ms ease-out; filter: drop-shadow(0 1px 3px #3b176e66); }
     .ripple { position: fixed; width: 18px; height: 18px; margin: -9px; border: 2px solid #8b5cf6;
       border-radius: 50%; background: #8b5cf633; animation: ripple 400ms ease-out forwards; }
     @keyframes ripple { from { transform: scale(.5); opacity: 1; } to { transform: scale(3); opacity: 0; } }
@@ -49,13 +49,14 @@
   shadow.append(cursor);
   document.documentElement.append(host);
 
-  let cursorTimer;
   let fieldTimer;
+  let agentActive = false;
+  // The agent's clicks and a real mouse send the same trusted events (CDP sets the same screen coordinates, measured
+  // 2026-11-07). The cursor therefore follows presses only: hovering with the real mouse never moves it, and it glides
+  // from one click of the agent to the next. It stays visible while the agent works.
   const move = (event) => {
     cursor.style.transform = `translate(${event.clientX}px, ${event.clientY}px)`;
-    cursor.style.opacity = "1";
-    clearTimeout(cursorTimer);
-    cursorTimer = setTimeout(() => { cursor.style.opacity = "0"; }, 1500);
+    cursor.style.opacity = agentActive ? "1" : "0";
   };
   const highlight = (event) => {
     if (!(event.target instanceof Element)) return;
@@ -68,10 +69,10 @@
     clearTimeout(fieldTimer);
     fieldTimer = setTimeout(() => { field.hidden = true; }, 800);
   };
-  for (const type of ["pointermove", "pointerdown", "click", "input", "focusin"]) {
+  for (const type of ["pointerdown", "input", "focusin"]) {
     document.addEventListener(type, (event) => {
       if (!event.isTrusted) return;
-      if (type === "pointermove" || type === "pointerdown" || type === "click") move(event);
+      if (type === "pointerdown") move(event);
       if (type === "pointerdown") {
         const ripple = layer("ripple");
         ripple.style.left = `${event.clientX}px`;
@@ -84,6 +85,8 @@
   chrome.runtime.onMessage.addListener((message, sender) => {
     if (sender.id !== chrome.runtime.id || message?.type !== "nami:agent-state"
       || typeof message.active !== "boolean" || typeof message.step !== "string") return;
+    agentActive = message.active;
+    if (!agentActive) cursor.style.opacity = "0";
     frame.hidden = label.hidden = !message.active;
     bubble.textContent = message.step.slice(0, 320).replace(/[–—]/g, ", ");
     bubble.hidden = !message.active || !message.step.trim();
