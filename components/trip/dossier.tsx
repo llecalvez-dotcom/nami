@@ -120,6 +120,12 @@ function AgentActivity({ trip, onStop }: { trip: Trip; onStop: () => void }) {
           <p className="mt-1 text-sm text-background/60">
             {run ? `Started at ${formatTime(run.started_at)} · ${run.state.replaceAll("_", " ")}` : "No agent running."}
           </p>
+          {run?.metrics ? (
+            <p className="mt-0.5 text-xs text-[#f7f5f1]/60">
+              {run.metrics.steps} steps
+              {run.metrics.total_cost !== null ? ` · cost $${run.metrics.total_cost.toFixed(4)}` : ""}
+            </p>
+          ) : null}
         </div>
         <Button
           variant="destructive"
@@ -180,7 +186,12 @@ export function Dossier({
         <section className="space-y-4 pt-2">
           <SectionTitle>Entry papers</SectionTitle>
           {livePapers ? (
-            <LivePapersList papers={livePapers} />
+            <LivePapersList
+              papers={livePapers}
+              statuses={Object.fromEntries(
+                trip.formalities.filter((f) => f.status === "pending_approval" || f.status === "confirmed").map((f) => [f.id, f.status]),
+              )}
+            />
           ) : (
             <ul className="space-y-3">
               {trip.formalities.map((f) => (

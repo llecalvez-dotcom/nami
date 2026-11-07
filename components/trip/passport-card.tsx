@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Camera, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { DocumentExtraction, PassportFieldKey } from "@/lib/contracts";
+import { PassportFieldsSchema, type DocumentExtraction, type PassportFieldKey, type PassportFields } from "@/lib/contracts";
 import { expiryWarning } from "@/lib/passport-dates";
 import { DocumentFinder, DocumentPreview, type DocumentChoice } from "@/components/trip/document-finder";
 
@@ -32,11 +32,21 @@ export function maskField(key: PassportFieldKey, value: string): string {
 const SENSITIVE: PassportFieldKey[] = ["passport_number", "birth_date"];
 
 // The photo and the fields stay in this component's memory: never stored in the browser nor on the server.
-export function PassportCard({ demo, returnDate, arrivalAt, onDocumentConfirmed }: {
+// onConfirm hands the confirmed fields to the Trip screen (memory only), for the visa agent.
+export function PassportCard({
+  demo,
+  returnDate,
+  arrivalAt,
+  onConfirm,
+  onDocumentConfirmed,
+  searchRequest = 0,
+}: {
   demo: boolean;
   returnDate: string | null;
   arrivalAt: string | null;
-  onDocumentConfirmed?: (id: string) => void;
+  onConfirm?: (fields: PassportFields | null) => void;
+  onDocumentConfirmed?: (id: string | null) => void;
+  searchRequest?: number;
 }) {
   const [reader, setReader] = useState<"off" | "h" | "anthropic">("off");
   const [busy, setBusy] = useState(false);
@@ -47,7 +57,13 @@ export function PassportCard({ demo, returnDate, arrivalAt, onDocumentConfirmed 
   const [consent, setConsent] = useState(false);
   const [edited, setEdited] = useState<PassportFieldKey[]>([]);
   const [document, setDocument] = useState<DocumentChoice | null>(null);
+  const [handledSearchRequest, setHandledSearchRequest] = useState(0);
   const requestId = useRef(0);
+
+  const unconfirm = () => {
+    setConfirmed(false);
+    onConfirm?.(null);
+  };
 
   useEffect(() => {
     let active = true;
@@ -70,13 +86,15 @@ export function PassportCard({ demo, returnDate, arrivalAt, onDocumentConfirmed 
   const readPassport = async (file?: File) => {
     const id = ++requestId.current;
     setError(null);
-    setConfirmed(false);
+    unconfirm();
     if (reader === "off" || !consent) return;
     let body: BodyInit;
     if (file) {
       if (!["image/jpeg", "image/png"].includes(file.type)) return setError("Send a JPEG or PNG photo.");
       if (file.size > MAX_BYTES) return setError("Photo too large (5 MB max).");
       setDocument(null);
+      onDocumentConfirmed?.(null);
+      setHandledSearchRequest(searchRequest);
       const form = new FormData();
       form.set("consent_provider", reader);
       form.set("image", file);
@@ -129,9 +147,11 @@ export function PassportCard({ demo, returnDate, arrivalAt, onDocumentConfirmed 
     setExtraction(null);
     setEdited([]);
     setError(null);
-    setConfirmed(false);
+    unconfirm();
     setConsent(false);
     setDocument(null);
+    onDocumentConfirmed?.(null);
+    setHandledSearchRequest(searchRequest);
   };
 
   return (
@@ -156,15 +176,26 @@ export function PassportCard({ demo, returnDate, arrivalAt, onDocumentConfirmed 
           <DocumentPreview document={document} demo={demo} />
           <p className="min-w-0 break-all text-sm">Selected document: {document.name}</p>
         </div>
-      ) : !FIELDS.some((field) => displayedValues[field.key].trim()) ? (
-        <DocumentFinder demo={demo} onConfirm={(selected) => {
-          requestId.current++;
-          setBusy(false);
-          setConsent(false);
-          setConfirmed(false);
-          setDocument(selected);
-          onDocumentConfirmed?.(selected.id);
-        }} />
+      ) : null}
+      {searchRequest > handledSearchRequest || (!document && !FIELDS.some((field) => displayedValues[field.key].trim())) ? (
+        <DocumentFinder
+          key={searchRequest}
+          demo={demo}
+          focusOnMount={searchRequest > handledSearchRequest}
+          onConfirm={(selected) => {
+            requestId.current++;
+            setBusy(false);
+            setConsent(false);
+            unconfirm();
+            setValues(null);
+            setExtraction(null);
+            setEdited([]);
+            setError(null);
+            setDocument(selected);
+            setHandledSearchRequest(searchRequest);
+            onDocumentConfirmed?.(selected.id);
+          }}
+        />
       ) : null}
       {reader === "off" ? (
         <p className="text-sm text-muted-foreground">
@@ -220,7 +251,16 @@ export function PassportCard({ demo, returnDate, arrivalAt, onDocumentConfirmed 
           className="grid gap-3 sm:grid-cols-2"
           onSubmit={(e) => {
             e.preventDefault();
+            const parsed = PassportFieldsSchema.safeParse(
+              Object.fromEntries(FIELDS.map((f) => [f.key, displayedValues[f.key].trim()])),
+            );
+            if (!parsed.success) {
+              setError("Check the fields: dates as YYYY-MM-DD, nationality as 2 letters (FR).");
+              return;
+            }
+            setError(null);
             setConfirmed(true);
+            onConfirm?.(parsed.data);
           }}
         >
           {FIELDS.map(({ key, label, placeholder }) => {
@@ -245,7 +285,7 @@ export function PassportCard({ demo, returnDate, arrivalAt, onDocumentConfirmed 
                   aria-label={label}
                   aria-invalid={(!displayedValues[key].trim() && (edited.includes(key) || extraction !== null)) || undefined}
                   onChange={(e) => {
-                    setConfirmed(false);
+                    unconfirm();
                     setEdited((keys) => keys.includes(key) ? keys : [...keys, key]);
                     setValues({ ...displayedValues, [key]: e.target.value });
                   }}

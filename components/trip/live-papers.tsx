@@ -115,7 +115,8 @@ export function LivePaperCard({ paper, observedOn }: { paper: Paper; observedOn?
   );
 }
 
-export function LivePapersList({ papers }: { papers: LivePapersState }) {
+// statuses: progress kept in the trip (for example the e-VOA "Pending approval" after the agent), by paper id.
+export function LivePapersList({ papers, statuses = {} }: { papers: LivePapersState; statuses?: Record<string, Formality["status"]> }) {
   if (papers.state === "loading") {
     return (
       <p className="animate-pulse rounded-[18px] bg-card p-5 text-sm text-muted-foreground shadow-soft" aria-busy="true">
@@ -138,7 +139,7 @@ export function LivePapersList({ papers }: { papers: LivePapersState }) {
       {result.formalities.length > 0 ? (
         <ul className="space-y-3">
           {result.formalities.map((f) => (
-            <LivePaperCard key={f.id} paper={f} observedOn={result.verified_by_hand_on} />
+            <LivePaperCard key={f.id} paper={statuses[f.id] ? { ...f, status: statuses[f.id] } : f} observedOn={result.verified_by_hand_on} />
           ))}
         </ul>
       ) : null}

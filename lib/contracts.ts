@@ -97,6 +97,8 @@ export const FormalitySchema = z.object({
 export type Formality = z.infer<typeof FormalitySchema>;
 
 export const AgentStateSchema = z.enum([
+  "pending",
+  "queued",
   "running",
   "awaiting_tool_results",
   "paused",
@@ -123,6 +125,14 @@ export const AgentRunSchema = z.object({
   pending_question: AgentQuestionSchema.optional(),
   result: z.record(z.string(), z.unknown()).optional(),
   error: z.string().optional(),
+  // Live session (ticket 05): next event index to read, tool calls already answered, usage and cost.
+  next_index: z.number().int().nonnegative().optional(),
+  handled_tool_ids: z.array(z.string()).optional(),
+  metrics: z.object({ steps: z.number(), total_cost: z.number().nullable() }).optional(),
+  // Terminal and every event read: polling stops.
+  drained: z.boolean().optional(),
+  // Last state reported by H itself: a local stop waits for H to confirm it.
+  h_status: AgentStateSchema.optional(),
 });
 export type AgentRun = z.infer<typeof AgentRunSchema>;
 

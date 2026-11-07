@@ -8,6 +8,7 @@ export function speechText(item: ConversationItem): string | null {
     case "agent":
       return item.text;
     case "question":
+    case "agent_question":
       return item.question;
     case "proposal":
       return item.text;
@@ -15,13 +16,15 @@ export function speechText(item: ConversationItem): string | null {
 }
 
 export function awaitsAnswer(item: ConversationItem): boolean {
-  if (item.kind === "question") return item.answer === null;
+  if (item.kind === "question" || item.kind === "agent_question") return item.answer === null;
   if (item.kind === "proposal") return item.decision === null;
   return false;
 }
 
 const answeredByUser = (item: ConversationItem) =>
-  item.kind === "user" || (item.kind === "question" && item.answer !== null) || (item.kind === "proposal" && item.decision !== null);
+  item.kind === "user" ||
+  ((item.kind === "question" || item.kind === "agent_question") && item.answer !== null) ||
+  (item.kind === "proposal" && item.decision !== null);
 
 // When the page opens, everything up to the user's last answer counts as already heard: only what came after it is read.
 export function alreadyHeard(items: ConversationItem[]): Set<string> {

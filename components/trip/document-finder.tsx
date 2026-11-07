@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FileImage } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -29,12 +29,17 @@ export function DocumentPreview({ document, demo = false }: { document: Document
   ) : <FileImage className="size-10 text-muted-foreground" aria-label="No image preview available" />;
 }
 
-export function DocumentFinder({ onConfirm, demo = false }: { onConfirm: (document: DocumentChoice) => void; demo?: boolean }) {
+export function DocumentFinder({ onConfirm, demo = false, focusOnMount = false }: {
+  onConfirm: (document: DocumentChoice) => void;
+  demo?: boolean;
+  focusOnMount?: boolean;
+}) {
   const [enabled, setEnabled] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [documents, setDocuments] = useState<DocumentChoice[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const searchCard = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -43,6 +48,12 @@ export function DocumentFinder({ onConfirm, demo = false }: { onConfirm: (docume
       .catch(() => {});
     return () => controller.abort();
   }, []);
+
+  useEffect(() => {
+    if (!enabled || !focusOnMount) return;
+    searchCard.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    searchCard.current?.querySelector<HTMLButtonElement>("button")?.focus({ preventScroll: true });
+  }, [enabled, focusOnMount]);
 
   const search = async () => {
     setBusy(true);
@@ -61,7 +72,7 @@ export function DocumentFinder({ onConfirm, demo = false }: { onConfirm: (docume
 
   if (!enabled || dismissed) return null;
   return (
-    <div className="space-y-3 rounded-2xl bg-muted p-4">
+    <div ref={searchCard} className="space-y-3 rounded-2xl bg-muted p-4">
       <p className="text-sm">I don&apos;t have your passport yet. Shall I look for it in your documents?</p>
       <p className="text-xs text-muted-foreground">Only file names in your configured local folder are searched. Nothing is sent to a model.</p>
       {documents === null ? (

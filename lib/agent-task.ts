@@ -20,6 +20,8 @@ export function buildPaperTask(input: PaperTaskInput): string {
   return [
     `Go to ${input.officialUrl}. Fill in the ${input.formName} form for the traveller and the trip below, step by step, up to the last screen.`,
     `You may: type into fields, pick from lists and calendars, tick choices, upload the provided files (${files}), click the buttons that move to the next step (Next, Continue, Lanjut).`,
+    "For a dropdown, click it once, then wait and take a fresh screenshot before concluding it did not open: menus may appear with a delay. If a search box appears, type the required value (for example France or Tourism), then click the matching option or press Enter. Use select_option only on native select elements, never on custom dropdowns.",
+    "Never attempt the same failed action more than 3 times. After 3 failed attempts on the same field, stop trying and call ask_user with field set to that field and a short question asking the human to pick the required value themselves in Chrome. Say which value to pick, for example: Please pick Tourism for purpose of visit in Chrome, then let me know. Wait for the human's answer before continuing, then take a fresh look and continue from the updated form.",
     `You must NEVER click on: ${forbidden}. Never tick a final declaration on honour.`,
     "If a captcha, an account creation or an e-mail code appears, stop and call ask_user so that the human handles it.",
     `Never leave the domain ${input.domain}. Do not invent any information. If a piece of information is missing, call ask_user with a short question.`,

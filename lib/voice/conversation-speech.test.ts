@@ -29,6 +29,20 @@ describe("conversation speech", () => {
     expect(plan.toRead.every((e) => !heard.has(e.id))).toBe(true);
   });
 
+  it("reads a question from the H agent and cuts it once answered", () => {
+    const question: ConversationItem = {
+      id: "q1",
+      kind: "agent_question",
+      tool_req: { id: "t1", tool_name: "ask_user", args: { question: "Which hotel?", field: "hotel" } },
+      question: "Which hotel?",
+      field: "hotel",
+      answer: null,
+    };
+    expect(speechText(question)).toBe("Which hotel?");
+    expect(speechPlan([question], new Set(), new Set()).toRead).toEqual([{ id: "q1", text: "Which hotel?" }]);
+    expect(speechPlan([{ ...question, answer: "Ubud" }], new Set(["q1"]), new Set(["q1"])).interrupted).toBe(true);
+  });
+
   it("never puts a microphone on the passport card", () => {
     const source = readFileSync(new URL("../../components/trip/passport-card.tsx", import.meta.url), "utf8");
     expect(source).not.toMatch(/components\/voice|useVoiceInput|MicButton/);

@@ -144,6 +144,28 @@ describe("agent tasks", () => {
     expect(task).toContain(paper.stop_condition);
   });
 
+  it("handles delayed custom dropdowns and hands blocked fields to the human", () => {
+    const task = buildPaperTask({
+      officialUrl: "https://example.gov/form",
+      formName: "Visa",
+      domain: "example.gov",
+      filePaths: [],
+      forbiddenButtons: [],
+      stopCondition: "Stop before payment.",
+      traveller: "Nationality: France.",
+      trip: "Purpose: tourism.",
+    });
+    expect(task).toContain("click it once, then wait and take a fresh screenshot before concluding it did not open");
+    expect(task).toContain("If a search box appears, type the required value (for example France or Tourism), then click the matching option or press Enter");
+    expect(task).toContain("Use select_option only on native select elements, never on custom dropdowns");
+    expect(task).toContain("Never attempt the same failed action more than 3 times");
+    expect(task).toContain("After 3 failed attempts on the same field, stop trying and call ask_user with field set to that field");
+    expect(task).toContain("asking the human to pick the required value themselves in Chrome");
+    expect(task).toContain("Say which value to pick");
+    expect(task).toContain("Wait for the human's answer before continuing, then take a fresh look and continue from the updated form");
+    expect(task).toContain("upload the provided files (none)");
+  });
+
   it("builds the flights task", () => {
     const task = buildFlightsTask({ origin: "Paris", destinationAirport: "DPS", departDate: "2026-11-09", arriveBefore: "18:00" });
     expect(task).toContain("from Paris to DPS departing 2026-11-09");
