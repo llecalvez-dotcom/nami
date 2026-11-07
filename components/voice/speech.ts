@@ -171,6 +171,15 @@ export function useConversationSpeech(items: ConversationItem[]) {
   }, [items]);
 }
 
+// True while Nami is saying something aloud (the side panel's wave follows it).
+export function useSpeaking(): boolean {
+  return useSyncExternalStore(
+    (listener) => getQueue()?.onChange(listener) ?? (() => {}),
+    () => getQueue()?.speaking() != null,
+    () => false,
+  );
+}
+
 // Opens the microphone of a card once Nami has finished reading that card aloud.
 export function useListenAfterSpeech(itemId: string, start: () => void | Promise<void>) {
   useEffect(() => getQueue()?.onSpoken((id) => id === itemId && void start()), [itemId, start]);

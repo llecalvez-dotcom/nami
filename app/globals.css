@@ -558,3 +558,98 @@
     background: #0b1630;
   }
 }
+
+/* Side panel (/panel): a horizon at dawn above Bali. The sky holds Nami's sentence, the wave says who has the floor,
+   the sand holds the answers. One color per paper: the lagoon for the visa, the frangipani for the arrival card.
+   docs/specs/2026-11-07-refonte-panneau.md */
+.nami-panel {
+  --np-ink: #13303a;
+  --np-ink-soft: rgb(19 48 58 / 0.66);
+  --np-sand: #f8efe3;
+  --np-cream: #fdf8f0;
+  --np-line: rgb(19 48 58 / 0.12);
+  --np-lagoon: #0c7480;
+  --np-lagoon-soft: #c4e4e2;
+  --np-coral: #bd4f2c;
+  --np-coral-soft: #f7d3c3;
+  --paper: var(--np-lagoon);
+  --paper-soft: var(--np-lagoon-soft);
+  --np-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --np-serif: "Gambetta", Georgia, "Times New Roman", serif;
+  color: var(--np-ink);
+  background:
+    var(--np-dawn-image, none) center top / cover no-repeat,
+    linear-gradient(180deg, #cde3ea 0%, #dfe9e6 30%, #f3e4d4 66%, #f2d3c0 100%);
+}
+.nami-panel[data-paper="arrival_card"] {
+  --paper: var(--np-coral);
+  --paper-soft: var(--np-coral-soft);
+}
+.nami-panel .np-serif {
+  font-family: var(--np-serif);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+.nami-panel .np-sentence {
+  font-family: var(--np-serif);
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  text-wrap: pretty;
+}
+.nami-panel .np-sentence[data-size="xl"] { font-size: 32px; line-height: 1.12; }
+.nami-panel .np-sentence[data-size="lg"] { font-size: 25px; line-height: 1.2; }
+.nami-panel .np-sentence[data-size="md"] { font-size: 20px; line-height: 1.3; }
+.nami-panel .np-sentence em,
+.nami-panel .np-pivot {
+  font-style: italic;
+  color: var(--paper);
+}
+.nami-panel .np-enter {
+  animation: np-enter 280ms var(--np-ease) both;
+}
+@keyframes np-enter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+.nami-panel .np-press {
+  transition: transform 160ms var(--np-ease), background-color 200ms var(--np-ease), color 200ms var(--np-ease), box-shadow 200ms var(--np-ease);
+}
+.nami-panel .np-press:active { transform: scale(0.97); }
+.nami-panel .np-glass {
+  background: rgb(253 248 240 / 0.72);
+  backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.6) inset, 0 12px 32px rgb(19 48 58 / 0.1);
+}
+
+/* The wave: two layers of the same swell drifting at different speeds. Its state says who has the floor. */
+.nami-panel .np-wave { position: relative; height: 76px; overflow: hidden; }
+.nami-panel .np-wave > svg {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 200%;
+  height: 100%;
+  transform-origin: bottom;
+  transition: transform 420ms var(--np-ease), opacity 420ms var(--np-ease);
+}
+.nami-panel .np-wave .np-swell-back { color: var(--paper-soft); animation: np-drift 14s linear infinite; transform: scaleY(0.55); }
+.nami-panel .np-wave .np-swell-front { color: var(--paper); opacity: 0.85; animation: np-drift 9s linear infinite reverse; transform: scaleY(0.35); }
+.nami-panel .np-wave[data-state="speaking"] .np-swell-back { animation-duration: 5s; transform: scaleY(0.95); }
+.nami-panel .np-wave[data-state="speaking"] .np-swell-front { animation-duration: 3.2s; transform: scaleY(0.7); }
+.nami-panel .np-wave[data-state="listening"] .np-swell-back { animation-duration: 3s; transform: scaleY(1); }
+.nami-panel .np-wave[data-state="listening"] .np-swell-front { animation-duration: 2s; transform: scaleY(0.9); opacity: 1; }
+.nami-panel .np-wave[data-state="working"] .np-swell-back { animation: np-roll 4s linear infinite; transform: scaleY(0.7); }
+.nami-panel .np-wave[data-state="working"] .np-swell-front { animation: np-roll 2.4s linear infinite; transform: scaleY(0.5); }
+@keyframes np-drift {
+  from { translate: 0 0; }
+  to { translate: -50% 0; }
+}
+@keyframes np-roll {
+  from { translate: -50% 0; }
+  to { translate: 0 0; }
+}
+.nami-panel .np-sand { background: var(--np-sand); }
+@media (prefers-reduced-motion: reduce) {
+  .nami-panel .np-wave > svg,
+  .nami-panel .np-enter { animation: none !important; }
+}

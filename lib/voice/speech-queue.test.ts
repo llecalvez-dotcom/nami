@@ -95,4 +95,17 @@ describe("microphone after a line", () => {
     finish(true);
     expect(heard).toEqual(["b"]);
   });
+
+  it("tells when a line starts and ends, for the panel's wave", () => {
+    const { engine, end } = fakeEngine();
+    const queue = createSpeechQueue(engine);
+    const states: (string | null)[] = [];
+    queue.onChange(() => states.push(queue.speaking()));
+
+    queue.enqueue("1", "Shall I fill in your visa?");
+    end();
+    queue.enqueue("2", "I am looking for your passport.");
+    queue.clear();
+    expect(states).toEqual(["1", null, "2", null]);
+  });
 });
