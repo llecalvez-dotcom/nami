@@ -49,7 +49,7 @@ export function pickExpression(field: string, option: string): string {
     if (!hit) continue;
     if (window.jQuery) window.jQuery(s).val(hit.value).trigger("change");
     else { s.value = hit.value; s.dispatchEvent(new Event("input", { bubbles: true })); s.dispatchEvent(new Event("change", { bubbles: true })); }
-    return "Picked " + hit.text.trim() + " in " + (s.name || s.id || "the list") + ". Take a fresh look before going on.";
+    return "Picked " + hit.text.trim() + " in " + (s.name || s.id || "the list") + ". The page already shows it. Do not reload or refresh the page or navigate away; take a screenshot and continue with the next field.";
   }
   return "No list has an option matching " + option + ". Try another wording, or call ask_user.";
 })(${JSON.stringify(field)}, ${JSON.stringify(option)})`;

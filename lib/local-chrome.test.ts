@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cdpUrls, pickExpression, pickOption } from "./local-chrome";
+import { PICK_OPTION_TOOL, UPLOAD_FILE_TOOL } from "./paper-agent";
 
 class FakeSocket {
   static sent: string[] = [];
@@ -19,6 +20,25 @@ class FakeSocket {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("pickOption", () => {
+  it("returns screenshot-only guidance from the actual selection expression without resetting the selection", () => {
+    const select = { name: "selectCountry", disabled: false, value: "", options: [{ text: "FRANCE", value: "FR" }],
+      getAttribute: () => null, closest: () => null, dispatchEvent: vi.fn() };
+    vi.stubGlobal("document", { querySelectorAll: () => [select] });
+    vi.stubGlobal("window", {});
+    const result = eval(pickExpression("selectCountry", "FRANCE"));
+    expect(result).toBe("Picked FRANCE in selectCountry. The page already shows it. Do not reload or refresh the page or navigate away; take a screenshot and continue with the next field.");
+    expect(select.value).toBe("FR");
+    expect(select.dispatchEvent.mock.calls.map(([event]) => event.type)).toEqual(["input", "change"]);
+  });
+
+  it("gives screenshot-only guidance in both tool descriptions", () => {
+    for (const tool of [PICK_OPTION_TOOL, UPLOAD_FILE_TOOL]) {
+      expect(tool.description).toMatch(/do not reload or refresh the page or navigate away/i);
+      expect(tool.description).toContain("take a screenshot");
+      expect(tool.description).not.toContain("fresh look");
+    }
+  });
+
   it("evaluates the pick in the official tab only", async () => {
     vi.stubGlobal("WebSocket", FakeSocket);
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => [
