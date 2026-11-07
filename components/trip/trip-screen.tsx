@@ -1,11 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowLeft, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SampleBadge } from "@/components/status-badge";
 import { Conversation } from "@/components/trip/conversation";
 import { Dossier } from "@/components/trip/dossier";
+import { useLivePapers } from "@/components/trip/live-papers";
+import { PassportCard } from "@/components/trip/passport-card";
+import { TryAnotherCountry } from "@/components/trip/try-another-country";
 import { SAMPLE_TRIP_ID } from "@/data/sample";
 import { requestTripParse } from "@/lib/trip-parse-client";
 import {
@@ -20,10 +24,18 @@ import { saveTrip, useTrips } from "@/lib/trip-store";
 
 export function TripScreen({ id }: { id: string }) {
   const trips = useTrips();
+  const demo = useSearchParams().get("demo") === "1";
+  const found = trips?.find((t) => t.id === id) ?? null;
+  const { destination, country_iso2, arrival_at } = found?.request ?? {};
+  const livePapers = useLivePapers(
+    found && !found.sample && found.formalities.length > 0 && destination && country_iso2
+      ? { destination, country_iso2, arrival_at }
+      : null,
+  );
 
   if (trips === null) return <div className="flex-1" aria-busy="true" />;
 
-  const trip = trips.find((t) => t.id === id) ?? (id === SAMPLE_TRIP_ID ? createSampleTrip(new Date()) : null);
+  const trip = found ?? (id === SAMPLE_TRIP_ID ? createSampleTrip(new Date()) : null);
 
   if (!trip) {
     return (
@@ -92,7 +104,12 @@ export function TripScreen({ id }: { id: string }) {
         </section>
         <aside aria-label="Trip folder" className="min-w-0 lg:sticky lg:top-20 lg:self-start">
           <div className="rounded-3xl border bg-[#efebe4]/60 p-6">
-            <Dossier trip={trip} onStop={() => update(stopAgent(trip))} />
+            <Dossier trip={trip} onStop={() => update(stopAgent(trip))} livePapers={livePapers}>
+              {trip.formalities.length > 0 || demo ? (
+                <PassportCard demo={demo} returnDate={trip.request.return_date} arrivalAt={trip.request.arrival_at} />
+              ) : null}
+              {demo ? <TryAnotherCountry /> : null}
+            </Dossier>
           </div>
         </aside>
       </main>
