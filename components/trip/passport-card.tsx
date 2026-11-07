@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { DocumentExtraction, PassportFieldKey } from "@/lib/contracts";
 import { expiryWarning } from "@/lib/passport-dates";
+import { DocumentFinder, DocumentPreview, type DocumentChoice } from "@/components/trip/document-finder";
 
 const FIELDS: { key: PassportFieldKey; label: string; placeholder: string }[] = [
   { key: "surname", label: "Surname", placeholder: "MARTIN" },
@@ -31,7 +32,12 @@ export function maskField(key: PassportFieldKey, value: string): string {
 const SENSITIVE: PassportFieldKey[] = ["passport_number", "birth_date"];
 
 // The photo and the fields stay in this component's memory: never stored in the browser nor on the server.
-export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; returnDate: string | null; arrivalAt: string | null }) {
+export function PassportCard({ demo, returnDate, arrivalAt, onDocumentConfirmed }: {
+  demo: boolean;
+  returnDate: string | null;
+  arrivalAt: string | null;
+  onDocumentConfirmed?: (id: string) => void;
+}) {
   const [reader, setReader] = useState<"off" | "h" | "anthropic">("off");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +46,7 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
   const [confirmed, setConfirmed] = useState(false);
   const [consent, setConsent] = useState(false);
   const [edited, setEdited] = useState<PassportFieldKey[]>([]);
+  const [document, setDocument] = useState<DocumentChoice | null>(null);
   const requestId = useRef(0);
 
   useEffect(() => {
@@ -100,7 +107,7 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
   const liveExpiryWarning = expiryWarning(displayedValues.expiry_date, trip);
   const complete = manual && FIELDS.every((f) => displayedValues[f.key].trim());
   const hasData = Boolean(
-    error || extraction || confirmed || (values && FIELDS.some((field) => values[field.key].trim())),
+    document || error || extraction || confirmed || (values && FIELDS.some((field) => values[field.key].trim())),
   );
   const provider = reader === "h" ? "H Company" : "Anthropic";
   const clear = () => {
@@ -112,6 +119,7 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
     setError(null);
     setConfirmed(false);
     setConsent(false);
+    setDocument(null);
   };
 
   return (
@@ -131,6 +139,17 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
           ) : null}
         </div>
       </div>
+      {document ? (
+        <div className="flex items-center gap-3 rounded-2xl bg-muted p-3">
+          <DocumentPreview document={document} demo={demo} />
+          <p className="min-w-0 break-all text-sm">Selected document: {document.name}</p>
+        </div>
+      ) : !FIELDS.some((field) => displayedValues[field.key].trim()) ? (
+        <DocumentFinder demo={demo} onConfirm={(selected) => {
+          setDocument(selected);
+          onDocumentConfirmed?.(selected.id);
+        }} />
+      ) : null}
       {reader === "off" ? (
         <p className="text-sm text-muted-foreground">
           Automatic reading is off: nothing leaves this device. Type the fields from your passport.

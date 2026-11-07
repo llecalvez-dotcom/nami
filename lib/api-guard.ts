@@ -4,6 +4,7 @@ export const API_LIMITS = {
   extract: 5 * 1024 * 1024 + 64 * 1024,
   transcribe: 10 * 1024 * 1024 + 64 * 1024,
   access: 1024,
+  documents: 1024,
 } as const;
 
 const QUOTA_LIMITS = {
@@ -12,6 +13,7 @@ const QUOTA_LIMITS = {
   transcribe: 20,
   extract: 5,
   access: 10,
+  documents: 100,
 } as const;
 
 const CONCURRENCY_LIMITS = {
@@ -20,6 +22,7 @@ const CONCURRENCY_LIMITS = {
   transcribe: 2,
   extract: 1,
   access: 2,
+  documents: 4,
 } as const;
 
 const WINDOW_MS = 10 * 60 * 1000;

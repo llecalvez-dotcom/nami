@@ -30,7 +30,7 @@
 | F16 | Conversation à la voix : Nami lit tout à voix haute, réponses à la voix partout, fin de parole et envoi automatiques | 🔵 partie B en relecture (branche `feat/06b-voix`, 216 tests, lint et compilation OK) ; test réel T10 à faire | Nathan | 06, partie B |
 | F17 | Validation page par page : l'agent attend un « oui » avant chaque « Suivant » (`confirm_page`) | ⬜ partie A en attente de la fusion de la PR #14 | Nathan | 06, partie A |
 | F18 | Extension Chrome : Nami dans le panneau latéral, l'agent dans l'onglet | 🔵 PR du ticket 08 (`feat/08-extension`), test réel avec l'agent H à faire | Léon | 08 |
-| F19 | Retrouver le passeport : dans un dossier local (A) ou par l'agent dans le Finder (C) | ⬜ | Ali (A), Clément ou Ali (C) | 09, 10 |
+| F19 | Retrouver le passeport : dans un dossier local (A) ou par l'agent dans le Finder (C) | 🟡 A : recherche locale, aperçu et confirmation ; raccordement `file_paths` après #14 ; C à faire | Ali (A), Clément ou Ali (C) | 09, 10 |
 
 ## 2. Back (routes serveur et logique)
 
