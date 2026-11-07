@@ -22,9 +22,14 @@ function AgentLabel({ from }: { from: "nami" | "agent_h" }) {
   );
 }
 
-const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+const isEmail = (value: string) =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
-function TextAnswer({ onSubmit }: { onSubmit: (value: string) => Promise<void> }) {
+function TextAnswer({
+  onSubmit,
+}: {
+  onSubmit: (value: string) => Promise<void>;
+}) {
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +45,11 @@ function TextAnswer({ onSubmit }: { onSubmit: (value: string) => Promise<void> }
         try {
           await onSubmit(text);
         } catch (err) {
-          setError(err instanceof Error ? err.message : "Something went wrong. Try again.");
+          setError(
+            err instanceof Error
+              ? err.message
+              : "Something went wrong. Try again.",
+          );
           setBusy(false);
         }
       }}
@@ -53,7 +62,12 @@ function TextAnswer({ onSubmit }: { onSubmit: (value: string) => Promise<void> }
           aria-label="Your answer"
           className="h-10 min-w-0 flex-1 rounded-lg border bg-background px-3 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
         />
-        <Button type="submit" size="lg" className="h-10 rounded-lg px-4" disabled={!value.trim() || busy}>
+        <Button
+          type="submit"
+          size="lg"
+          className="h-10 rounded-lg px-4"
+          disabled={!value.trim() || busy}
+        >
           {busy ? "Reading…" : "Send"}
         </Button>
       </div>
@@ -70,12 +84,16 @@ function QuestionCard({
   item,
   onAnswer,
   onAnswerText,
-}: { item: Extract<ConversationItem, { kind: "question" }> } & Pick<Handlers, "onAnswer" | "onAnswerText">) {
+}: { item: Extract<ConversationItem, { kind: "question" }> } & Pick<
+  Handlers,
+  "onAnswer" | "onAnswerText"
+>) {
   return (
     <div
       className={cn(
         "rounded-2xl border bg-card p-5",
-        item.answer === null && "border-primary/30 shadow-[0_8px_24px_-16px_rgba(33,77,69,0.45)]",
+        item.answer === null &&
+          "border-primary/30 shadow-[0_8px_24px_-16px_rgba(33,77,69,0.45)]",
       )}
     >
       <AgentLabel from={item.from} />
@@ -110,47 +128,77 @@ function QuestionCard({
               ))}
             </div>
           ) : null}
-          {item.input === "text" ? <TextAnswer onSubmit={(text) => onAnswerText(item.id, text)} /> : null}
+          {item.input === "text" ? (
+            <TextAnswer onSubmit={(text) => onAnswerText(item.id, text)} />
+          ) : null}
         </>
       )}
     </div>
   );
 }
 
-function ProposalCard({ item, onDecide }: { item: Extract<ConversationItem, { kind: "proposal" }> } & Pick<Handlers, "onDecide">) {
+function ProposalCard({
+  item,
+  onDecide,
+}: { item: Extract<ConversationItem, { kind: "proposal" }> } & Pick<
+  Handlers,
+  "onDecide"
+>) {
   return (
     <div
       className={cn(
         "rounded-2xl border bg-card p-5",
-        item.decision === null && "border-primary/30 shadow-[0_8px_24px_-16px_rgba(33,77,69,0.45)]",
+        item.decision === null &&
+          "border-primary/30 shadow-[0_8px_24px_-16px_rgba(33,77,69,0.45)]",
       )}
     >
       <AgentLabel from="nami" />
       <p className="font-heading text-2xl leading-tight">{item.text}</p>
       {item.decision === null ? (
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button size="lg" className="h-10 rounded-full px-5" onClick={() => onDecide(item.id, true)}>
+          <Button
+            size="lg"
+            className="h-10 rounded-full px-5"
+            onClick={() => onDecide(item.id, true)}
+          >
             {item.accept_label}
           </Button>
-          <Button variant="ghost" size="lg" className="h-10 rounded-full px-4" onClick={() => onDecide(item.id, false)}>
+          <Button
+            variant="ghost"
+            size="lg"
+            className="h-10 rounded-full px-4"
+            onClick={() => onDecide(item.id, false)}
+          >
             {item.decline_label}
           </Button>
         </div>
       ) : (
         <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-sm">
-          {item.decision === "accepted" ? <Check className="size-3.5 text-primary" /> : <X className="size-3.5" />}
-          {item.decision === "accepted" ? item.accept_label : item.decline_label}
+          {item.decision === "accepted" ? (
+            <Check className="size-3.5 text-primary" />
+          ) : (
+            <X className="size-3.5" />
+          )}
+          {item.decision === "accepted"
+            ? item.accept_label
+            : item.decline_label}
         </p>
       )}
     </div>
   );
 }
 
-export function Conversation({ items, ...handlers }: { items: ConversationItem[] } & Handlers) {
+export function Conversation({
+  items,
+  ...handlers
+}: { items: ConversationItem[] } & Handlers) {
   return (
     <ol className="flex flex-col gap-4">
       {items.map((item) => (
-        <li key={item.id} className="animate-in fade-in slide-in-from-bottom-1 duration-300">
+        <li
+          key={item.id}
+          className="animate-in fade-in slide-in-from-bottom-1 duration-300"
+        >
           {item.kind === "user" ? (
             <div className="ml-auto max-w-[85%] rounded-2xl rounded-br-md bg-primary px-5 py-3.5 text-primary-foreground">
               <p className="text-[15px] leading-relaxed">“{item.text}”</p>
@@ -161,7 +209,11 @@ export function Conversation({ items, ...handlers }: { items: ConversationItem[]
               <p className="text-[15px] leading-relaxed">{item.text}</p>
             </div>
           ) : item.kind === "question" ? (
-            <QuestionCard item={item} onAnswer={handlers.onAnswer} onAnswerText={handlers.onAnswerText} />
+            <QuestionCard
+              item={item}
+              onAnswer={handlers.onAnswer}
+              onAnswerText={handlers.onAnswerText}
+            />
           ) : (
             <ProposalCard item={item} onDecide={handlers.onDecide} />
           )}
