@@ -13,19 +13,30 @@ export function TripsScreen() {
       <AppNav>
         <Link
           href="/#ask"
-          className="hidden h-10 items-center gap-2 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground shadow-glow md:inline-flex"
+          className="glass hidden h-11 items-center gap-2 px-4 text-sm font-medium md:inline-flex"
         >
           <Plus className="size-4" /> New trip
         </Link>
       </AppNav>
-      <main className="mx-auto w-full max-w-6xl flex-1 px-5 pt-10 sm:px-8 sm:pt-16">
-        <h1 className="text-4xl font-semibold tracking-[-0.03em] sm:text-6xl">Your trips</h1>
-        <p className="mt-3 text-muted-foreground">Open a trip to answer Nami, follow your papers and the agent.</p>
-        <div className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3" aria-busy={trips === null}>
-          {(trips ?? []).map((trip) => (
-            <TripCard key={trip.id} trip={toCard(trip)} />
-          ))}
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 pt-12 sm:px-7 sm:pt-20">
+        <div className="on-sky text-center">
+          <p className="label-mono text-[11px]">Selected trips</p>
+          <h1 className="mt-3 text-[45px] leading-[1.05] sm:text-7xl">
+            <span className="font-script font-bold">Your</span> <span className="mix-serif">trips.</span>
+          </h1>
         </div>
+        <section className="poster poster-chartreuse mt-12 p-5 sm:p-8">
+          <div className="flex items-center justify-between label-mono">
+            <span>Nami · trips</span>
+            <span>Take a look</span>
+          </div>
+          <p className="mt-4 max-w-md text-[18px] leading-snug">Open a trip to answer Nami, follow your papers and the agent.</p>
+          <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3" aria-busy={trips === null}>
+            {(trips ?? []).map((trip) => (
+              <TripCard key={trip.id} trip={toCard(trip)} />
+            ))}
+          </div>
+        </section>
       </main>
     </div>
   );

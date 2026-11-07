@@ -17,11 +17,11 @@ export function TripCard({ trip, className }: { trip: TripCardData; className?: 
     <Link
       href={`/trip/${trip.id}`}
       className={cn(
-        "group flex flex-col rounded-[28px] bg-card p-3 shadow-soft transition-transform duration-300 hover:-translate-y-1",
+        "group flex flex-col rounded-[18px] bg-card p-3 shadow-soft transition-transform duration-300 hover:-translate-y-1",
         className,
       )}
     >
-      <div className="relative aspect-[4/3] overflow-hidden rounded-[22px] bg-muted">
+      <div className="riso relative aspect-[4/3] overflow-hidden rounded-[12px]">
         <Image
           src={destinationImage(request.destination, request.country_iso2)}
           alt={title}
@@ -35,8 +35,8 @@ export function TripCard({ trip, className }: { trip: TripCardData; className?: 
         {trip.sample ? <SampleBadge className="absolute top-3 right-3 bg-card/90" /> : null}
       </div>
       <div className="px-3 pt-5 pb-3">
-        <p className="truncate text-[28px] leading-none font-semibold tracking-tight">{title}</p>
-        <p className="mt-4 flex items-center gap-2 text-xs font-medium tracking-wider text-muted-foreground">
+        <p className="truncate text-[26px] leading-none font-medium tracking-[-0.04em]">{title}</p>
+        <p className="label-mono mt-4 flex items-center gap-2 text-muted-foreground">
           {request.origin_country ?? "?"}
           <span className="h-px flex-1 bg-border" aria-hidden />
           <span aria-hidden>→</span>
@@ -57,7 +57,7 @@ export function TripCard({ trip, className }: { trip: TripCardData; className?: 
             </p>
           ) : null}
         </div>
-        <span className="rounded-full bg-muted px-4 py-1.5 text-xs font-medium text-muted-foreground transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
+        <span className="label-mono rounded-full border border-border px-4 py-1.5 transition-colors group-hover:border-primary group-hover:bg-primary group-hover:text-primary-foreground">
           Details
         </span>
       </div>

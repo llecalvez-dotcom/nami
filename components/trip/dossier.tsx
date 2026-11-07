@@ -8,6 +8,7 @@ import type { Formality, ModuleKind, ModuleSuggestion, TripRequestDraft } from "
 import { formatDate, formatDateTime, formatTime } from "@/lib/format";
 import { LivePapersList, type LivePapersState } from "@/components/trip/live-papers";
 import { isAgentActive, type Trip } from "@/lib/trip-state";
+import { agentOfficialUrl, showOfficialSite } from "@/lib/official-tab";
 
 const MODULES: { module: ModuleKind; label: string }[] = [
   { module: "papers", label: "Entry papers" },
@@ -16,7 +17,7 @@ const MODULES: { module: ModuleKind; label: string }[] = [
 ];
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h3 className="text-lg font-semibold tracking-tight">{children}</h3>;
+  return <h3 className="text-[20px] font-medium tracking-[-0.5px]">{children}</h3>;
 }
 
 function Summary({ request }: { request: TripRequestDraft }) {
@@ -62,10 +63,10 @@ function windowText(formality: Formality): string {
 function PaperCard({ formality }: { formality: Formality }) {
   const paper = getBaliPaper(formality.id as BaliPaperId);
   return (
-    <li className="rounded-[24px] bg-card p-5 shadow-soft">
+    <li className="rounded-[18px] bg-card p-5 shadow-soft">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-lg leading-snug font-semibold tracking-tight">{formality.name}</p>
+          <p className="text-[20px] leading-snug font-medium tracking-[-0.5px]">{formality.name}</p>
           <p className="mt-1 text-sm text-muted-foreground">{windowText(formality)}</p>
         </div>
         <StatusBadge status={formality.status} checkedAt={formality.checked_at} />
@@ -107,9 +108,10 @@ function PaperCard({ formality }: { formality: Formality }) {
 function AgentActivity({ trip, onStop }: { trip: Trip; onStop: () => void }) {
   const run = trip.agent_run;
   const active = isAgentActive(run);
+  const officialUrl = agentOfficialUrl(trip);
   return (
-    <div className="rounded-[28px] bg-foreground p-6 text-background shadow-float">
-      <div className="flex items-center justify-between gap-3">
+    <div className="rounded-[18px] bg-foreground p-6 text-background">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <SectionTitle>Agent Activity</SectionTitle>
@@ -129,6 +131,16 @@ function AgentActivity({ trip, onStop }: { trip: Trip; onStop: () => void }) {
           <Octagon /> Stop agent
         </Button>
       </div>
+      {officialUrl ? (
+        <button
+          type="button"
+          onClick={() => void showOfficialSite(officialUrl)}
+          className="mt-4 inline-flex h-10 max-w-full items-center gap-2 rounded-full bg-white/10 px-4 text-sm text-background transition-colors hover:bg-white/20"
+        >
+          <ExternalLink className="size-4 shrink-0" /> <span className="whitespace-nowrap">Open the official site</span>
+          <span className="min-w-0 truncate font-mono text-[11px] text-background/60">{new URL(officialUrl).hostname}</span>
+        </button>
+      ) : null}
       {trip.agent_steps.length > 0 ? (
         <ol className="mt-5 space-y-2.5 border-t border-white/10 pt-5">
           {trip.agent_steps.map((step, i) => (
@@ -156,11 +168,11 @@ export function Dossier({
 }) {
   return (
     <div className="flex flex-col gap-5">
-      <section className="space-y-5 rounded-[28px] bg-card p-6 shadow-soft">
+      <section className="space-y-5 rounded-[18px] bg-card p-6 shadow-soft">
         <SectionTitle>Your trip</SectionTitle>
         <Summary request={trip.request} />
       </section>
-      <section className="space-y-4 rounded-[28px] bg-card p-6 shadow-soft">
+      <section className="space-y-4 rounded-[18px] bg-card p-6 shadow-soft">
         <SectionTitle>What I can do</SectionTitle>
         <Modules modules={trip.modules} />
       </section>

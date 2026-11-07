@@ -3,19 +3,25 @@
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
+@custom-variant night (&:is([data-theme="night"] *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-sans: Helvetica, Arial, sans-serif;
+  --font-mono: "Courier New", Courier, monospace;
+  --font-heading: var(--display-font);
+  --font-script: "Snell Roundhand", "Apple Chancery", "URW Chancery L", cursive;
+  --font-serif: Georgia, "Times New Roman", serif;
+  --font-display: var(--display-font);
   --color-attention: var(--attention);
   --color-attention-foreground: var(--attention-foreground);
   --color-success: var(--success);
-  --shadow-soft: 0 1px 2px rgb(21 26 51 / 0.04), 0 18px 40px -24px rgb(21 26 51 / 0.22);
-  --shadow-float: 0 24px 60px -24px rgb(21 26 51 / 0.35), 0 2px 6px rgb(21 26 51 / 0.06);
-  --shadow-glow: 0 14px 30px -10px rgb(91 61 245 / 0.55);
+  --shadow-soft: var(--app-shadow-soft);
+  --shadow-float: var(--app-shadow-float);
+  --shadow-glow: var(--app-shadow-glow);
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-sky: cubic-bezier(0.65, 0, 0.35, 1);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -54,76 +60,447 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Think Big DA: sky scene, liquid glass UI, colored poster panels. */
 :root {
-  --background: #eef0f6;
-  --foreground: #151a33;
-  --card: #ffffff;
-  --card-foreground: #151a33;
-  --popover: #ffffff;
-  --popover-foreground: #151a33;
-  --primary: #5b3df5;
-  --primary-foreground: #ffffff;
-  --secondary: #f3f4f9;
-  --secondary-foreground: #151a33;
-  --muted: #f3f4f9;
-  --muted-foreground: #7b8199;
-  --accent: #efebff;
-  --accent-foreground: #3d25c9;
-  --destructive: #e5484d;
-  --attention: #e8933a;
-  --attention-foreground: #9a5410;
-  --success: #12a87a;
-  --border: #e6e8f1;
-  --input: #e1e4ee;
-  --ring: #5b3df5;
+  --sky-top: #0a86d9;
+  --sky-bottom: #2ba3ee;
+  --cloud: #f4f1ea;
+  --cloud-shade: #dcd6cb;
+  --ink: #102934;
+  --icon: #050708;
+  --glass-shadow: rgb(25 59 87 / 0.15);
+
+  --r-pill: 999px;
+  --r-panel: 32px;
+  --r-card: 18px;
+  --r-btn: 24px;
+  --t-fast: 0.25s;
+  --t-base: 0.3s;
+  --t-panel: 0.32s;
+  --t-theme: 2.4s;
+
+  --display-font: Helvetica, Arial, sans-serif;
+
+  --background: transparent;
+  --foreground: var(--ink);
+  --card: rgb(255 253 233 / 0.72);
+  --card-foreground: var(--ink);
+  --popover: #fffdf3;
+  --popover-foreground: var(--ink);
+  --primary: var(--ink);
+  --primary-foreground: #fffdf3;
+  --secondary: rgb(16 41 52 / 0.08);
+  --secondary-foreground: var(--ink);
+  --muted: rgb(16 41 52 / 0.08);
+  --muted-foreground: rgb(16 41 52 / 0.68);
+  --accent: rgb(16 41 52 / 0.12);
+  --accent-foreground: var(--ink);
+  --destructive: #d42a1f;
+  --attention: #c25400;
+  --attention-foreground: #8a3a00;
+  --success: #1f7a3a;
+  --border: rgb(16 41 52 / 0.24);
+  --input: rgb(16 41 52 / 0.24);
+  --ring: var(--ink);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 1rem;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #151a33;
-  --sidebar-primary: #5b3df5;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #efebff;
-  --sidebar-accent-foreground: #3d25c9;
-  --sidebar-border: #e6e8f1;
-  --sidebar-ring: #5b3df5;
+  --sidebar: #fffdf3;
+  --sidebar-foreground: var(--ink);
+  --sidebar-primary: var(--ink);
+  --sidebar-primary-foreground: #fffdf3;
+  --sidebar-accent: rgb(16 41 52 / 0.12);
+  --sidebar-accent-foreground: var(--ink);
+  --sidebar-border: rgb(16 41 52 / 0.24);
+  --sidebar-ring: var(--ink);
+
+  --app-shadow-soft: inset 0 0 0 1px var(--border);
+  --app-shadow-float: 0 18px 60px rgb(7 18 27 / 0.22);
+  --app-shadow-glow: none;
 }
 
-.dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+[data-theme="night"] {
+  --sky-top: #050a1a;
+  --sky-bottom: #0b1630;
+  --cloud: #3a4a6e;
+  --cloud-shade: #26324f;
+  --ink: #f4faff;
+  --icon: #f3f5ff;
+  --glass-shadow: rgb(0 0 0 / 0.33);
+}
+
+@layer components {
+/* Posters: one color + one display typeface per section. Tokens are re-scoped so every card inside follows. */
+.poster {
+  --poster-ink: #102934;
+  --poster-bg: #fffdf3;
+  --poster-line: rgb(255 255 255 / 0.6);
+  --foreground: var(--poster-ink);
+  --card: rgb(255 253 233 / 0.44);
+  --card-foreground: var(--poster-ink);
+  --popover: var(--poster-bg);
+  --popover-foreground: var(--poster-ink);
+  --background: var(--poster-bg);
+  --primary: var(--poster-ink);
+  --primary-foreground: var(--poster-bg);
+  --secondary: color-mix(in srgb, var(--poster-ink) 8%, transparent);
+  --secondary-foreground: var(--poster-ink);
+  --muted: color-mix(in srgb, var(--poster-ink) 8%, transparent);
+  --muted-foreground: color-mix(in srgb, var(--poster-ink) 70%, transparent);
+  --accent: color-mix(in srgb, var(--poster-ink) 13%, transparent);
+  --accent-foreground: var(--poster-ink);
+  --border: color-mix(in srgb, var(--poster-ink) 24%, transparent);
+  --input: color-mix(in srgb, var(--poster-ink) 24%, transparent);
+  --ring: var(--poster-ink);
+  --app-shadow-soft: inset 0 0 0 1px var(--border);
+  --app-shadow-float: inset 0 0 0 1px var(--border);
+  --app-shadow-glow: none;
+
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--r-panel);
+  color: var(--poster-ink);
+  border: 1px solid var(--poster-line);
+  background: color-mix(in srgb, var(--poster-bg) 93%, transparent);
+  box-shadow:
+    inset 0 1px 2px rgb(255 255 255 / 0.53),
+    inset 0 -1px 2px rgb(255 255 255 / 0.2),
+    0 18px 80px rgb(7 18 27 / 0.21);
+  backdrop-filter: blur(16px) saturate(1.12);
+  -webkit-backdrop-filter: blur(16px) saturate(1.12);
+}
+.poster-solid {
+  background: var(--poster-bg);
+}
+.poster::after {
+  /* varnish: a soft gloss on the top of the print */
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 140px;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(rgb(255 255 255 / 0.22), transparent);
+  pointer-events: none;
+}
+.poster-yellow {
+  --poster-bg: #ffda36;
+  --poster-ink: #38210d;
+  --poster-line: #ffea8e;
+  --display-font: var(--font-script);
+}
+.poster-chartreuse {
+  --poster-bg: #a5c93a;
+  --poster-ink: #1f3a10;
+  --poster-line: #c8e27a;
+  --display-font: "Segoe Script", "Bradley Hand", "Brush Script MT", cursive;
+}
+.poster-mint {
+  --poster-bg: #bfe3d0;
+  --poster-ink: #123a5a;
+  --poster-line: #ddf1e6;
+  --display-font: Helvetica, Arial, sans-serif;
+}
+.poster-orange {
+  --poster-bg: #ff7a1a;
+  --poster-ink: #1b1b1b;
+  --poster-line: #ffb27a;
+  --display-font: Helvetica, Arial, sans-serif;
+}
+.poster-alu {
+  --poster-bg: #e3e6e5;
+  --poster-ink: #202722;
+  --poster-line: rgb(250 252 251 / 0.85);
+  --display-font: Helvetica, Arial, sans-serif;
+  border-radius: 16px;
+  background: linear-gradient(
+    117deg,
+    rgb(227 230 229 / 0.97),
+    rgb(240 241 236 / 0.96) 32%,
+    rgb(197 205 206 / 0.96) 74%,
+    rgb(231 234 231 / 0.97)
+  );
+  box-shadow:
+    inset 0 1px 1px #fff,
+    0 25px 90px rgb(5 22 38 / 0.27);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+.poster-alu::after {
+  /* brushed aluminium */
+  inset: 0;
+  height: auto;
+  background: repeating-linear-gradient(90deg, rgb(0 0 0 / 0.035) 0 1px, transparent 1px 3px);
+  mix-blend-mode: multiply;
+}
+[data-theme="night"] .poster-alu {
+  background: linear-gradient(
+    117deg,
+    rgb(214 204 188 / 0.97),
+    rgb(232 226 212 / 0.96) 32%,
+    rgb(190 178 160 / 0.96) 74%,
+    rgb(222 214 200 / 0.97)
+  );
+}
+
+/* Display typography */
+.display-title {
+  font-family: var(--display-font);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+}
+.poster-orange .display-title {
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+}
+.poster-chartreuse .display-title {
+  font-weight: 400;
+}
+.mix-serif {
+  font-family: var(--font-serif);
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: -0.03em;
+}
+.label-mono {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* Liquid glass, the only material of the UI */
+.glass.app-dock {
+  background: var(--sky-top);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+}
+.app-header {
+  background: var(--sky-top);
+  border-bottom: 1px solid rgb(255 255 255 / 0.22);
+  box-shadow: 0 10px 30px -18px rgb(7 18 27 / 0.45);
+}
+.glass {
+  position: relative;
+  isolation: isolate;
+  border-radius: var(--r-pill);
+  border: 1px solid rgb(255 255 255 / 0.66);
+  color: var(--ink);
+  background: transparent;
+  box-shadow:
+    inset 0 2px 2px 0 rgb(255 255 255 / 0.71),
+    inset 0 -2px 4px 0 rgb(227 245 255 / 0.44),
+    0 8px 20px 0 rgb(25 59 87 / 0.15),
+    0 2px 4px 0 rgb(33 67 90 / 0.11);
+  transition:
+    background var(--t-fast),
+    opacity var(--t-base),
+    border-color var(--t-fast),
+    box-shadow var(--t-fast);
+}
+.glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(155deg, rgb(255 255 255 / 0.447), rgb(217 240 255 / 0.21) 42%, rgb(169 211 235 / 0.314));
+  backdrop-filter: blur(13px) saturate(1.3);
+  -webkit-backdrop-filter: blur(13px) saturate(1.3);
+  transition: background var(--t-fast);
+}
+.glass:where(a, button):hover::before {
+  background: linear-gradient(155deg, rgb(255 255 255 / 0.6), rgb(217 240 255 / 0.32) 42%, rgb(169 211 235 / 0.4));
+}
+[data-theme="night"] .glass {
+  border-color: rgb(237 247 255 / 0.514);
+  box-shadow:
+    inset 0 2px 2px 0 rgb(243 251 255 / 0.52),
+    inset 0 -2px 4px 0 rgb(200 232 255 / 0.22),
+    0 8px 24px 0 rgb(0 0 0 / 0.333);
+}
+[data-theme="night"] .glass::before {
+  background: linear-gradient(145deg, rgb(240 248 255 / 0.196), rgb(140 198 233 / 0.14) 48%, rgb(40 73 98 / 0.39));
+}
+/* Glass laid on a poster takes the poster's tint */
+.poster .glass {
+  color: var(--poster-ink);
+  border-color: color-mix(in srgb, var(--poster-ink) 35%, transparent);
+  border-radius: var(--r-btn);
+  box-shadow: inset 0 1px 2px rgb(255 255 255 / 0.5);
+}
+.poster .glass::before {
+  background: linear-gradient(155deg, rgb(255 255 255 / 0.35), rgb(255 255 255 / 0.08));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.glass-menu {
+  color: #fff;
+  background: color-mix(in srgb, var(--sky-top) 88%, #fff);
+  text-shadow: 0 1px 2px rgb(16 41 52 / 0.35);
+  box-shadow:
+    inset 0 2px 2px 0 rgb(255 255 255 / 0.6),
+    0 6px 16px rgb(25 59 87 / 0.19);
+}
+.glass-menu::before {
+  backdrop-filter: blur(14px) saturate(1.25);
+  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+}
+.glass-help {
+  border-radius: var(--r-pill);
+  border: 1px solid rgb(255 255 255 / 0.21);
+  background: rgb(22 49 71 / 0.07);
+  color: var(--ink);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.on-sky {
+  color: var(--ink);
+  transition: color var(--t-theme) var(--ease-sky);
+}
+
+/* Duotone / risograph prints for photos on posters */
+.riso {
+  position: relative;
+  isolation: isolate;
+  background: var(--riso-ink, var(--poster-bg, #9fd9d6));
+}
+.riso img {
+  filter: grayscale(1) contrast(1.35) brightness(1.05);
+  mix-blend-mode: multiply;
+}
+.riso::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle, rgb(0 0 0 / 0.35) 1px, transparent 1.2px) 0 0 / 4px 4px;
+  mix-blend-mode: multiply;
+  opacity: 0.45;
+}
+.poster-alu .riso {
+  --riso-ink: #9fd9d6;
+}
+
+/* Scrolling band */
+@keyframes nami-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+.marquee > div {
+  display: flex;
+  width: max-content;
+  animation: nami-marquee 38s linear infinite;
+}
+
+/* Glass menu: staggered blur in */
+.menu-item {
+  opacity: 0;
+  filter: blur(8px);
+  transform: translateY(-6px);
+  pointer-events: none;
+  transition:
+    opacity var(--t-base),
+    filter var(--t-base),
+    transform var(--t-panel) var(--ease-out);
+  transition-delay: calc(var(--i) * 50ms);
+}
+.menu.is-open .menu-item {
+  opacity: 1;
+  filter: none;
+  transform: none;
+  pointer-events: auto;
+}
+
+/* Sky scene */
+.sky-layer {
+  position: fixed;
+  inset: 0;
+  z-index: -10;
+  overflow: hidden;
+  pointer-events: none;
+}
+.sky-day,
+.sky-night {
+  position: absolute;
+  inset: 0;
+  transition: opacity var(--t-theme) var(--ease-sky);
+}
+.sky-day {
+  background: linear-gradient(#0a86d9, #2ba3ee);
+}
+.sky-night {
+  background: linear-gradient(#050a1a, #0b1630);
+  opacity: 0;
+}
+.sky-stars {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 1.2s var(--ease-sky) 1.2s;
+}
+.sky-moon {
+  position: absolute;
+  top: 9%;
+  right: 12%;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 42% 40%, #eef4ff, #c9d8f2 55%, rgb(201 216 242 / 0) 72%);
+  filter: blur(1.5px);
+  box-shadow: 0 0 80px 20px rgb(201 216 242 / 0.25);
+  opacity: 0;
+  transform: scale(0.4);
+  transition:
+    opacity 0.8s var(--ease-sky),
+    transform 0.8s var(--ease-sky);
+}
+[data-theme="night"] .sky-night,
+[data-theme="night"] .sky-stars,
+[data-theme="night"] .sky-moon {
+  opacity: 1;
+}
+[data-theme="night"] .sky-moon {
+  transform: none;
+}
+.cloud {
+  position: absolute;
+  animation: nami-drift var(--drift, 140s) linear infinite;
+  animation-delay: var(--delay, 0s);
+}
+.cloud span {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 30%, #fff, var(--cloud) 58%, var(--cloud-shade));
+  filter: blur(2px);
+  transition: background var(--t-theme) var(--ease-sky);
+}
+[data-theme="night"] .cloud span {
+  background: radial-gradient(circle at 60% 25%, #6c7ca0, var(--cloud) 58%, var(--cloud-shade));
+}
+@keyframes nami-drift {
+  from {
+    transform: translateX(-30vw);
+  }
+  to {
+    transform: translateX(130vw);
+  }
+}
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation: none !important;
+  }
 }
 
 @layer base {
@@ -131,16 +508,23 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
-    background-image: radial-gradient(1200px 600px at 85% -10%, rgb(91 61 245 / 0.07), transparent 60%),
-      radial-gradient(900px 500px at -10% 110%, rgb(21 26 51 / 0.04), transparent 60%);
+    @apply text-foreground;
+    font-size: 16px;
+    line-height: 1.5;
   }
   h1,
   h2,
   h3 {
     text-wrap: balance;
   }
+  h2 {
+    letter-spacing: -0.04em;
+  }
   html {
     @apply font-sans;
+    background: #2ba3ee;
+  }
+  [data-theme="night"] {
+    background: #0b1630;
   }
 }

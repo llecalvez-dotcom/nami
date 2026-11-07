@@ -33,9 +33,10 @@ export default function AccessPage() {
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-5 px-5 py-10">
+    <main className="poster poster-orange m-auto flex w-[calc(100%-2rem)] max-w-sm flex-col gap-5 p-8">
       <div className="space-y-2">
-        <h1 className="font-heading text-3xl">Nami access</h1>
+        <p className="label-mono">Nami · access</p>
+        <h1 className="display-title text-[45px]">Nami access</h1>
         <p className="text-sm text-muted-foreground">Enter the access code to continue.</p>
       </div>
       <form className="space-y-3" onSubmit={submit}>
@@ -49,8 +50,8 @@ export default function AccessPage() {
             required
           />
         </label>
-        {error ? <p className="text-sm text-attention">{error}</p> : null}
-        <Button type="submit" className="w-full" disabled={busy}>
+        {error ? <p className="text-sm font-medium">{error}</p> : null}
+        <Button type="submit" className="h-12 w-full rounded-full font-mono text-[11px] tracking-[0.1em] uppercase" disabled={busy}>
           {busy ? "Checking…" : "Continue"}
         </Button>
       </form>

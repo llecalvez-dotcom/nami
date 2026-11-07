@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Nami options</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main>
+      <h1>Nami</h1>
+      <form id="form">
+        <label for="url">Nami address</label>
+        <input id="url" type="url" required placeholder="http://localhost:3000" />
+        <button type="submit">Save</button>
+      </form>
+      <p id="saved" role="status"></p>
+      <h2>Microphone</h2>
+      <p>The side panel cannot show the microphone prompt. Allow it once here, then reopen the panel.</p>
+      <button id="mic" type="button">Allow the microphone</button>
+      <p id="mic-status" role="status"></p>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

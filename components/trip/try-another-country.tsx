@@ -27,8 +27,8 @@ export function TryAnotherCountry() {
   };
 
   return (
-    <section className="space-y-4 rounded-[28px] bg-card p-6 shadow-soft">
-      <h3 className="text-lg font-semibold tracking-tight">Try another country</h3>
+    <section className="space-y-4 rounded-[18px] bg-card p-6 shadow-soft">
+      <h3 className="text-[20px] font-medium tracking-[-0.5px]">Try another country</h3>
       <form onSubmit={submit} className="flex gap-2">
         <Input
           value={text}

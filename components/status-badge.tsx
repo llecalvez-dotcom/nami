@@ -21,11 +21,11 @@ const MODULE_STATE: Record<ModuleState, string> = {
 };
 
 export const COUNTRY_STATUS: Record<CountryStatus, { label: string; color: string; pill: string }> = {
-  home: { label: "Home", color: "#151a33", pill: "bg-foreground text-background" },
-  in_progress: { label: "Visa in progress", color: "#5b3df5", pill: "bg-primary text-primary-foreground" },
-  ready: { label: "Ready to go", color: "#12a87a", pill: "bg-success text-white" },
-  planned: { label: "Planned", color: "#9d8cff", pill: "bg-accent text-accent-foreground" },
-  wish: { label: "Wishlist", color: "#f2a65a", pill: "bg-attention/15 text-attention-foreground" },
+  home: { label: "Home", color: "#102934", pill: "bg-[#102934] text-[#f4faff]" },
+  in_progress: { label: "Visa in progress", color: "#ff7a1a", pill: "bg-[#ff7a1a] text-[#1b1b1b]" },
+  ready: { label: "Ready to go", color: "#a5c93a", pill: "bg-[#a5c93a] text-[#1f3a10]" },
+  planned: { label: "Planned", color: "#ffda36", pill: "bg-[#ffda36] text-[#38210d]" },
+  wish: { label: "Wishlist", color: "#f2a6c8", pill: "bg-[#f2a6c8] text-[#7a1030]" },
 };
 
 const pill = "inline-flex h-6 items-center rounded-full px-2.5 text-xs font-medium whitespace-nowrap";
@@ -50,7 +50,7 @@ export function ModuleStateBadge({ state }: { state: ModuleState | null }) {
 
 export function CountryStatusPill({ status, className }: { status: CountryStatus; className?: string }) {
   const { label, pill: tone } = COUNTRY_STATUS[status];
-  return <span className={cn(pill, "h-7 px-3", tone, className)}>{label}</span>;
+  return <span className={cn(pill, "label-mono h-7 px-3 font-bold ring-1 ring-black/10", tone, className)}>{label}</span>;
 }
 
 export function SampleBadge({ className }: { className?: string }) {
@@ -58,7 +58,7 @@ export function SampleBadge({ className }: { className?: string }) {
     <span
       className={cn(
         pill,
-        "border border-dashed border-attention bg-attention/10 font-mono tracking-wide text-attention-foreground uppercase",
+        "border border-dashed border-[#8a3a00] bg-[#fffdf3] font-mono tracking-wide text-[#8a3a00] uppercase",
         className,
       )}
     >

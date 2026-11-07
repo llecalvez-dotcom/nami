@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { geoCentroid } from "d3-geo";
 import { Heart, Plus } from "lucide-react";
 import { AppNav } from "@/components/app-nav";
+import { useTheme } from "@/components/theme-toggle";
 import { CountryPanel } from "@/components/map/country-panel";
 import { COUNTRY_STATUS } from "@/components/status-badge";
 import { useAllTrips } from "@/components/trip/use-all-trips";
@@ -13,14 +14,25 @@ import { countryFromName, countryName } from "@/lib/countries";
 import { homeCountry, homePassports, mapCountries, type CountryStatus } from "@/lib/trip-progress";
 import { addWish, useWishlist } from "@/lib/wishlist-store";
 
-const THEME: GlobeTheme = {
+const DAY: GlobeTheme = {
   ground: "transparent",
-  land: "#7d849e",
-  arc: "#5b3df5",
-  glow: "rgb(91 61 245 / 0.05)",
-  text: "#151a33",
-  muted: "#7b8199",
+  land: "#f4f1ea",
+  arc: "#ffffff",
+  glow: "rgb(255 255 255 / 0.12)",
+  text: "#102934",
+  muted: "rgb(16 41 52 / 0.7)",
 };
+
+const NIGHT: GlobeTheme = {
+  ground: "transparent",
+  land: "#6c7ca0",
+  arc: "#c9d8f2",
+  glow: "rgb(201 216 242 / 0.08)",
+  text: "#f4faff",
+  muted: "#a9b6d0",
+};
+
+const statusColor = (s: CountryStatus, night: boolean) => (s === "home" && night ? "#f4f1ea" : COUNTRY_STATUS[s].color);
 
 const CAPITALS: Record<string, [number, number]> = { FR: [2.35, 48.86], GB: [-0.13, 51.5], US: [-77.04, 38.9], DE: [13.4, 52.52] };
 const CITIES: [RegExp, [number, number]][] = [[/bali/i, [115.19, -8.41]]];
@@ -37,6 +49,7 @@ function coordsOf(iso2: string, destination?: string | null): [number, number] |
 export function WorldMapScreen() {
   const trips = useAllTrips();
   const wishlist = useWishlist();
+  const night = useTheme() === "night";
   const [selected, setSelected] = useState<string | null>(null);
   const [wish, setWish] = useState("");
   const [wishError, setWishError] = useState<string | null>(null);
@@ -48,9 +61,9 @@ export function WorldMapScreen() {
   const regions = useMemo(
     () =>
       Object.fromEntries(
-        Object.values(world).map((c) => [c.iso2, { color: COUNTRY_STATUS[c.status].color, label: COUNTRY_STATUS[c.status].label }]),
+        Object.values(world).map((c) => [c.iso2, { color: statusColor(c.status, night), label: COUNTRY_STATUS[c.status].label }]),
       ) as Record<string, Region>,
-    [world],
+    [world, night],
   );
   const hub = useMemo<Place>(() => {
     const [lon, lat] = coordsOf(home) ?? [2.35, 48.86];
@@ -81,11 +94,13 @@ export function WorldMapScreen() {
   return (
     <div className="flex flex-1 flex-col pb-28 md:pb-10">
       <AppNav />
-      <main className="mx-auto grid w-full max-w-6xl flex-1 gap-8 px-5 pt-6 sm:px-8 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:pt-10">
-        <section className="relative min-h-[500px] overflow-hidden rounded-[36px] bg-card shadow-soft sm:min-h-[560px] lg:min-h-[640px]">
-          <div className="pointer-events-none absolute top-6 left-6 z-10 sm:top-8 sm:left-8">
-            <p className="text-sm font-medium text-muted-foreground">From {countryName(home)}</p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-[-0.03em] sm:text-4xl">Your world</h1>
+      <main className="mx-auto grid w-full max-w-6xl flex-1 gap-8 px-4 pt-4 sm:px-7 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] lg:pt-8">
+        <section className="relative min-h-[500px] sm:min-h-[560px] lg:min-h-[660px]">
+          <div className="on-sky pointer-events-none absolute top-4 left-2 z-10 sm:left-4">
+            <p className="label-mono text-[11px]">From {countryName(home)}</p>
+            <h1 className="mt-2 text-[45px] leading-[1.05]">
+              <span className="font-script font-bold">Your</span> <span className="mix-serif">world.</span>
+            </h1>
           </div>
           {trips ? (
             <RouteGlobe
@@ -93,23 +108,29 @@ export function WorldMapScreen() {
               places={places}
               regions={regions}
               onSelectCountry={setSelected}
-              theme={THEME}
+              theme={night ? NIGHT : DAY}
               className="!absolute inset-0"
             />
           ) : null}
-          <div className="absolute inset-x-4 bottom-4 z-10 flex flex-wrap justify-center gap-x-4 gap-y-1.5 rounded-[20px] bg-card/85 px-5 py-2.5 text-xs font-medium shadow-soft backdrop-blur sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2">
+          <div className="glass absolute inset-x-2 bottom-2 z-10 flex flex-wrap justify-center gap-x-4 gap-y-1.5 rounded-[24px] px-5 py-3 font-mono text-[10px] tracking-[0.08em] uppercase sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 sm:rounded-full">
             {ORDER.map((s) => (
               <span key={s} className="inline-flex items-center gap-1.5">
-                <span className="size-2.5 rounded-full" style={{ background: COUNTRY_STATUS[s].color }} />
+                <span className="size-2.5 rounded-full ring-1 ring-black/15" style={{ background: statusColor(s, night) }} />
                 {COUNTRY_STATUS[s].label}
               </span>
             ))}
           </div>
         </section>
 
-        <aside className="space-y-6">
+        <aside className="poster poster-mint space-y-6 self-start p-6 sm:p-7">
           <div>
-            <h2 className="text-2xl font-semibold tracking-tight">Countries on your map</h2>
+            <div className="flex items-center justify-between label-mono">
+              <span>Nami · world map</span>
+              <span>{list.length} countries</span>
+            </div>
+            <h2 className="mt-4 text-[32px] leading-[1.15] font-medium">
+              Countries on your <span className="mix-serif">map.</span>
+            </h2>
             <p className="mt-1 text-sm text-muted-foreground">Click a coloured country on the globe, or pick one here.</p>
           </div>
           <ul className="space-y-2" aria-busy={trips === null}>
@@ -118,11 +139,10 @@ export function WorldMapScreen() {
                 <button
                   type="button"
                   onClick={() => setSelected(c.iso2)}
-                  className="flex w-full items-center gap-4 rounded-[22px] bg-card p-3 pr-4 text-left shadow-soft transition-transform hover:-translate-y-0.5"
+                  className="flex w-full items-center gap-4 rounded-[18px] bg-card p-3 pr-4 text-left shadow-soft transition-transform hover:-translate-y-0.5"
                 >
                   <span
-                    className="grid size-11 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
-                    style={{ background: COUNTRY_STATUS[c.status].color }}
+                    className={`grid size-11 shrink-0 place-items-center rounded-full font-mono text-xs font-bold ring-1 ring-black/10 ${COUNTRY_STATUS[c.status].pill}`}
                   >
                     {c.iso2}
                   </span>
@@ -138,9 +158,9 @@ export function WorldMapScreen() {
             ))}
           </ul>
 
-          <section id="wishlist" className="scroll-mt-24 rounded-[28px] bg-card p-6 shadow-soft">
-            <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
-              <Heart className="size-4 text-attention" /> Where do you dream of going?
+          <section id="wishlist" className="scroll-mt-24 rounded-[18px] bg-card p-5 shadow-soft">
+            <h2 className="flex items-center gap-2 text-[20px] font-medium tracking-[-0.5px]">
+              <Heart className="size-4" /> Where do you dream of going?
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">Add a country to your wishlist: it lights up on the globe.</p>
             <form onSubmit={submitWish} className="mt-4 flex gap-2">
@@ -149,13 +169,13 @@ export function WorldMapScreen() {
                 onChange={(e) => setWish(e.target.value)}
                 placeholder="Japan, Peru, Kenya…"
                 aria-label="Add a country to your wishlist"
-                className="h-11 min-w-0 flex-1 rounded-full bg-muted px-4 text-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/30"
+                className="h-11 min-w-0 flex-1 rounded-full border border-border bg-transparent px-4 text-sm outline-none placeholder:text-muted-foreground focus-visible:ring-3 focus-visible:ring-ring/30"
               />
               <button
                 type="submit"
                 disabled={!wish.trim()}
                 aria-label="Add"
-                className="grid size-11 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground shadow-glow disabled:opacity-40 disabled:shadow-none"
+                className="glass grid size-11 shrink-0 place-items-center disabled:opacity-40"
               >
                 <Plus className="size-5" />
               </button>
@@ -168,7 +188,7 @@ export function WorldMapScreen() {
                     key={iso2}
                     type="button"
                     onClick={() => setSelected(iso2)}
-                    className="rounded-full bg-attention/12 px-3 py-1.5 text-xs font-medium text-attention-foreground"
+                    className="rounded-full bg-[#f2a6c8] px-3 py-1.5 font-mono text-[11px] tracking-[0.06em] text-[#7a1030] uppercase"
                   >
                     {countryName(iso2)}
                   </button>
