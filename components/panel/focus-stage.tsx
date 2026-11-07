@@ -100,7 +100,12 @@ function VisualCard({ visual, t }: { visual: StageVisual; t: Translate }) {
   }
   const read = visual.kind === "passport_read";
   return (
-    <figure className="relative mt-7 h-44 overflow-hidden rounded-[22px] bg-[var(--paper-soft)] shadow-[0_14px_36px_rgb(19_48_58/0.16)]">
+    <figure
+      className={cn(
+        "relative mt-7 overflow-hidden rounded-[22px] bg-[var(--paper-soft)] shadow-[0_14px_36px_rgb(19_48_58/0.16)]",
+        read ? "h-44" : "h-24 w-40",
+      )}
+    >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={preview(visual.id)}
@@ -189,9 +194,7 @@ function Sky(props: Props) {
         <ReadyMark paper={ready} />
         <Sentence text={t(READY_TITLE[ready])} size="xl" />
         <p className="mt-2 text-[15px] text-[var(--np-ink-soft)]">{t("Check it in the tab, then send it yourself.")}</p>
-        <div className="mt-8 border-t border-[var(--np-line)] pt-6">
-          <Sentence text={sentenceOf(item)} pivot={destination} size="md" />
-        </div>
+        <p className="mt-10 text-[16px] leading-snug text-[var(--np-ink-soft)]">{sentenceOf(item)}</p>
       </>
     );
   } else {
@@ -231,9 +234,9 @@ export function WaveMic({ voice, t, large }: { voice: VoiceInput; t: Translate; 
       aria-pressed={listening}
       aria-label={listening ? t("Listening…") : t("Speak")}
       className={cn(
-        "np-press grid place-items-center rounded-full text-[var(--np-cream)] shadow-[0_10px_28px_rgb(19_48_58/0.25)] outline-none focus-visible:ring-4 focus-visible:ring-[var(--paper-soft)]",
-        large ? "size-[76px]" : "size-14",
-        listening ? "bg-[var(--np-ink)]" : "bg-[var(--paper)]",
+        "np-press grid place-items-center rounded-full shadow-[0_8px_24px_rgb(19_48_58/0.18)] outline-none focus-visible:ring-4 focus-visible:ring-[var(--paper-soft)]",
+        large ? "size-[72px]" : "size-14",
+        listening ? "bg-[var(--np-ink)] text-[var(--np-cream)]" : large ? "bg-[var(--paper)] text-[var(--np-cream)]" : "bg-[var(--np-cream)] text-[var(--paper)]",
       )}
     >
       {voice.status === "transcribing" ? (

@@ -20,9 +20,11 @@ function Swell({ className }: { className: string }) {
 export function Wave({ state, children }: { state: WaveState; children?: ReactNode }) {
   return (
     <div className="np-wave" data-state={state}>
-      <Swell className="np-swell-back" />
-      <Swell className="np-swell-front" />
-      {children ? <div className="absolute inset-0 z-10 flex items-end justify-center pb-2">{children}</div> : null}
+      <div className="np-swells">
+        <Swell className="np-swell-back" />
+        <Swell className="np-swell-front" />
+      </div>
+      {children ? <div className="absolute inset-x-0 bottom-2 z-10 flex justify-center">{children}</div> : null}
     </div>
   );
 }

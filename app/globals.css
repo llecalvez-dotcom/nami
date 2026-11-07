@@ -564,13 +564,13 @@
    docs/specs/2026-11-07-refonte-panneau.md */
 .nami-panel {
   --np-ink: #13303a;
-  --np-ink-soft: rgb(19 48 58 / 0.66);
+  --np-ink-soft: rgb(19 48 58 / 0.76);
   --np-sand: #f8efe3;
   --np-cream: #fdf8f0;
   --np-line: rgb(19 48 58 / 0.12);
   --np-lagoon: #0c7480;
   --np-lagoon-soft: #c4e4e2;
-  --np-coral: #bd4f2c;
+  --np-coral: #a9441f;
   --np-coral-soft: #f7d3c3;
   --paper: var(--np-lagoon);
   --paper-soft: var(--np-lagoon-soft);
@@ -622,8 +622,9 @@
 }
 
 /* The wave: two layers of the same swell drifting at different speeds. Its state says who has the floor. */
-.nami-panel .np-wave { position: relative; height: 76px; overflow: hidden; }
-.nami-panel .np-wave > svg {
+.nami-panel .np-wave { position: relative; height: 76px; }
+.nami-panel .np-swells { position: absolute; inset: 0; overflow: hidden; }
+.nami-panel .np-swells > svg {
   position: absolute;
   bottom: 0;
   left: 0;
@@ -648,8 +649,9 @@
   from { translate: -50% 0; }
   to { translate: 0 0; }
 }
-.nami-panel .np-sand { background: var(--np-sand); }
+/* The same height on every screen: the wave and the microphone never jump from one step to the next. */
+.nami-panel .np-sand { background: var(--np-sand); min-height: 128px; }
 @media (prefers-reduced-motion: reduce) {
-  .nami-panel .np-wave > svg,
+  .nami-panel .np-swells > svg,
   .nami-panel .np-enter { animation: none !important; }
 }
