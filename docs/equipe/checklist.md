@@ -6,6 +6,8 @@
 
 **Recadrage (15 h 40)** : le computer use passe au centre, voir `docs/specs/2026-11-07-recadrage-computer-use.md`. Option A (navigateur piloté) ou C (ordinateur entier pour les documents) selon le test T9.
 
+**Recadrage (19 h 30)** : Nami épuré dans le panneau latéral, l'agent qu'on voit cliquer (curseur, onde, cadre, bulle), voir `docs/specs/2026-11-07-nami-epure.md`. Tickets 13 (Léon), 14 (Nathan), 15 (Clément), 16 (Ali). Cause des clics ratés de l'agent trouvée : écran Retina, Chrome de l'agent à lancer avec `--force-device-scale-factor=1`.
+
 **Échéances** : vidéo de secours samedi 22 h · gel du code dimanche 11 h · rendu dimanche 14 h.
 
 ## 1. Front (ce qu'on voit à l'écran)

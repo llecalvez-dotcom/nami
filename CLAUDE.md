@@ -8,7 +8,8 @@ Note de projet de Nathan : `~/Code/perso/obsidian-vault/projets/_actifs/2026-11-
 ## Documents de référence (dans l'ordre)
 1. `docs/equipe/checklist.md` : chaque fonctionnalité, son état, son responsable. **À mettre à jour à chaque PR fusionnée.**
 2. `docs/equipe/cockpit.md` : façon de travailler, répartition, calendrier, démo, règles.
-3. `docs/specs/2026-11-07-recadrage-computer-use.md` : recadrage du samedi 15 h 40, le computer use au centre (prime sur la note de cadrage pour ce qu'il reprend).
+3. `docs/specs/2026-11-07-nami-epure.md` : recadrage du samedi 19 h 30, Nami épuré dans le panneau latéral, l'agent qu'on voit cliquer (prime sur les deux notes suivantes pour ce qu'il reprend ; tickets 13 à 16).
+3b. `docs/specs/2026-11-07-recadrage-computer-use.md` : recadrage du samedi 15 h 40, le computer use au centre.
 4. `docs/specs/2026-11-07-cadrage-devin.md` : note de cadrage (v4.3) : routes, contrats, consignes de l'agent H, tests, registre des faits.
 5. `docs/tickets/NN-*.md` : une fiche par morceau à construire.
 
@@ -37,4 +38,4 @@ Note de projet de Nathan : `~/Code/perso/obsidian-vault/projets/_actifs/2026-11-
 | Tests | 🔄 Mesuré en réel le 7/11 : compréhension ✅, voix ✅, Linkup ✅ (3 à 15 s), lecture du passeport 🟡 (8 s puis échecs à 30 s quand H est chargé), agent H 🟡 (navigue sur l'e-VOA, bloqué par les menus Select2 dès le premier menu ; dépôt de fichier impossible en mode navigateur). Jamais fait : parcours complet jusqu'à l'écran de paiement, T9 (agent de l'ordinateur entier), test dans le bruit de la salle. |
 
 ## Next Immediate Action
-Débloquer l'agent sur l'e-VOA : 1) lancer `npm run demo` depuis la branche de la PR #14 à jour (Chrome de l'agent sans veille, pont relancé tout seul, Nami), garder la fenêtre de l'agent visible ; 2) passage réel : nouveau voyage « I'm flying to Bali on Monday for a friend's wedding, landing at 2:30 pm », passeport confirmé, « Create my visa » ; vérifier si la consigne clavier pour Select2 (`docs/tickets/12-passeport-automatique.md`, partie C, point 1) ouvre le menu du pays ; 3) sinon coder l'outil `choose_option` (partie C, point 2) ; 4) noter chaque passage dans `docs/tests/f1-evoa.md`.
+Recadrage du samedi 19 h 30 (`docs/specs/2026-11-07-nami-epure.md`) : lancer sur Devin les tickets 13 (Léon, couche visuelle), 14 (Nathan, panneau épuré), 15 (Clément, agent jusqu'au paiement), 16 (Ali, photo et scan). Le Chrome de l'agent doit tourner avec `--force-device-scale-factor=1` sur un écran Retina, sinon les clics de H tombent à coordonnées doublées. Relire et tester chaque PR (tests, lint, compilation, fusion simulée), puis passage complet dans l'extension sur le banc du Mac de Nathan ; vidéo de secours à 22 h.
