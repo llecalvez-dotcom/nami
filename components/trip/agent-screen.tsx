@@ -30,7 +30,7 @@ export function AgentScreen({ sessionId, active, demo }: { sessionId: string; ac
           <button type="button" className="block w-full overflow-hidden rounded-lg text-left" onClick={() => setBlurred(!blurred)}
             aria-label={blurred ? "Reveal passport details on the agent's screen" : "Blur the agent's screen"}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`/api/agent/${encodeURIComponent(sessionId)}/screen?t=${refresh}`}
+            <img src={`/api/agent/${encodeURIComponent(sessionId)}/screen?t=${refresh}&active=${active ? "1" : "0"}`}
               alt="The agent's latest screen" referrerPolicy="no-referrer"
               className={`max-h-[480px] w-full object-contain ${blurred ? "blur-xl" : ""} ${unavailable ? "hidden" : ""}`}
               onLoad={() => setUnavailable(false)} onError={() => setUnavailable(true)} />
