@@ -76,7 +76,7 @@ type NewConversationItem = ConversationItem extends infer T ? (T extends Convers
 
 const ACTIVE_AGENT_STATES: AgentRun["state"][] = ["pending", "queued", "running", "awaiting_tool_results", "paused"];
 
-export const VISA_READY_MESSAGE = "Visa pre-filled in Chrome, stopped before payment. Check every field, then pay yourself.";
+export const VISA_READY_MESSAGE = "I stopped before sending anything: the next step sends your data to the Indonesian government. Check the form in the tab, then continue yourself.";
 
 // After a reload the confirmed passport is gone (never stored): nothing from H is read, so nothing is saved unmasked, until it is confirmed again.
 export function needsPassportReconfirm(run: AgentRun | null, passportConfirmed: boolean): boolean {
@@ -117,7 +117,7 @@ const FLIGHTS_AFTER_VISA: NewConversationItem = {
 const CREATE_VISA_PROPOSAL: NewConversationItem = {
   kind: "proposal",
   action: "create_visa",
-  text: "For Bali you need an e-VOA. Shall I fill it in for you on the official site? I stop before payment: you check, you pay.",
+  text: "For Bali you need an e-VOA. Shall I fill it in for you on the official site? I stop before anything is sent: you check, you send.",
   accept_label: "Create my visa",
   decline_label: "Not now",
   decision: null,

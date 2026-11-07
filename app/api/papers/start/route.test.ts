@@ -334,7 +334,7 @@ describe("POST /api/papers/start (route 5)", () => {
   it("stops the e-VOA agent on the summary or payment screen and never lets it submit or pay", async () => {
     await start(BODY);
     const instructions: string = sentBody().agent.instructions;
-    expect(instructions).toContain("Stop on the summary screen or the payment screen, without clicking anything on it. Then call report_ready as your last action.");
+    expect(instructions).toContain("never click Next there, because the next steps send the traveller's data to the government. Then call report_ready as your last action.");
     const forbidden = instructions.split("\n").find((line) => line.startsWith("You must NEVER click on:"));
     for (const button of ["Submit", "Pay", "Bayar", "Kirim"]) expect(forbidden).toContain(button);
   });
