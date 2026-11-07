@@ -71,7 +71,7 @@ async function uploadPassport(confirmedPath: string, connect: (port: number) => 
       expression: `(() => {
         const domain = ${JSON.stringify(domain)};
         if (location.hostname !== domain && !location.hostname.endsWith("." + domain)) return "no official tab";
-        const inputs = [...document.querySelectorAll('input[type="file"]')].filter(input => !input.disabled);
+        const inputs = [...document.querySelectorAll('input[type="file"]')];
         const isVisible = input => {
           const style = getComputedStyle(input);
           return input.getClientRects().length > 0 && style.visibility === "visible"
@@ -84,7 +84,7 @@ async function uploadPassport(confirmedPath: string, connect: (port: number) => 
         ].filter(Boolean).map(String).join(" ").toLowerCase();
         const candidates = inputs.filter(input => !/photo|picture|selfie|face|crop/.test(describe(input)));
         const passport = candidates.filter(input => /pas+por/.test(describe(input)));
-        const pool = passport.length > 0 ? passport : candidates;
+        const pool = (passport.length > 0 ? passport : candidates).filter(input => !input.disabled);
         const shown = pool.filter(isVisible);
         return shown.length === 1 ? shown[0] : pool.length === 1 ? pool[0] : null;
       })()`,
