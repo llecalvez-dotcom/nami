@@ -4,6 +4,15 @@
 
 > Direction validée : **Nami**, l'agent qui prépare ton voyage. L'utilisateur décrit n'importe quel voyage à la voix, l'agent pose ses questions, puis propose les modules un par un : papiers, vol, hôtel. **V1 = module Papiers pour un Français qui part de France à Bali.** Brief produit d'origine de Léon : [`docs/brief/2026-11-07-brief-produit-leon.md`](../brief/2026-11-07-brief-produit-leon.md). Note de cadrage complète (v4.2) : [`docs/specs/2026-11-07-cadrage-devin.md`](../specs/2026-11-07-cadrage-devin.md).
 
+## 🔁 Comment on travaille (à suivre jusqu'au rendu)
+
+1. **GitHub est la seule vérité.** Ce qui n'est pas sur GitHub n'existe pas pour l'équipe.
+2. **On code sur Devin cloud**, où sont les clés. Un ticket = une session Devin = une PR vers `main`, lancée par le propriétaire du ticket avec : « Dans le dépôt llecalvez-dotcom/nami, branche main : lis docs/specs/2026-11-07-cadrage-devin.md puis exécute docs/tickets/XX.md. Ouvre une PR vers main. »
+3. **Claude relit et teste chaque PR** (tests, lint, compilation, conformité au ticket, secrets) et donne son verdict à Nathan.
+4. **Le propriétaire fait le test réel** dans sa session cloud, puis **fusionne lui-même**.
+5. **Exception** : l'agent H qui remplit le visa pilote un Chrome local, il se teste sur un portable (Clément), pas sur le cloud.
+6. **Résultats des tests** : un fichier par test dans `docs/tests/`. **Avancement** : chacun met à jour sa ligne ci-dessous.
+
 ## 🎯 Le produit en une minute
 
 1. **La demande** : « Je pars à Bali lundi pour le mariage d'un ami, je reste dix jours. » Voix (Gladia) ou texte.
@@ -40,7 +49,7 @@ Un dossier = un propriétaire, pour ne jamais se marcher dessus. **Chaque propri
 | 2 | [04](../tickets/04-voix.md) | Voix Gladia, boucle vocale | Nathan | `app/api/voice/`, `components/voice/` |
 | 2 | (sans ticket) | Design premium des écrans, conversation, dossier du voyage | Léon | `app/` (pages), `components/` (hors voix) |
 | 2 | (sans ticket) | Tests F1, F6, F8 avec l'agent H, scripts de test | Clément | `scripts/feasibility/` |
-| 3 | 05 (écrit après les tests de Clément) | Agent H sur le visa e-VOA, Agent Activity, mode démo préparé | Clément | `lib/agent-task.ts`, `app/api/papers/`, `app/api/agent/` |
+| 3 | [05](../tickets/05-agent-visa.md) | Agent H sur le visa e-VOA, Agent Activity, question vocale de l'agent | Clément | `lib/agent-task.ts`, `app/api/papers/`, `app/api/agent/` |
 | 4 | 06 (P1) | Module Vol | Clément | `app/api/flights/` |
 
 Les étapes 2 partent en parallèle dès que le ticket 01 est fusionné.

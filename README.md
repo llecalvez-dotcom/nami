@@ -11,6 +11,7 @@ V1 : un Français qui part de France à Bali, module Papiers (visa e-VOA, carte 
 
 | Document | Contenu |
 |---|---|
+| [`docs/equipe/checklist.md`](docs/equipe/checklist.md) | **La checklist globale** : chaque fonctionnalité front et back, son état, son responsable |
 | [`docs/equipe/cockpit.md`](docs/equipe/cockpit.md) | **Le tableau de bord de l'équipe** : répartition, tests de faisabilité, calendrier, démo, règles, liens |
 | [`docs/specs/2026-11-07-cadrage-devin.md`](docs/specs/2026-11-07-cadrage-devin.md) | La note de cadrage complète (v4.2) : architecture, routes, contrats, tests, registre des faits |
 | [`docs/tickets/`](docs/tickets/) | Les tickets pour Devin, un par périmètre |
