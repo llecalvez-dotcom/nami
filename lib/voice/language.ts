@@ -23,6 +23,14 @@ export function setSpokenLanguage(language: string | null | undefined) {
   listeners.forEach((listener) => listener());
 }
 
+// Back to English until the traveller speaks again (a new trip starts from zero).
+export function resetSpokenLanguage() {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {}
+  listeners.forEach((listener) => listener());
+}
+
 // Gladia guesses the language of a short answer badly ("oui", "ok", a word through a distant microphone): measured on
 // 2026-11-07, Nami switched to a language the traveller does not speak. Only a sentence of 3 words or more changes it.
 export const MIN_WORDS_FOR_LANGUAGE = 3;

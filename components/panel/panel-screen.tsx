@@ -11,8 +11,8 @@ import { useAgentRun } from "@/components/trip/use-agent-run";
 import { useTripActions } from "@/components/trip/use-trip-actions";
 import { MuteToggle } from "@/components/voice/mute-toggle";
 import { useVoiceInput } from "@/components/voice/use-voice-input";
-import { speakLine, useConversationSpeech, useSpeaking } from "@/components/voice/speech";
-import { useSpokenLanguage } from "@/lib/voice/language";
+import { speakLine, stopSpeaking, useConversationSpeech, useSpeaking } from "@/components/voice/speech";
+import { resetSpokenLanguage, useSpokenLanguage } from "@/lib/voice/language";
 import { requestTranslations, translated, useTranslatedConversation, useTranslationsVersion } from "@/lib/voice/translations";
 import type { DocumentExtraction, PassportFields } from "@/lib/contracts";
 import { bestFirst, foundPassportText, foundPhotoText, foundReturnTicketText, readSummary, type Reader } from "@/lib/panel-documents";
@@ -30,7 +30,7 @@ import {
   type ConversationItem,
   type Trip,
 } from "@/lib/trip-state";
-import { getTrip, saveTrip, useTrips } from "@/lib/trip-store";
+import { clearTrips, getTrip, saveTrip, useTrips } from "@/lib/trip-store";
 import { cn } from "@/lib/utils";
 
 const CURRENT_TRIP_KEY = "nami.panel.trip";
@@ -506,7 +506,15 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
             <MessagesSquare className="size-[18px]" />
           </IconButton>
           <MuteToggle className="size-10 text-[var(--np-ink)]" />
-          <IconButton label={t("New trip")} onClick={onNewTrip}>
+          <IconButton
+            label={t("New trip")}
+            onClick={async () => {
+              // Starting over stops the agent and the voice first: nothing keeps running for the old trip.
+              stopSpeaking();
+              if (isAgentActive(latest().agent_run)) await actions.stop().catch(() => {});
+              onNewTrip();
+            }}
+          >
             <Plus className="size-5" />
           </IconButton>
         </div>
@@ -601,7 +609,18 @@ export function PanelScreen() {
   return (
     <div className="relative z-10 flex h-dvh flex-col">
       {trip ? (
-        <TripView key={trip.id} trip={trip} t={t} language={language} onNewTrip={() => choose(null)} />
+        <TripView
+          key={trip.id}
+          trip={trip}
+          t={t}
+          language={language}
+          onNewTrip={() => {
+            // « Nouveau voyage » starts from zero: saved trips, current trip and spoken language are wiped.
+            clearTrips();
+            resetSpokenLanguage();
+            choose(null);
+          }}
+        />
       ) : (
         <div className="nami-panel relative flex h-dvh flex-col" data-scene="aube">
           <header className="px-5 pt-4 pb-2">
