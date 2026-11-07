@@ -16,7 +16,26 @@ export type ParseResult = { request: TripRequestDraft; missing: QuestionField[];
 const ModelOutputSchema = TripRequestDraftSchema.omit({ raw_text: true, status: true });
 type ModelOutput = z.infer<typeof ModelOutputSchema>;
 
-export const MODEL_OUTPUT_JSON_SCHEMA = z.toJSONSchema(ModelOutputSchema);
+// What the H model must produce: types only. The JSON Schema zod generates carries huge date regexes (leap years
+// included); with a date to write ("lundi", "Monday"), H's constrained decoding crawled or never finished (2 timeouts
+// out of 2 on 2026-11-07, while the same request without a date answered in 0.8 s). The output is still checked by zod.
+const nullable = (type: "string" | "integer") => ({ type: [type, "null"] });
+export const MODEL_OUTPUT_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    nationality: nullable("string"),
+    origin_country: nullable("string"),
+    destination: nullable("string"),
+    country_iso2: nullable("string"),
+    departure_date: nullable("string"),
+    arrival_at: nullable("string"),
+    return_date: nullable("string"),
+    purpose: nullable("string"),
+    travellers: nullable("integer"),
+  },
+  required: ["nationality", "origin_country", "destination", "country_iso2", "departure_date", "arrival_at", "return_date", "purpose", "travellers"],
+  additionalProperties: false,
+};
 
 const SYSTEM_PROMPT = `You turn a traveller's request into a JSON trip request. Never guess: a field the traveller did not give stays null.
 Fields:
