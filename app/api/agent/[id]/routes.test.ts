@@ -27,7 +27,7 @@ describe("upload_file answer", () => {
     expect(await response.json()).toEqual({ ok: true, upload_result: "uploaded" });
     expect(uploadSessionDocument).toHaveBeenCalledWith("s-1", tool_req);
     expect(JSON.parse(call()[1].body as string)).toEqual({
-      kind: "tool_result", tool_req, result: "uploaded",
+      kind: "tool_result", tool_req, result: "uploaded. Do not reload or refresh the page or navigate away; take a screenshot to verify the file is shown, then continue with the next field.",
     });
   });
 
@@ -36,6 +36,7 @@ describe("upload_file answer", () => {
     fetch.mockResolvedValue(new Response(null, { status: 204 }));
     const response = await post({ tool_req, result: "upload" });
     expect(await response.json()).toEqual({ ok: true, upload_result: result });
+    expect(JSON.parse(call()[1].body as string).result).toBe(result);
   });
 
   it("rejects caller-provided paths in tool arguments before connecting or answering H", async () => {

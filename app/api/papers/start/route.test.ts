@@ -297,6 +297,25 @@ describe("POST /api/papers/start (route 5)", () => {
     expect(task).toContain("Purpose: tourism.");
   });
 
+  it("gives the agent the e-VOA menu path right after the first line of the task", async () => {
+    await start(BODY);
+    const lines = (sentBody().messages[0].message as string).split("\n");
+    const evoa = getBaliPaper("evoa");
+    expect(evoa.route_hint).toContain("B1 - Tourist (Visa On Arrival)");
+    expect(lines[0]).toContain(`Go to ${evoa.official_url}.`);
+    expect(lines[1]).toBe(evoa.route_hint);
+    expect(lines[1]).toContain("Detail & Apply");
+    expect(lines[1]).toContain("do not look for another page or site");
+  });
+
+  it("stops the e-VOA agent on the summary or payment screen and never lets it submit or pay", async () => {
+    await start(BODY);
+    const instructions: string = sentBody().agent.instructions;
+    expect(instructions).toContain("Stop on the summary screen or the payment screen, without clicking anything on it. Then call report_ready as your last action.");
+    const forbidden = instructions.split("\n").find((line) => line.startsWith("You must NEVER click on:"));
+    for (const button of ["Submit", "Pay", "Bayar", "Kirim"]) expect(forbidden).toContain(button);
+  });
+
   it.each(["/home/fictitious/fictitious-passport.jpg", "/Users/fictitious/fictitious-passport.jpg", "C:\\Users\\Fictitious\\fictitious-passport.jpg"])(
     "never sends a legacy local path or filename to H: %s", async (path) => {
       expect((await start({ ...BODY, file_paths: [path] })).status).toBe(201);
@@ -304,6 +323,24 @@ describe("POST /api/papers/start (route 5)", () => {
       expect(sentBody()).not.toHaveProperty("file_paths");
     },
   );
+
+  it("uses NAMI_LOCAL_SESSION_ID when the panel sends no local session, and lets the body win", async () => {
+    vi.stubEnv("NAMI_LOCAL_SESSION_ID", "server-session-7");
+    expect((await start({ ...BODY, local_session_id: undefined })).status).toBe(201);
+    expect(sentBody().agent.environments[0].session_id).toBe("server-session-7");
+    resetGuards();
+    resetBrowserPreflight();
+    fetch.mockClear();
+    expect((await start(BODY)).status).toBe(201);
+    expect(sentBody().agent.environments[0].session_id).toBe("local-42");
+  });
+
+  it("refuses a malformed NAMI_LOCAL_SESSION_ID without calling H", async () => {
+    vi.stubEnv("NAMI_LOCAL_SESSION_ID", "bad id with spaces");
+    const response = await start({ ...BODY, local_session_id: undefined });
+    expect(response.status).toBe(400);
+    expect(fetch).not.toHaveBeenCalled();
+  });
 
   it("logs nothing and never sends the task back", async () => {
     const log = vi.spyOn(console, "log");

@@ -33,8 +33,13 @@ async function start(request: Request): Promise<Response> {
   const body = read.value as Record<string, unknown> | null;
   if (!body || typeof body !== "object") return fail("Invalid request.", 400);
   if (body.paper_id !== PILOT_PAPER_ID) return fail("Only the Bali e-VOA can be filled in by the agent for now.", 400);
+  // The side panel (/panel) shows no settings: the server's NAMI_LOCAL_SESSION_ID fills the gap.
+  const serverSession = process.env.NAMI_LOCAL_SESSION_ID?.trim();
+  if ((typeof body.local_session_id !== "string" || !body.local_session_id.trim()) && serverSession) {
+    body.local_session_id = serverSession;
+  }
   if (typeof body.local_session_id !== "string" || !body.local_session_id.trim()) {
-    return fail("Missing local browser session: run holo local browser and paste its id in the demo settings (?demo=1).", 400);
+    return fail("Missing local browser session: set NAMI_LOCAL_SESSION_ID to the id printed by holo local browser, or paste it in the demo settings (?demo=1).", 400);
   }
   const input = PaperStartSchema.safeParse(body);
   if (!input.success) {
