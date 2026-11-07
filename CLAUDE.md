@@ -8,8 +8,9 @@ Note de projet de Nathan : `~/Code/perso/obsidian-vault/projets/_actifs/2026-11-
 ## Documents de référence (dans l'ordre)
 1. `docs/equipe/checklist.md` : chaque fonctionnalité, son état, son responsable. **À mettre à jour à chaque PR fusionnée.**
 2. `docs/equipe/cockpit.md` : façon de travailler, répartition, calendrier, démo, règles.
-3. `docs/specs/2026-11-07-cadrage-devin.md` : note de cadrage (v4.3) : routes, contrats, consignes de l'agent H, tests, registre des faits.
-4. `docs/tickets/NN-*.md` : une fiche par morceau à construire.
+3. `docs/specs/2026-11-07-recadrage-computer-use.md` : recadrage du samedi 15 h 40, le computer use au centre (prime sur la note de cadrage pour ce qu'il reprend).
+4. `docs/specs/2026-11-07-cadrage-devin.md` : note de cadrage (v4.3) : routes, contrats, consignes de l'agent H, tests, registre des faits.
+5. `docs/tickets/NN-*.md` : une fiche par morceau à construire.
 
 ## Structure
 - `app/` : pages Next.js et routes API (`app/api/trip/parse`, `app/api/voice/transcribe`, à venir `formalities`, `documents/extract`, `papers/start`, `agent/[id]/…`).
@@ -27,13 +28,13 @@ Note de projet de Nathan : `~/Code/perso/obsidian-vault/projets/_actifs/2026-11-
 - Aucun tiret cadratin ni demi-cadratin dans les textes de l'interface.
 
 ## Current Project State
-(vérifié le samedi 7 novembre à 15 h 05)
+(vérifié le samedi 7 novembre à 15 h 45)
 
 | Aspect | Status |
 |--------|--------|
-| Code | 🔄 Fusionnés : 01, 02, 03 (PR #6), 04, routes protégées et passeport privé (PR #12). PR #13 (design + page World map, Léon) relue, testée et prête. PR #14 (ticket 05 partie A, agent H sur l'e-VOA, Clément) relue (172 tests) ; arrêt hors du domaine officiel et rebasage demandés à son Devin à 15 h 03 ; test réel 3 sur 3 à faire. Partie B et ticket 06 pas commencés. PR #11 (coffre chiffré) hors hackathon, laissée ouverte. |
+| Code | 🔄 Fusionnés : 01, 02, 03 (PR #6), 04, routes protégées et passeport privé (PR #12), design + page World map (PR #13), fiche du coffre chiffré hors hackathon (PR #11). PR #14 (ticket 05 partie A, agent H sur l'e-VOA, Clément) : arrêt hors domaine ajouté, à jour avec `main`, 222 tests, lint et compilation OK ; test réel 3 sur 3 à faire. Partie B et ticket 06 pas commencés. |
 | Config | ✅ Clés dans les secrets de Devin cloud (`HAI_API_KEY` remplacée à 14 h 25) ; `.env*` et `private/` ignorés ; accord écrit du titulaire du passeport. Nouvelles variables : `PASSPORT_READER` (`off` par défaut, `h` pour la démo), `NAMI_ACCESS_CODE` (obligatoire en production). ❓ CLI de H et Chrome dédié sur le portable de Clément ; `.env.local` locaux avec la nouvelle clé H. |
-| Tests | ✅ `main` : 164 tests, lint et compilation OK ; F0, F5 (voix) et L1 (Linkup, 5 pays sur 5) réussis en réel. ❓ T8 (vrai passeport, Ali). ⬜ T4 à T6 (agent H sur le portable de Clément). |
+| Tests | ✅ `main` : 172 tests, lint et compilation OK ; F0, F5 (voix) et L1 (Linkup, 5 pays sur 5) réussis en réel. ❓ T8 (vrai passeport, Ali). ⬜ T4 à T6 (agent H sur le portable de Clément). |
 
 ## Next Immediate Action
-Relire les nouveaux commits de la PR #14 dès qu'ils arrivent (arrêt hors domaine, rebasage sur `main`) : `npm test`, `npm run lint`, `npm run build`, fusion simulée, puis feu vert au test réel de Clément. En parallèle, écrire `docs/tickets/06-demo.md` (tout brancher + mode démo préparé, avec `PASSPORT_READER=h`, `NAMI_ACCESS_CODE` si en ligne, redémarrage du serveur avant la démo pour les quotas) et préparer le pitch avec Nathan.
+Recadrage computer use (`docs/specs/2026-11-07-recadrage-computer-use.md`) : attendre le verdict de deux tests, le test réel de la PR #14 par Clément (`docs/tests/f1-evoa.md`) et le test T9 d'Ali (`docs/tests/t9-bureau.md`, décide entre A et C). Relire chaque PR des tickets 06, 08, 09 (et 10 si T9 réussit) dès qu'elle arrive : `npm test`, `npm run lint`, `npm run build`, fusion simulée. Puis écrire le ticket du mode démo et préparer le pitch avec Nathan.

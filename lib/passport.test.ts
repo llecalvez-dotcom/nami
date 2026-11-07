@@ -38,14 +38,14 @@ describe("toExtraction", () => {
       expiry_date: "2030-02-02",
     });
     expect(result.confidence_per_field).toMatchObject({ surname: 0.98, passport_number: 0.9 });
-    expect(result.warnings).toEqual([]);
+    expect(result.warnings).toEqual(["The MRZ could not be checked: review the printed fields."]);
   });
 
   it("leaves a missing field null with confidence 0 and asks to type it", () => {
     const result = toExtraction(JSON.stringify({ ...SPECIMEN, issue_date: null }), TRIP);
     expect(result.fields.issue_date).toBeNull();
     expect(result.confidence_per_field.issue_date).toBe(0);
-    expect(result.warnings).toEqual(["Date of issue could not be read: type it in."]);
+    expect(result.warnings).toContain("Date of issue could not be read: type it in.");
   });
 
   it("drops a value that is not a valid date instead of guessing", () => {
