@@ -59,6 +59,8 @@ export async function preflightBrowser(browserId: string, connect: (port: number
         }
       });
       if (official.length > 1) throw new AgentPreflightError("Several official e-VOA tabs are open. Close the extra tabs, then try again.", 409);
+      // With no tab at all, holo local browser stops on "unable to discover open pages" (seen twice on 2026-11-07).
+      if (!result.targetInfos.some((target) => target.type === "page")) await client.send("Target.createTarget", { url: "about:blank" });
     } catch (error) {
       if (error instanceof AgentPreflightError) throw error;
       throw new AgentPreflightError(`Chrome DevTools is not ready. Run holo local browser --debug-port ${port} and keep it open, then try again.`, 503);

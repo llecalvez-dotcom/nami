@@ -50,6 +50,19 @@ describe("browser preflight", () => {
     },
   );
 
+  it("opens a blank tab when the agent's Chrome has none, so the H bridge can attach", async () => {
+    send.mockResolvedValueOnce({ targetInfos: [{ type: "service_worker", url: "chrome-extension://x/bg.js" }] });
+    const lease = await preflightBrowser("bridge-1", connect);
+    expect(send).toHaveBeenCalledWith("Target.createTarget", { url: "about:blank" });
+    lease.release();
+  });
+
+  it("opens no tab when one is already there", async () => {
+    send.mockResolvedValueOnce({ targetInfos: [{ type: "page", url: "about:blank" }] });
+    (await preflightBrowser("bridge-1", connect)).release();
+    expect(send).not.toHaveBeenCalledWith("Target.createTarget", expect.anything());
+  });
+
   it("rejects several official page tabs and closes CDP without attaching", async () => {
     send.mockResolvedValue({ targetInfos: [
       { type: "page", url: `https://${DOMAIN}/form` },
