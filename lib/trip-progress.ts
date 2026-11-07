@@ -84,11 +84,15 @@ export function homeCountry(trips: CountedTrip[], fallback = "FR"): string {
   return mostCommon(trips, originOf) ?? fallback;
 }
 
-export function homePassport(trips: CountedTrip[], home: string): string | null {
-  return mostCommon(
-    trips.filter((t) => originOf(t) === home),
-    (t) => t.request.nationality,
-  );
+export function homePassports(trips: CountedTrip[], home: string): string[] {
+  const fromHome = trips.filter((t) => originOf(t) === home);
+  const real = fromHome.filter((t) => !t.sample);
+  const counts = new Map<string, number>();
+  for (const t of real.length ? real : fromHome) {
+    const iso = t.request.nationality;
+    if (iso) counts.set(iso, (counts.get(iso) ?? 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([iso]) => iso);
 }
 
 export type MapCountry = { iso2: string; status: CountryStatus; trips: Trip[] };

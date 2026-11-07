@@ -10,7 +10,7 @@ import { useAllTrips } from "@/components/trip/use-all-trips";
 import { RouteGlobe, type GlobeTheme, type Place, type Region } from "@/components/ui/route-globe";
 import { countries } from "@/components/ui/route-globe-utils/globe";
 import { countryFromName, countryName } from "@/lib/countries";
-import { homeCountry, homePassport, mapCountries, type CountryStatus } from "@/lib/trip-progress";
+import { homeCountry, homePassports, mapCountries, type CountryStatus } from "@/lib/trip-progress";
 import { addWish, useWishlist } from "@/lib/wishlist-store";
 
 const THEME: GlobeTheme = {
@@ -184,7 +184,7 @@ export function WorldMapScreen() {
           iso2={selected}
           country={world[selected] ?? null}
           homeTrips={(trips ?? []).filter((t) => (t.request.origin_country ?? t.request.nationality) === home).length}
-          passport={trips ? homePassport(trips, home) : null}
+          passports={trips ? homePassports(trips, home) : []}
           onClose={close}
         />
       ) : null}
