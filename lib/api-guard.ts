@@ -36,7 +36,10 @@ function tooLarge(): Response {
   return Response.json({ error: "Request too large." }, { status: 413 });
 }
 
-function clientKey(request: Request): string {
+function clientKey(request: Request, route: ApiRoute): string {
+  const forwardedFor = request.headers.get("x-forwarded-for")?.split(",", 1)[0]?.trim();
+  if (route === "access") return forwardedFor ? `ip:${forwardedFor}` : "anonymous";
+
   const cookieHeader = request.headers.get("cookie");
   if (cookieHeader) {
     for (const item of cookieHeader.split(";")) {
@@ -45,7 +48,6 @@ function clientKey(request: Request): string {
       return `cookie:${item.slice(separator + 1).trim()}`;
     }
   }
-  const forwardedFor = request.headers.get("x-forwarded-for")?.split(",", 1)[0]?.trim();
   return forwardedFor ? `ip:${forwardedFor}` : "anonymous";
 }
 
@@ -54,7 +56,7 @@ export function guard(request: Request, route: ApiRoute, now: () => number = Dat
   if (contentLength !== null && (!/^\d+$/.test(contentLength) || Number(contentLength) > API_LIMITS[route])) return tooLarge();
 
   const timestamp = now();
-  const key = JSON.stringify([route, clientKey(request)]);
+  const key = JSON.stringify([route, clientKey(request, route)]);
   const currentQuota = quotas.get(key);
   const quota =
     currentQuota && timestamp < currentQuota.resetAt
