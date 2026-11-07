@@ -112,26 +112,33 @@ agent_chrome_running() {
   return 1
 }
 
-# Pixel density of the agent's Chrome, read in a tab through DevTools (Runtime.evaluate). Opens a blank tab if there is none.
-# Prints the number, or "error".
+# Pixel density of the agent's Chrome, read in every tab through DevTools (Runtime.evaluate): tabs in windows on
+# different screens can differ. Opens a blank tab if there is none. Prints the first density that is not 1, else 1, or "error".
 chrome_scale() {
   NAMI_CDP_PORT="$PORT" node - << 'JS'
 const base = `http://127.0.0.1:${process.env.NAMI_CDP_PORT}`;
 const done = (text) => { console.log(text); process.exit(0); };
 setTimeout(() => done("error"), 8000);
-(async () => {
-  const tabs = await (await fetch(`${base}/json`)).json();
-  let tab = tabs.find((t) => t.type === "page" && t.webSocketDebuggerUrl);
-  if (!tab) tab = await (await fetch(`${base}/json/new?about:blank`, { method: "PUT" })).json();
-  const ws = new WebSocket(tab.webSocketDebuggerUrl);
-  ws.onerror = () => done("error");
+const scaleOf = (url) => new Promise((resolve, reject) => {
+  const ws = new WebSocket(url);
+  ws.onerror = () => reject(new Error("socket"));
   ws.onopen = () => ws.send(JSON.stringify({ id: 1, method: "Runtime.evaluate", params: { expression: "window.devicePixelRatio", returnByValue: true } }));
   ws.onmessage = (event) => {
     const reply = JSON.parse(String(event.data));
     if (reply.id !== 1) return;
+    ws.close();
     const value = reply.result?.result?.value;
-    done(typeof value === "number" ? String(value) : "error");
+    if (typeof value === "number") resolve(value); else reject(new Error("value"));
   };
+});
+(async () => {
+  let tabs = (await (await fetch(`${base}/json`)).json()).filter((t) => t.type === "page" && t.webSocketDebuggerUrl);
+  if (!tabs.length) tabs = [await (await fetch(`${base}/json/new?about:blank`, { method: "PUT" })).json()];
+  for (const tab of tabs) {
+    const scale = await scaleOf(tab.webSocketDebuggerUrl);
+    if (scale !== 1) done(String(scale));
+  }
+  done("1");
 })().catch(() => done("error"));
 JS
 }
