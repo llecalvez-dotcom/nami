@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { mrzCheckDigit, nationalityCode, normalizeMrz, parseMrz } from "@/lib/mrz";
-import { toExtraction } from "@/lib/passport";
+import { extractPassport, toExtraction } from "@/lib/passport";
 import { expiryWarning } from "@/lib/passport-dates";
 
 const ICAO_FIRST = "P<UTOERIKSSON<<ANNA<MARIA<<<<<<<<<<<<<<<<<<<";
@@ -114,8 +114,41 @@ describe("MRZ cross-check", () => {
     expect(result.warnings).toContainEqual(expect.stringContaining("composite"));
   });
 
+  // Seen on 2026-11-07 with a real French passport: compound surname printed on the page but read without its particle.
+  it("takes the MRZ surname when the printed one only misses a particle of it", () => {
+    const result = extract({ surname: "BERGE", mrz_line1: "P<FRALE<BERGE<<CAMILLE<JEANNE".padEnd(44, "<") });
+    expect(result.fields.surname).toBe("LE BERGE");
+    expect(result.mrz_verified).toContain("surname");
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("still flags a surname that is not part of the MRZ surname", () => {
+    const result = extract({ surname: "DURAND", mrz_line1: "P<FRALE<BERGE<<CAMILLE<JEANNE".padEnd(44, "<") });
+    expect(result.fields.surname).toBe("DURAND");
+    expect(result.warnings).toContainEqual(expect.stringContaining("Surname:"));
+  });
+
+  // Seen on 2026-11-07: every individual check passes, the composite fails because the model miscounts the < fillers.
+  it.each([-3, -1, 1, 2])("realigns line 2 when the model miscounts the fillers by %i", (delta) => {
+    const line = secondLine();
+    const fillers = 14 + delta;
+    const miscounted = line.slice(0, 28) + "<".repeat(fillers) + line.slice(42);
+    const result = extract({ mrz_line2: miscounted });
+    expect(result.warnings).toEqual([]);
+    expect(result.mrz_verified).toHaveLength(6);
+  });
+
+  it("keeps a real composite error once realigned", () => {
+    const line = secondLine();
+    const wrong = line.slice(0, 43) + (line[43] === "0" ? "1" : "0");
+    expect(extract({ mrz_line2: wrong }).warnings).toContainEqual(expect.stringContaining("composite"));
+  });
+
   it("normalizes accent and name separators before comparison", () => {
     expect(extract({ given_names: "Cámille-Jeanne" }).mrz_verified).toContain("given_names");
+    // French passports print the given names separated by commas; the model copies them or not, run to run.
+    expect(extract({ given_names: "Camille, Jeanne" }).mrz_verified).toContain("given_names");
+    expect(extract({ given_names: "CAMILLE, JEANNE." }).warnings).toEqual([]);
   });
 
   it.each([null, "not an MRZ"])("leaves confidence unchanged when MRZ is unavailable: %s", (mrz_line1) => {
@@ -143,5 +176,36 @@ describe("nationalityCode", () => {
     expect(nationalityCode("D<<")).toBe("DE");
     expect(nationalityCode("FRA")).toBe("FR");
     expect(nationalityCode("FR<")).toBe("FR<");
+  });
+});
+
+describe("second reading when the MRZ does not confirm the first", () => {
+  const IMAGE = { base64: "aGVsbG8=", mimeType: "image/jpeg" as const };
+  const reading = (overrides = {}) => JSON.stringify({ ...model, ...overrides });
+
+  it("reads again and keeps the reading the MRZ confirms", async () => {
+    const read = vi.fn().mockResolvedValueOnce(reading({ surname: "OTHER" })).mockResolvedValueOnce(reading());
+    const result = await extractPassport(IMAGE, {}, { name: "h", read });
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(result.warnings).toEqual([]);
+    expect(result.mrz_verified).toHaveLength(6);
+  });
+
+  it("reads once when the MRZ confirms the first reading", async () => {
+    const read = vi.fn().mockResolvedValue(reading());
+    await extractPassport(IMAGE, {}, { name: "h", read });
+    expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the first reading when the second fails or is not better", async () => {
+    const failing = vi.fn().mockResolvedValueOnce(reading({ surname: "OTHER" })).mockRejectedValueOnce(new Error("timeout"));
+    expect((await extractPassport(IMAGE, {}, { name: "h", read: failing })).fields.surname).toBe("OTHER");
+    const worse = vi.fn().mockResolvedValueOnce(reading({ surname: "OTHER" })).mockResolvedValueOnce(reading({ mrz_line1: null }));
+    expect((await extractPassport(IMAGE, {}, { name: "h", read: worse })).fields.surname).toBe("OTHER");
+  });
+
+  it("stores the given names without the commas of the printed page", async () => {
+    const read = vi.fn().mockResolvedValue(reading({ given_names: "Camille, Jeanne" }));
+    expect((await extractPassport(IMAGE, {}, { name: "h", read })).fields.given_names).toBe("Camille Jeanne");
   });
 });

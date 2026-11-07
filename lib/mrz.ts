@@ -8,7 +8,7 @@ export function nationalityCode(code: string): string {
 
 export function normalizeMrz(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase()
-    .replace(/[\s'’\-]/g, "<").replace(/<+/g, "<").replace(/^<|<$/g, "");
+    .replace(/[\s'’\-,.]/g, "<").replace(/<+/g, "<").replace(/^<|<$/g, "");
 }
 
 export function mrzCheckDigit(value: string): string {
@@ -28,9 +28,19 @@ function dateValue(value: string, birth: boolean, now: Date): string | null {
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === iso ? iso : null;
 }
 
+// A model copying line 2 often miscounts the < fillers of the optional data (seen on 2026-11-07): every individual
+// check passes but the composite digit is read at the wrong place. The 28 fixed characters and the two final digits
+// (optional data check digit, composite) are kept, and the optional data is padded back to its 14 characters.
+function realignSecond(line: string): string {
+  if (line.length === 44 || line.length < 31 || !/[0-9<][0-9]$/.test(line)) return line;
+  const optional = line.slice(28, -2).replace(/<+$/, "");
+  return optional.length > 14 ? line : line.slice(0, 28) + optional.padEnd(14, "<") + line.slice(-2);
+}
+
 export function parseMrz(line1: unknown, line2: unknown, now = new Date()) {
   if (typeof line1 !== "string" || typeof line2 !== "string") return null;
-  const lines = [line1, line2].map((line) => line.toUpperCase().replace(/\s/g, ""));
+  const raw = [line1, line2].map((line) => line.toUpperCase().replace(/\s/g, ""));
+  const lines = [raw[0], realignSecond(raw[1])];
   if (lines[0].length < 5 || lines[1].length < 28
     || lines.some((line) => line.length > 44 || !/^[A-Z0-9<]+$/.test(line))) return null;
   const [first, second] = lines.map((line) => line.padEnd(44, "<"));
