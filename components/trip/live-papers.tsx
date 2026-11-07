@@ -56,7 +56,7 @@ export function LivePaperCard({ paper, observedOn }: { paper: Paper; observedOn?
   const when = windowText(paper);
   return (
     <li className="rounded-[24px] bg-card p-5 shadow-soft">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col-reverse items-start gap-2 sm:flex-row sm:justify-between sm:gap-3">
         <div>
           <p className="text-lg leading-snug font-semibold tracking-tight">{paper.name}</p>
           {when ? <p className="mt-1 text-sm text-muted-foreground">{when}</p> : null}
