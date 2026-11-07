@@ -5,7 +5,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
-import { findDocuments } from "@/lib/documents";
+import { documentFilePaths, findDocuments } from "@/lib/documents";
 import { bindSessionDocument, uploadSessionDocument } from "@/lib/agent-passport-upload";
 import { connectChrome } from "@/lib/chrome-cdp";
 
@@ -69,7 +69,8 @@ smoke("real Chrome: confirmed file arrives with exactly one input and change eve
     }
     expect(ready).toBe(true);
     const [document] = await findDocuments();
-    bindSessionDocument("smoke-session", document.id);
+    const [path] = (await documentFilePaths([document.id]))!;
+    bindSessionDocument("smoke-session", path);
     expect(await uploadSessionDocument("smoke-session", {
       tool_name: "upload_file", args: { purpose: "passport" }, id: "smoke-upload",
     })).toBe("uploaded");

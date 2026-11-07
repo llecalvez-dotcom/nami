@@ -98,14 +98,25 @@ describe("passport document handoff", () => {
     expect(task.split(path)).toHaveLength(2);
   });
 
-  it("binds the created session to the confirmed document for later server-side uploads", async () => {
+  it("binds the resolved file at start so a later search does not break the upload", async () => {
     expect((await start({ ...BODY, document_id: documentId })).status).toBe(201);
-    const connect = vi.fn(async () => ({
-      send: vi.fn(async () => ({ targetInfos: [] })),
-      close: vi.fn(),
-    }));
+    await findDocuments();
+    const send = vi.fn(async (method: string, params: Record<string, unknown> = {}) => {
+      if (method === "Target.getTargets") return {
+        targetInfos: [{ type: "page", targetId: "official", url: "https://evisa.imigrasi.go.id/form" }],
+      };
+      if (method === "Target.attachToTarget") return { sessionId: "target" };
+      if (method === "Runtime.evaluate") return { result: { objectId: "input" } };
+      if (method === "Runtime.callFunctionOn") return {
+        result: params.returnByValue ? { value: true } : { objectId: "events" },
+      };
+      return {};
+    });
+    const connect = vi.fn(async () => ({ send, close: vi.fn() }));
     expect(await uploadSessionDocument("s-1",
-      { tool_name: "upload_file", args: { purpose: "passport" }, id: "upload-bound" }, connect)).toBe("no official tab");
+      { tool_name: "upload_file", args: { purpose: "passport" }, id: "upload-bound" }, connect)).toBe("uploaded");
+    expect(send).toHaveBeenCalledWith("DOM.setFileInputFiles",
+      { objectId: "input", files: [join(root, filename)] }, "target");
     expect(connect).toHaveBeenCalledOnce();
   });
 

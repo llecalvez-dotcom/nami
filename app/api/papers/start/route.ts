@@ -56,7 +56,7 @@ async function start(request: Request): Promise<Response> {
       maxTimeS: PAPER_MAX_TIME_S,
       maxSteps: PAPER_MAX_STEPS,
     });
-    if (input.data.document_id) bindSessionDocument(session.id, input.data.document_id);
+    if (input.data.document_id) bindSessionDocument(session.id, documentPaths[0]);
     return Response.json({ session_id: session.id, status: session.status }, { status: 201 });
   } catch (error) {
     return hErrorResponse(error);

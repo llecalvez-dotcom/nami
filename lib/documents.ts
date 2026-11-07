@@ -81,10 +81,15 @@ export async function resolveDocumentPath(id: string): Promise<string | null> {
   if (!documentsEnabled() || !/^[a-f0-9]{48}$/.test(id)) return null;
   const entry = store().get(id);
   if (!entry) return null;
+  return validateDocumentPath(entry.path, entry.root);
+}
+
+export async function validateDocumentPath(filePath: string, expectedRoot?: string): Promise<string | null> {
+  if (!documentsEnabled()) return null;
   try {
     const root = await realpath(process.env.NAMI_DOCUMENTS_DIR!);
-    const path = await realpath(entry.path);
-    if (root !== entry.root || !inside(root, path)) return null;
+    const path = await realpath(filePath);
+    if ((expectedRoot !== undefined && root !== expectedRoot) || !inside(root, path)) return null;
     const info = await stat(path);
     return info.isFile() && info.size <= MAX_BYTES && TYPES.has(extname(path).toLowerCase()) ? path : null;
   } catch {

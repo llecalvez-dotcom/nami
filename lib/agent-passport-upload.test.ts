@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { bindSessionDocument, uploadSessionDocument } from "@/lib/agent-passport-upload";
@@ -10,7 +10,6 @@ const CALL: ToolRequest = { tool_name: "upload_file", args: { purpose: "passport
 const DOMAIN = "evisa.imigrasi.go.id";
 let root: string;
 let path: string;
-let documentId: string;
 
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), "nami-upload-fictitious-")));
@@ -19,9 +18,8 @@ beforeEach(async () => {
   vi.stubEnv("NODE_ENV", "test");
   vi.stubEnv("NAMI_DOCUMENTS_DIR", root);
   vi.stubEnv("NAMI_AGENT_CHROME_PORT", "");
-  const [document] = await findDocuments();
-  documentId = document.id;
-  bindSessionDocument("session-1", documentId);
+  await findDocuments();
+  bindSessionDocument("session-1", path);
 });
 
 afterEach(async () => {
@@ -149,17 +147,49 @@ describe("session-bound CDP passport upload", () => {
     expect(chrome.send.mock.calls.some(([method]) => method === "DOM.setFileInputFiles")).toBe(false);
   });
 
-  it.each(["production", "disabled", "photo", "unknown", "expired", "path"])("hands over without connecting: %s", async (reason) => {
+  it.each(["production", "disabled", "photo", "unknown", "missing", "path"])("hands over without connecting: %s", async (reason) => {
     const chrome = mockChrome([true]);
     let call = CALL;
     if (reason === "production") vi.stubEnv("NODE_ENV", "production");
     if (reason === "disabled") vi.stubEnv("NAMI_DOCUMENTS_DIR", "");
     if (reason === "photo") call = { ...CALL, args: { purpose: "photo" } };
     if (reason === "path") call = { ...CALL, args: { purpose: "passport", path: "/not-confirmed.jpg" } };
-    if (reason === "expired") await findDocuments();
+    if (reason === "missing") await rm(path);
     expect(await uploadSessionDocument(reason === "unknown" ? "unknown" : "session-1", call, chrome.connect))
       .toContain("ask_user");
     expect(chrome.connect).not.toHaveBeenCalled();
+  });
+
+  it("keeps the confirmed file after another search replaces discovery tokens", async () => {
+    const chrome = mockChrome([true]);
+    await findDocuments();
+    expect(await uploadSessionDocument("session-1", CALL, chrome.connect)).toBe("uploaded");
+    expect(chrome.inputs[0].files).toEqual([path]);
+  });
+
+  it("refuses a confirmed file replaced by a directory", async () => {
+    const chrome = mockChrome([true]);
+    await rm(path);
+    await mkdir(path);
+    expect(await uploadSessionDocument("session-1", CALL, chrome.connect)).toContain("ask_user");
+    expect(chrome.connect).not.toHaveBeenCalled();
+  });
+
+  it("refuses a file outside the configured root, including a replacement symlink", async () => {
+    const chrome = mockChrome([true]);
+    const outside = await mkdtemp(join(tmpdir(), "nami-outside-upload-"));
+    try {
+      const other = join(outside, "fictitious.jpg");
+      await writeFile(other, "fictitious image");
+      await rm(path);
+      await symlink(other, path);
+      expect(await uploadSessionDocument("session-1", CALL, chrome.connect)).toContain("ask_user");
+      bindSessionDocument("outside-session", other);
+      expect(await uploadSessionDocument("outside-session", CALL, chrome.connect)).toContain("ask_user");
+      expect(chrome.connect).not.toHaveBeenCalled();
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
   });
 
   it("reuses the result for the same tool call so an H acknowledgment retry does not upload twice", async () => {
@@ -181,7 +211,7 @@ describe("session-bound CDP passport upload", () => {
     const connect = vi.fn(async () => { throw new Error(path); });
     expect(await uploadSessionDocument("session-1", CALL, connect)).not.toContain(path);
     expect(log).not.toHaveBeenCalled();
-    bindSessionDocument("session-1", documentId);
+    bindSessionDocument("session-1", path);
     vi.stubEnv("NAMI_AGENT_CHROME_PORT", "99999");
     expect(await uploadSessionDocument("session-1", CALL, connect)).toContain("ask_user");
     expect(connect).toHaveBeenCalledOnce();

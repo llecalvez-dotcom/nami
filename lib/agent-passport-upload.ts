@@ -1,5 +1,5 @@
 import { getBaliPaper } from "@/lib/bali-papers";
-import { documentsEnabled, resolveDocumentPath } from "@/lib/documents";
+import { documentsEnabled, validateDocumentPath } from "@/lib/documents";
 import { connectChrome, type CdpConnection } from "@/lib/chrome-cdp";
 import { toolCallKey } from "@/lib/agent-changes";
 import type { ToolRequest } from "@/lib/h-agent";
@@ -7,15 +7,15 @@ import type { ToolRequest } from "@/lib/h-agent";
 type UploadResult = "uploaded" | "no official tab" | "no file input found" | "several official tabs open; call ask_user" | typeof ASK_USER;
 const ASK_USER = "Upload unavailable. Call ask_user so the user can upload the file themselves.";
 const TTL_MS = 60 * 60 * 1000;
-type SessionDocument = { id: string; expires: number; uploads: Map<string, Promise<UploadResult>> };
+type SessionDocument = { path: string; expires: number; uploads: Map<string, Promise<UploadResult>> };
 const shared = globalThis as typeof globalThis & { namiAgentDocuments?: Map<string, SessionDocument> };
 const sessions = () => shared.namiAgentDocuments ??= new Map<string, SessionDocument>();
 
-export function bindSessionDocument(sessionId: string, documentId: string): void {
+export function bindSessionDocument(sessionId: string, path: string): void {
   const store = sessions();
   for (const [id, entry] of store) if (entry.expires <= Date.now()) store.delete(id);
   if (store.size >= 1000) store.delete(store.keys().next().value!);
-  store.set(sessionId, { id: documentId, expires: Date.now() + TTL_MS, uploads: new Map() });
+  store.set(sessionId, { path, expires: Date.now() + TTL_MS, uploads: new Map() });
 }
 
 function official(url: string, domain: string): boolean {
@@ -41,16 +41,16 @@ export async function uploadSessionDocument(
   const key = toolCallKey(call);
   const previous = entry.uploads.get(key);
   if (previous) return previous;
-  const upload = uploadPassport(entry.id, connect);
+  const upload = uploadPassport(entry.path, connect);
   entry.uploads.set(key, upload);
   return upload;
 }
 
-async function uploadPassport(documentId: string, connect: (port: number) => Promise<CdpConnection>): Promise<UploadResult> {
+async function uploadPassport(confirmedPath: string, connect: (port: number) => Promise<CdpConnection>): Promise<UploadResult> {
   let client: CdpConnection | undefined;
   let targetSession: string | undefined;
   try {
-    const path = await resolveDocumentPath(documentId);
+    const path = await validateDocumentPath(confirmedPath);
     if (!path) return ASK_USER;
     const rawPort = process.env.NAMI_AGENT_CHROME_PORT || "9222";
     if (!/^\d+$/.test(rawPort)) return ASK_USER;
