@@ -462,14 +462,14 @@
   animation: nami-drift var(--drift, 140s) linear infinite;
   animation-delay: var(--delay, 0s);
 }
-.cloud > span {
+.cloud span {
   position: absolute;
   border-radius: 50%;
   background: radial-gradient(circle at 40% 30%, #fff, var(--cloud) 58%, var(--cloud-shade));
   filter: blur(2px);
   transition: background var(--t-theme) var(--ease-sky);
 }
-[data-theme="night"] .cloud > span {
+[data-theme="night"] .cloud span {
   background: radial-gradient(circle at 60% 25%, #6c7ca0, var(--cloud) 58%, var(--cloud-shade));
 }
 @keyframes nami-drift {
