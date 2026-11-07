@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { agentName, cancelSession, createSession, getChanges, HAgentError, sendToolResult } from "@/lib/h-agent";
+import { agentName, agentSettings, cancelSession, createSession, createSessionBody, getChanges, HAgentError, sendToolResult } from "@/lib/h-agent";
 
 const API = "https://agp.eu.hcompany.ai/api/v2";
 const TOOL = { name: "ask_user", description: "Ask", input_schema: { type: "object" } };
+const INPUT = { task: "Fill it", instructions: "Never submit or pay.", tools: [TOOL], localBrowserSessionId: "local-42", maxTimeS: 900, maxSteps: 80 };
 
 type Call = [string, RequestInit];
 function mockFetch(response: () => Response) {
@@ -15,6 +16,8 @@ const lastCall = (fetch: ReturnType<typeof mockFetch>) => fetch.mock.calls.at(-1
 beforeEach(() => {
   vi.stubEnv("HAI_API_KEY", "h-key");
   vi.stubEnv("HAI_AGENT_NAME", "Hackathon H");
+  vi.stubEnv("NAMI_AGENT_MODEL", "");
+  vi.stubEnv("NAMI_AGENT_REASONING", "");
 });
 
 afterEach(() => {
@@ -25,7 +28,7 @@ afterEach(() => {
 describe("createSession", () => {
   it("posts an inline agent on the local browser, with the tools and the caps", async () => {
     const fetch = mockFetch(() => Response.json({ id: "s-1", status: { status: "pending" } }, { status: 201 }));
-    const session = await createSession({ task: "Fill it", tools: [TOOL], localBrowserSessionId: "local-42", maxTimeS: 900, maxSteps: 80 });
+    const session = await createSession(INPUT);
     expect(session).toEqual({ id: "s-1", status: "pending" });
     const [url, init] = lastCall(fetch);
     expect(url).toBe(`${API}/sessions`);
@@ -35,6 +38,9 @@ describe("createSession", () => {
       agent: {
         name: "hackathon-h",
         description: expect.any(String),
+        model: "holo4-27b",
+        reasoning_effort: "medium",
+        instructions: "Never submit or pay.",
         environments: [{ id: "browser", kind: "web", host: "user_device", session_id: "local-42", settle_s: 2, mode: { type: "visual", markdown: true } }],
         tools: [TOOL],
       },
@@ -48,16 +54,62 @@ describe("createSession", () => {
   it("fails without HAI_API_KEY and makes no call", async () => {
     vi.stubEnv("HAI_API_KEY", "");
     const fetch = mockFetch(() => Response.json({}));
-    await expect(createSession({ task: "t", tools: [], localBrowserSessionId: "l", maxTimeS: 1, maxSteps: 1 })).rejects.toMatchObject({ status: 503 });
+    await expect(createSession(INPUT)).rejects.toMatchObject({ status: 503 });
     expect(fetch).not.toHaveBeenCalled();
   });
 
   it("never puts the H error body in the error", async () => {
     mockFetch(() => new Response("echo: passport 24AB12345", { status: 422 }));
-    const error = await createSession({ task: "t", tools: [], localBrowserSessionId: "l", maxTimeS: 1, maxSteps: 1 }).catch((e) => e);
+    const error = await createSession(INPUT).catch((e) => e);
     expect(error).toBeInstanceOf(HAgentError);
     expect(error.status).toBe(422);
     expect(error.message).not.toContain("24AB12345");
+  });
+});
+
+describe("agent model and reasoning settings", () => {
+  it("pins defaults independently of the trip parsing model", () => {
+    expect(agentSettings({ HAI_MODEL: "holo4-35b-a3b" })).toEqual({ model: "holo4-27b", reasoning_effort: "medium" });
+  });
+
+  it.each(["holo4-27b", "holo4-35b-a3b", "holo3-1-35b-a3b", "holo3-122b-a10b"])("accepts documented model %s", (model) => {
+    vi.stubEnv("NAMI_AGENT_MODEL", model);
+    expect(createSessionBody(INPUT).agent.model).toBe(model);
+  });
+
+  it.each(["disabled", "low", "medium", "xhigh"])("accepts documented Agents API reasoning %s", (effort) => {
+    vi.stubEnv("NAMI_AGENT_REASONING", effort);
+    expect(createSessionBody(INPUT).agent.reasoning_effort).toBe(effort);
+  });
+
+  it.each(["", "h/web-surfer-flash", "holo4-unknown", "/private/fictitious-model.jpg", "holo4-35b-a3b "])("falls back for invalid model %s", (model) => {
+    vi.stubEnv("NAMI_AGENT_MODEL", model);
+    expect(createSessionBody(INPUT).agent.model).toBe("holo4-27b");
+  });
+
+  it.each(["", "none", "high", "MEDIUM", "/private/fictitious-reasoning.jpg"])("falls back for invalid reasoning %s", (effort) => {
+    vi.stubEnv("NAMI_AGENT_REASONING", effort);
+    expect(createSessionBody(INPUT).agent.reasoning_effort).toBe("medium");
+  });
+
+  it("sends only validated defaults, never invalid environment values, to H", async () => {
+    vi.stubEnv("NAMI_AGENT_MODEL", "/private/fictitious-model.jpg");
+    vi.stubEnv("NAMI_AGENT_REASONING", "/private/fictitious-reasoning.jpg");
+    const fetch = mockFetch(() => Response.json({ id: "s-1" }, { status: 201 }));
+    await createSession(INPUT);
+    const body = lastCall(fetch)[1].body as string;
+    expect(JSON.parse(body).agent).toMatchObject({ model: "holo4-27b", reasoning_effort: "medium" });
+    expect(body).not.toContain("/private/");
+  });
+
+  it("sends valid overrides with the standing instructions to H", async () => {
+    vi.stubEnv("NAMI_AGENT_MODEL", "holo4-35b-a3b");
+    vi.stubEnv("NAMI_AGENT_REASONING", "disabled");
+    const fetch = mockFetch(() => Response.json({ id: "s-1" }, { status: 201 }));
+    await createSession(INPUT);
+    expect(JSON.parse(lastCall(fetch)[1].body as string).agent).toMatchObject({
+      model: "holo4-35b-a3b", reasoning_effort: "disabled", instructions: INPUT.instructions,
+    });
   });
 });
 

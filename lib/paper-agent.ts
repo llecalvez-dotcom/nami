@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { buildPaperTask } from "@/lib/agent-task";
+import { buildPaperInstructions, buildPaperTask } from "@/lib/agent-task";
 import { getBaliPaper, type BaliPaper } from "@/lib/bali-papers";
 import { PassportFieldsSchema, TripRequestSchema, type PassportFields, type TripRequest } from "@/lib/contracts";
 import { HAgentError, type ToolSpec } from "@/lib/h-agent";
@@ -106,14 +106,18 @@ export function describeTrip(request: TripRequest): string {
   ].join(" ");
 }
 
-export function buildPilotTask(input: Pick<PaperStart, "request" | "passport" | "file_paths">, paper: BaliPaper = getBaliPaper(PILOT_PAPER_ID)): string {
+export function buildPilotInstructions(paper: BaliPaper = getBaliPaper(PILOT_PAPER_ID)): string {
+  return buildPaperInstructions({
+    domain: paper.domain,
+    forbiddenButtons: [...paper.forbidden_buttons],
+    stopCondition: paper.stop_condition,
+  });
+}
+
+export function buildPilotTask(input: Pick<PaperStart, "request" | "passport">, paper: BaliPaper = getBaliPaper(PILOT_PAPER_ID)): string {
   return buildPaperTask({
     officialUrl: paper.official_url,
     formName: paper.name,
-    domain: paper.domain,
-    filePaths: input.file_paths,
-    forbiddenButtons: [...paper.forbidden_buttons],
-    stopCondition: paper.stop_condition,
     traveller: describeTraveller(input.passport),
     trip: describeTrip(input.request),
   });

@@ -4,6 +4,7 @@ import { documentFilePaths } from "@/lib/documents";
 import { bindSessionDocument } from "@/lib/agent-passport-upload";
 import {
   buildPilotTask,
+  buildPilotInstructions,
   fail,
   hErrorResponse,
   PAPER_MAX_STEPS,
@@ -45,12 +46,10 @@ async function start(request: Request): Promise<Response> {
   if (documentPaths === null) {
     return fail("The passport document is no longer available. Search for your passport again.", 400);
   }
-  const filePaths = input.data.document_id === undefined
-    ? input.data.file_paths
-    : [...new Set([...input.data.file_paths, ...documentPaths])];
   try {
     const session = await createSession({
-      task: buildPilotTask({ ...input.data, file_paths: filePaths }),
+      task: buildPilotTask(input.data),
+      instructions: buildPilotInstructions(),
       tools: PAPER_TOOLS,
       localBrowserSessionId: input.data.local_session_id,
       maxTimeS: PAPER_MAX_TIME_S,

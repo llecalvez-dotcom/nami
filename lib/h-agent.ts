@@ -6,6 +6,15 @@ export const H_AGENTS_API = "https://agp.eu.hcompany.ai/api/v2";
 const DEFAULT_AGENT_NAME = "nami-paper-agent";
 const REQUEST_TIMEOUT_MS = 30_000;
 export const CHANGES_WAIT_S = 20;
+const AGENT_MODELS = ["holo4-27b", "holo4-35b-a3b", "holo3-1-35b-a3b", "holo3-122b-a10b"] as const;
+const AGENT_REASONING = ["disabled", "low", "medium", "xhigh"] as const;
+
+export function agentSettings(env: Record<string, string | undefined> = process.env) {
+  return {
+    model: AGENT_MODELS.find((model) => model === env.NAMI_AGENT_MODEL) ?? "holo4-27b",
+    reasoning_effort: AGENT_REASONING.find((effort) => effort === env.NAMI_AGENT_REASONING) ?? "medium",
+  };
+}
 
 export type JsonSchema = Record<string, unknown>;
 export type ToolSpec = { name: string; description: string; input_schema: JsonSchema };
@@ -83,6 +92,7 @@ export function agentName(raw = process.env.HAI_AGENT_NAME): string {
 
 export type CreateSessionInput = {
   task: string;
+  instructions: string;
   tools: ToolSpec[];
   localBrowserSessionId: string;
   maxTimeS: number;
@@ -94,6 +104,8 @@ export function createSessionBody(input: CreateSessionInput) {
     agent: {
       name: agentName(),
       description: "Nami: fills in an official travel form in the traveller's own Chrome and stops before payment.",
+      ...agentSettings(),
+      instructions: input.instructions,
       // "web" on "user_device", attached to the session_id printed by `holo local browser` (your-browser).
       environments: [
         { id: "browser", kind: "web", host: "user_device", session_id: input.localBrowserSessionId, settle_s: 2, mode: { type: "visual", markdown: true } },

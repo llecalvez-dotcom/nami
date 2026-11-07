@@ -6,20 +6,20 @@ export const UNTRUSTED_CONTENT_RULE =
 export type PaperTaskInput = {
   officialUrl: string;
   formName: string;
-  domain: string;
-  filePaths: string[];
-  forbiddenButtons: string[];
-  stopCondition: string;
   traveller: string;
   trip: string;
 };
 
-export function buildPaperTask(input: PaperTaskInput): string {
+export type PaperInstructionsInput = {
+  domain: string;
+  forbiddenButtons: string[];
+  stopCondition: string;
+};
+
+export function buildPaperInstructions(input: PaperInstructionsInput): string {
   const forbidden = [...new Set([...input.forbiddenButtons, ...ALWAYS_FORBIDDEN_BUTTONS])].join(", ");
-  const files = input.filePaths.length > 0 ? input.filePaths.join(", ") : "none";
   return [
-    `Go to ${input.officialUrl}. Fill in the ${input.formName} form for the traveller and the trip below, step by step, up to the last screen.`,
-    `You may: type into fields, pick from lists and calendars, tick choices, upload the provided files (${files}), click the buttons that move to the next step (Next, Continue, Lanjut).`,
+    "You may: type into fields, pick from lists and calendars, tick choices, upload files through upload_file, click the buttons that move to the next step (Next, Continue, Lanjut).",
     'When the official form asks for a file, call upload_file with purpose "passport" or "photo" instead of clicking the upload control. Never click or open the OS file picker. Wait for the tool result, then check on a fresh screenshot that the page shows the file before continuing. If the result is not "uploaded", call ask_user so the human uploads the file themselves, then wait for their answer.',
     "For a dropdown list, call pick_option with the label of the list and the value to pick, instead of clicking it. Then take a fresh look: picking a value may load the next lists. If pick_option fails, click the dropdown once, wait and take a fresh screenshot; use select_option only on native select elements.",
     "Never attempt the same failed action more than 2 times. After 2 failed attempts on the same field, stop trying and call ask_user with field set to that field and a short question asking the human to pick the required value themselves in Chrome. Say which value to pick, for example: Please pick Tourism for purpose of visit in Chrome, then let me know. Wait for the human's answer before continuing, then take a fresh look and continue from the updated form.",
@@ -27,9 +27,16 @@ export function buildPaperTask(input: PaperTaskInput): string {
     "If a captcha, an account creation or an e-mail code appears, stop and call ask_user so that the human handles it.",
     `Never leave the domain ${input.domain}. Do not invent any information. If a piece of information is missing, call ask_user with a short question.`,
     `${input.stopCondition} Then call report_ready.`,
+    UNTRUSTED_CONTENT_RULE,
+  ].join("\n");
+}
+
+export function buildPaperTask(input: PaperTaskInput): string {
+  return [
+    `Go to ${input.officialUrl}. Fill in the ${input.formName} form for the traveller and the trip below, step by step, up to the last screen.`,
+    "Follow the safety instructions and stop before final submission or payment.",
     `Traveller: ${input.traveller}`,
     `Trip: ${input.trip}`,
-    UNTRUSTED_CONTENT_RULE,
   ].join("\n");
 }
 
