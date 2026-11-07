@@ -38,7 +38,14 @@ export async function findDocuments(): Promise<FoundDocument[]> {
   const root = await realpath(process.env.NAMI_DOCUMENTS_DIR!);
   const candidates: (Omit<FoundDocument, "id"> & { path: string })[] = [];
   async function scan(directory: string, depth: number) {
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
+    let entries;
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch (error) {
+      if (depth === 0) throw error;
+      return;
+    }
+    for (const entry of entries) {
       const path = join(directory, entry.name);
       if (entry.isDirectory()) {
         if (depth < 2) await scan(path, depth + 1);
