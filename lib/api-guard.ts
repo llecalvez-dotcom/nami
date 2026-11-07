@@ -23,6 +23,7 @@ const CONCURRENCY_LIMITS = {
 } as const;
 
 const WINDOW_MS = 10 * 60 * 1000;
+const ACCESS_GLOBAL_QUOTA_LIMIT = 50;
 type ApiRoute = keyof typeof API_LIMITS;
 type Quota = { count: number; resetAt: number };
 type Lease = { release: () => void };
@@ -59,14 +60,23 @@ export function guard(request: Request, route: ApiRoute, now: () => number = Dat
   if (contentLength !== null && (!/^\d+$/.test(contentLength) || Number(contentLength) > API_LIMITS[route])) return tooLarge();
 
   const timestamp = now();
-  const key = JSON.stringify([route, clientKey(request, route)]);
-  const currentQuota = quotas.get(key);
-  const quota =
-    currentQuota && timestamp < currentQuota.resetAt
-      ? currentQuota
-      : { count: 0, resetAt: timestamp + WINDOW_MS };
-  if (quota.count >= QUOTA_LIMITS[route]) {
-    const retryAfter = Math.max(1, Math.ceil((quota.resetAt - timestamp) / 1000));
+  const quotaKeys = [JSON.stringify([route, clientKey(request, route)])];
+  if (route === "access") {
+    // The per-IP key is only trustworthy behind a proxy that sets x-forwarded-for; the global cap bounds guessing regardless.
+    quotaKeys.push(JSON.stringify(["access", "global"]));
+  }
+  const requestQuotas = quotaKeys.map((key, index) => {
+    const currentQuota = quotas.get(key);
+    const quota =
+      currentQuota && timestamp < currentQuota.resetAt
+        ? currentQuota
+        : { count: 0, resetAt: timestamp + WINDOW_MS };
+    const limit = route === "access" && index === 1 ? ACCESS_GLOBAL_QUOTA_LIMIT : QUOTA_LIMITS[route];
+    return { key, quota, limit };
+  });
+  const exhaustedQuota = requestQuotas.find(({ quota, limit }) => quota.count >= limit);
+  if (exhaustedQuota) {
+    const retryAfter = Math.max(1, Math.ceil((exhaustedQuota.quota.resetAt - timestamp) / 1000));
     return Response.json(
       { error: "Too many requests. Try again later." },
       { status: 429, headers: { "Retry-After": String(retryAfter) } },
@@ -81,7 +91,9 @@ export function guard(request: Request, route: ApiRoute, now: () => number = Dat
       if (value.resetAt <= timestamp) quotas.delete(entry);
     }
   }
-  quotas.set(key, { count: quota.count + 1, resetAt: quota.resetAt });
+  for (const { key, quota } of requestQuotas) {
+    quotas.set(key, { count: quota.count + 1, resetAt: quota.resetAt });
+  }
   activeByRoute.set(route, active + 1);
   let released = false;
   return {

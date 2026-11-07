@@ -67,6 +67,22 @@ describe("api guard size limits", () => {
 });
 
 describe("api guard quotas", () => {
+  it("enforces a global access quota when forwarded IPs are forged", () => {
+    const statuses: number[] = [];
+    for (let count = 1; count <= 60; count++) {
+      const result = guard(request({ "x-forwarded-for": `198.51.100.${count}` }), "access");
+      if (result instanceof Response) {
+        statuses.push(result.status);
+      } else {
+        statuses.push(200);
+        result.release();
+      }
+    }
+
+    expect(statuses.slice(0, 50)).toEqual(Array(50).fill(200));
+    expect(statuses.slice(50)).toEqual(Array(10).fill(429));
+  });
+
   it("rolls a fixed-window quota over after ten minutes", () => {
     let timestamp = 1000;
     const sameClient = request({ cookie: "nami_access=client-token" });
