@@ -16,7 +16,7 @@ const MODULES: { module: ModuleKind; label: string }[] = [
 ];
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h3 className="text-lg font-semibold tracking-tight">{children}</h3>;
+  return <h3 className="text-[20px] font-medium tracking-[-0.5px]">{children}</h3>;
 }
 
 function Summary({ request }: { request: TripRequestDraft }) {
@@ -62,10 +62,10 @@ function windowText(formality: Formality): string {
 function PaperCard({ formality }: { formality: Formality }) {
   const paper = getBaliPaper(formality.id as BaliPaperId);
   return (
-    <li className="rounded-[24px] bg-card p-5 shadow-soft">
+    <li className="rounded-[18px] bg-card p-5 shadow-soft">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-lg leading-snug font-semibold tracking-tight">{formality.name}</p>
+          <p className="text-[20px] leading-snug font-medium tracking-[-0.5px]">{formality.name}</p>
           <p className="mt-1 text-sm text-muted-foreground">{windowText(formality)}</p>
         </div>
         <StatusBadge status={formality.status} checkedAt={formality.checked_at} />
@@ -108,7 +108,7 @@ function AgentActivity({ trip, onStop }: { trip: Trip; onStop: () => void }) {
   const run = trip.agent_run;
   const active = isAgentActive(run);
   return (
-    <div className="rounded-[28px] bg-foreground p-6 text-background shadow-float">
+    <div className="rounded-[18px] bg-foreground p-6 text-background">
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
@@ -156,11 +156,11 @@ export function Dossier({
 }) {
   return (
     <div className="flex flex-col gap-5">
-      <section className="space-y-5 rounded-[28px] bg-card p-6 shadow-soft">
+      <section className="space-y-5 rounded-[18px] bg-card p-6 shadow-soft">
         <SectionTitle>Your trip</SectionTitle>
         <Summary request={trip.request} />
       </section>
-      <section className="space-y-4 rounded-[28px] bg-card p-6 shadow-soft">
+      <section className="space-y-4 rounded-[18px] bg-card p-6 shadow-soft">
         <SectionTitle>What I can do</SectionTitle>
         <Modules modules={trip.modules} />
       </section>
