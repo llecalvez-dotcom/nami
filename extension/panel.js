@@ -16,7 +16,10 @@ const sameSite = (tabUrl, host) => {
 async function bringToFront(url) {
   const host = url.hostname;
   const tabs = await chrome.tabs.query({});
-  const tab = tabs.find((t) => t.url && sameSite(t.url, host));
+  // Several tabs on the official site: prefer the exact page, then the one used last (the agent's).
+  const tab = tabs
+    .filter((t) => t.url && sameSite(t.url, host))
+    .sort((a, b) => (b.url === url.href) - (a.url === url.href) || (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0];
   if (tab?.id !== undefined) {
     await chrome.tabs.update(tab.id, { active: true });
     await chrome.windows.update(tab.windowId, { focused: true });
