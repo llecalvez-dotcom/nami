@@ -97,8 +97,10 @@ describe("local documents", () => {
     expect(documents[0].score).toBe(110);
     expect(await resolveDocumentPath(passport.id)).toBe(join(root, "passeport-scan.jpg"));
     expect(await resolveDocumentPath(documents[0].id, "photo")).toBe(join(root, "photo-identite.jpg"));
-    expect(await resolveDocumentPath(documents[0].id)).toBeNull();
+    expect(await resolveDocumentPath(documents[0].id)).toBe(join(root, "photo-identite.jpg"));
+    expect(await resolveDocumentPath(documents[0].id, "passport")).toBeNull();
     expect(await resolveDocumentPath(passport.id, "photo")).toBeNull();
+    expect((await preview(request(`preview?id=${documents[0].id}`))).status).not.toBe(404);
     await findDocuments("photo");
     expect(await resolveDocumentPath(documents[0].id, "photo")).toBeNull();
     expect(await resolveDocumentPath(passport.id)).toBe(join(root, "passeport-scan.jpg"));

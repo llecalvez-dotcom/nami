@@ -89,10 +89,11 @@ export async function findDocuments(kind: DocumentKind = "passport"): Promise<Fo
   });
 }
 
-export async function resolveDocumentPath(id: string, kind: DocumentKind = "passport"): Promise<string | null> {
+// Without a kind (previews), any token resolves; the start route asks for the kind it binds.
+export async function resolveDocumentPath(id: string, kind?: DocumentKind): Promise<string | null> {
   if (!documentsEnabled() || !/^[a-f0-9]{48}$/.test(id)) return null;
   const entry = store().get(id);
-  if (!entry || entry.kind !== kind) return null;
+  if (!entry || (kind !== undefined && entry.kind !== kind)) return null;
   return validateDocumentPath(entry.path, entry.root);
 }
 
