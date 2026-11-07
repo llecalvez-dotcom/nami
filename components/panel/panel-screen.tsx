@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Check, Keyboard, MessagesSquare, Plus, X } from "lucide-react";
-import { FocusStage, Sentence, STAGE_TEXTS, VoiceHint, WaveMic, waveState, type AgentView, type StageVisual, type Translate } from "@/components/panel/focus-stage";
-import { Wave } from "@/components/panel/wave";
+import { Check, MessagesSquare, Plus, X } from "lucide-react";
+import { FocusStage, Sentence, STAGE_TEXTS, TypeInstead, VoiceHint, WaveMic, waveState, type AgentView, type StageVisual, type Translate } from "@/components/panel/focus-stage";
+import { Painting } from "@/components/panel/backdrop";
 import { PassportCard } from "@/components/trip/passport-card";
 import { PhotoCard } from "@/components/trip/photo-card";
 import { ReturnTicketCard } from "@/components/trip/return-ticket-card";
@@ -16,7 +16,7 @@ import { useSpokenLanguage } from "@/lib/voice/language";
 import { requestTranslations, translated, useTranslatedConversation, useTranslationsVersion } from "@/lib/voice/translations";
 import type { DocumentExtraction, PassportFields } from "@/lib/contracts";
 import { bestFirst, foundPassportText, foundPhotoText, foundReturnTicketText, readSummary, type Reader } from "@/lib/panel-documents";
-import { agentChecklist, CHECKLIST_LABELS, focusItem, paperInFocus, readyPaper } from "@/lib/panel-focus";
+import { agentChecklist, CHECKLIST_LABELS, focusItem, paperInFocus, readyPaper, sceneFor } from "@/lib/panel-focus";
 import { requestTripParse } from "@/lib/trip-parse-client";
 import {
   acceptProposal,
@@ -96,7 +96,7 @@ function useT(language: string): Translate {
 const EXAMPLES = ["I'm flying to Bali on Monday for a friend's wedding.", "Je pars à Bali lundi pour deux semaines.", "Me voy a Bali en diciembre."];
 
 function Wordmark() {
-  return <span className="np-serif text-[22px] leading-none italic">nami</span>;
+  return <span className="text-[19px] leading-none font-bold tracking-[-0.03em]">nami</span>;
 }
 
 function IconButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
@@ -116,9 +116,9 @@ function IconButton({ label, onClick, children }: { label: string; onClick: () =
 // A sheet over the panel: the only place that scrolls.
 function Sheet({ title, onClose, t, children }: { title: string; onClose?: () => void; t: Translate; children: ReactNode }) {
   return (
-    <div role="dialog" aria-label={title} className="np-enter absolute inset-0 z-30 flex flex-col bg-[var(--np-sand)]">
+    <div role="dialog" aria-label={title} className="np-enter absolute inset-0 z-30 flex flex-col bg-[var(--np-wall)]">
       <header className="flex items-center justify-between px-5 pt-4 pb-2">
-        <p className="np-serif text-[22px]">{title}</p>
+        <p className="text-[22px] font-bold tracking-[-0.02em]">{title}</p>
         {onClose ? (
           <IconButton label={t("Close")} onClick={onClose}>
             <X className="size-5" />
@@ -136,7 +136,7 @@ function History({ items, t, onClose }: { items: ConversationItem[]; t: Translat
       <ol className="flex flex-col gap-3 pt-2">
         {items.map((item) =>
           item.kind === "user" ? (
-            <li key={item.id} className="ml-auto max-w-[85%] rounded-[20px] rounded-br-md bg-[var(--np-ink)] px-4 py-2.5 text-[15px] text-[var(--np-cream)]">
+            <li key={item.id} className="ml-auto max-w-[85%] rounded-[20px] rounded-br-md bg-[var(--np-ink)] px-4 py-2.5 text-[15px] text-[var(--np-on-accent)]">
               {item.text}
             </li>
           ) : (
@@ -166,7 +166,7 @@ function Shore({ marks, t, onPassport }: { marks: Mark[]; t: Translate; onPasspo
           <>
             <span
               aria-hidden
-              className={cn("grid size-4 place-items-center rounded-full", mark.done ? "text-[var(--np-cream)]" : "ring-1 ring-[var(--np-line)] ring-inset")}
+              className={cn("grid size-4 place-items-center rounded-full", mark.done ? "text-[var(--np-on-accent)]" : "ring-1 ring-[var(--np-line)] ring-inset")}
               style={mark.done ? { background: mark.paper === "arrival_card" ? "var(--np-coral)" : "var(--np-lagoon)" } : undefined}
             >
               {mark.done ? <Check className="size-2.5" strokeWidth={3.5} /> : null}
@@ -176,7 +176,7 @@ function Shore({ marks, t, onPassport }: { marks: Mark[]; t: Translate; onPasspo
         );
         const className = cn(
           "inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium",
-          mark.done ? "bg-[rgb(253_248_240/0.7)]" : "text-[var(--np-ink-soft)]",
+          mark.done ? "bg-[var(--np-fill)]" : "text-[var(--np-ink-soft)]",
         );
         return (
           <li key={mark.label}>
@@ -195,8 +195,6 @@ function Shore({ marks, t, onPassport }: { marks: Mark[]; t: Translate; onPasspo
 }
 
 function StartView({ onTrip, t }: { onTrip: (trip: Trip) => void; t: Translate }) {
-  const [text, setText] = useState("");
-  const [typing, setTyping] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const speaking = useSpeaking();
@@ -217,26 +215,21 @@ function StartView({ onTrip, t }: { onTrip: (trip: Trip) => void; t: Translate }
     }
   };
   // One gesture: what is said is sent right away.
-  const voice = useVoiceInput((said) => {
-    setText(said);
-    void submit(said);
-  });
+  const voice = useVoiceInput((said) => void submit(said));
 
   return (
     <>
-      <section className="flex min-h-0 flex-1 flex-col justify-center px-7 pb-6">
+      <Painting scene="aube" hero wave={busy ? "working" : waveState(voice, speaking, false)} mic={<WaveMic voice={voice} t={t} large />} />
+      <section className="min-h-0 flex-1 overflow-y-auto px-6 pt-12 pb-4">
         <Sentence text={busy ? t("Reading your trip…") : t("Tell me where you're going. I'll take care of the papers.")} size="xl" />
-        <p className="mt-4 text-[15px] leading-snug text-[var(--np-ink-soft)]">{t("Speak, in any language. You keep the last word.")}</p>
-        <ul className="mt-7 flex flex-col gap-1.5">
+        <p className="mt-3 text-[15px] leading-snug text-[var(--np-ink-soft)]">{t("Speak, in any language. You keep the last word.")}</p>
+        <ul className="mt-5 flex flex-col">
           {EXAMPLES.map((example) => (
             <li key={example}>
               <button
                 type="button"
-                onClick={() => {
-                  setText(example);
-                  void submit(example);
-                }}
-                className="np-press np-serif text-left text-[16px] text-[var(--np-ink-soft)] italic hover:text-[var(--np-ink)]"
+                onClick={() => void submit(example)}
+                className="np-press w-full rounded-xl py-1.5 text-left text-[15px] text-[var(--paper)] hover:bg-[var(--np-fill)]"
               >
                 “{example}”
               </button>
@@ -244,45 +237,14 @@ function StartView({ onTrip, t }: { onTrip: (trip: Trip) => void; t: Translate }
           ))}
         </ul>
         {error ? (
-          <p role="alert" className="mt-5 text-[14px] text-[var(--np-coral)]">
+          <p role="alert" className="mt-4 text-[14px] text-[var(--np-coral)]">
             {t("I couldn't read your trip yet:")} {error}
           </p>
         ) : null}
       </section>
-      <Wave state={busy ? "working" : waveState(voice, speaking, false)}>
-        <WaveMic voice={voice} t={t} large />
-      </Wave>
-      <div className="np-sand px-5 pt-3 pb-5">
+      <div className="px-5 pb-5">
         <VoiceHint voice={voice} t={t} />
-        {typing ? (
-          <form
-            className="mt-2 flex gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void submit(text);
-            }}
-          >
-            <input
-              autoFocus
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              placeholder={EXAMPLES[0]}
-              aria-label={t("Type instead")}
-              className="h-12 min-w-0 flex-1 rounded-full bg-[var(--np-cream)] px-5 text-[15px] outline-none ring-1 ring-[var(--np-line)] focus-visible:ring-2 focus-visible:ring-[var(--paper)]"
-            />
-            <button type="submit" disabled={!text.trim() || busy} className="np-press h-12 rounded-full bg-[var(--np-ink)] px-5 text-[15px] font-medium text-[var(--np-cream)] disabled:opacity-40">
-              OK
-            </button>
-          </form>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setTyping(true)}
-            className="np-press mx-auto mt-1 flex h-10 items-center gap-2 rounded-full px-4 text-[14px] text-[var(--np-ink-soft)] hover:bg-[rgb(19_48_58/0.06)]"
-          >
-            <Keyboard className="size-4" /> {t("Type instead")}
-          </button>
-        )}
+        <TypeInstead t={t} placeholder={EXAMPLES[0]} onSubmit={submit} />
       </div>
     </>
   );
@@ -527,9 +489,11 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
 
   const showCard = manual || reconfirm;
   const compact = passport !== null && !editing;
+  const paper = agent?.paper ?? ready ?? paperInFocus(trip, focus);
+  const scene = sceneFor({ started: true, paper, visaReady: marks[2].done, cardReady: marks[3].done });
 
   return (
-    <div className="nami-panel relative flex h-dvh flex-col" data-paper={agent?.paper ?? ready ?? paperInFocus(trip, focus)}>
+    <div className="nami-panel relative flex h-dvh flex-col" data-paper={paper} data-scene={scene}>
       <header className="flex items-center justify-between gap-2 px-5 pt-4 pb-2">
         <div className="flex min-w-0 items-baseline gap-2.5">
           <Wordmark />
@@ -555,7 +519,7 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
       />
       <FocusStage
         item={shownFocus}
-        destination={trip.request.destination}
+        scene={scene}
         visual={visual}
         ready={ready}
         agent={agent}
@@ -583,7 +547,7 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
                   }
             }
           >
-            {reconfirm ? <p className="mb-4 rounded-2xl bg-[var(--np-cream)] p-4 text-[14px]">{t(RECONFIRM_TEXT)}</p> : null}
+            {reconfirm ? <p className="mb-4 rounded-2xl bg-[var(--np-fill)] p-4 text-[14px]">{t(RECONFIRM_TEXT)}</p> : null}
             <PassportCard
               demo
               returnDate={trip.request.return_date}
@@ -637,7 +601,7 @@ export function PanelScreen() {
       {trip ? (
         <TripView key={trip.id} trip={trip} t={t} language={language} onNewTrip={() => choose(null)} />
       ) : (
-        <div className="nami-panel relative flex h-dvh flex-col">
+        <div className="nami-panel relative flex h-dvh flex-col" data-scene="aube">
           <header className="px-5 pt-4 pb-2">
             <Wordmark />
           </header>

@@ -1,7 +1,3 @@
-"use client";
-
-import type { ReactNode } from "react";
-
 export type WaveState = "idle" | "speaking" | "listening" | "working";
 
 // One swell repeated twice across a 200% wide drawing, so drifting by half its width loops without a seam.
@@ -16,15 +12,13 @@ function Swell({ className }: { className: string }) {
   );
 }
 
-// Nami's signature: calm at rest, it swells when Nami speaks, rises when Nami listens, rolls on while the agent works.
-export function Wave({ state, children }: { state: WaveState; children?: ReactNode }) {
+// Nami's signature, at the foot of the painting: calm at rest, it swells when Nami speaks, rises when Nami
+// listens, rolls on while the agent works.
+export function Wave({ state }: { state: WaveState }) {
   return (
-    <div className="np-wave" data-state={state}>
-      <div className="np-swells">
-        <Swell className="np-swell-back" />
-        <Swell className="np-swell-front" />
-      </div>
-      {children ? <div className="absolute inset-x-0 bottom-2 z-10 flex justify-center">{children}</div> : null}
+    <div className="np-wave" data-state={state} aria-hidden>
+      <Swell className="np-swell-back" />
+      <Swell className="np-swell-front" />
     </div>
   );
 }
