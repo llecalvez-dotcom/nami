@@ -9,6 +9,7 @@ import type { ConversationItem } from "@/lib/trip-state";
 
 type Handlers = {
   onAnswer: (itemId: string, value: string, label: string) => void;
+  onAnswerAgent: (itemId: string, value: string) => void;
   onAnswerText: (itemId: string, text: string) => Promise<void>;
   onDecide: (itemId: string, accepted: boolean) => void;
 };
@@ -117,6 +118,41 @@ function QuestionCard({
   );
 }
 
+const looksLikeEmail = (field: string, question: string) => /e-?mail/i.test(field) || /e-?mail/i.test(question);
+
+// ask_user from the H agent: read aloud, answered by voice or text, sent on "Validate".
+function AgentQuestionCard({
+  item,
+  onAnswerAgent,
+}: { item: Extract<ConversationItem, { kind: "agent_question" }> } & Pick<Handlers, "onAnswerAgent">) {
+  const email = looksLikeEmail(item.field, item.question);
+  return (
+    <div
+      className={cn(
+        "rounded-2xl border bg-card p-5",
+        item.answer === null && "border-primary/30 shadow-[0_8px_24px_-16px_rgba(33,77,69,0.45)]",
+      )}
+    >
+      <AgentLabel from="agent_h" />
+      <p className="font-heading text-2xl leading-tight">{item.question}</p>
+      {item.answer !== null ? (
+        <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-sm">
+          <Check className="size-3.5 text-primary" /> {item.answer}
+        </p>
+      ) : (
+        <VoiceAnswer
+          question={item.question}
+          type={email ? "email" : "text"}
+          isValid={email ? isEmail : undefined}
+          placeholder={email ? "you@example.com" : "Your answer"}
+          label="Your answer to the agent"
+          onValidate={(value) => onAnswerAgent(item.id, value)}
+        />
+      )}
+    </div>
+  );
+}
+
 function ProposalCard({ item, onDecide }: { item: Extract<ConversationItem, { kind: "proposal" }> } & Pick<Handlers, "onDecide">) {
   return (
     <div
@@ -159,9 +195,20 @@ export function Conversation({ items, ...handlers }: { items: ConversationItem[]
             <div className="max-w-[90%] px-1">
               <AgentLabel from="nami" />
               <p className="text-[15px] leading-relaxed">{item.text}</p>
+              {item.list && item.list.length > 0 ? (
+                <ul className="mt-2 flex flex-wrap gap-1.5">
+                  {item.list.map((entry) => (
+                    <li key={entry} className="rounded-full bg-muted px-2.5 py-0.5 text-xs">
+                      {entry}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
             </div>
           ) : item.kind === "question" ? (
             <QuestionCard item={item} onAnswer={handlers.onAnswer} onAnswerText={handlers.onAnswerText} />
+          ) : item.kind === "agent_question" ? (
+            <AgentQuestionCard item={item} onAnswerAgent={handlers.onAnswerAgent} />
           ) : (
             <ProposalCard item={item} onDecide={handlers.onDecide} />
           )}

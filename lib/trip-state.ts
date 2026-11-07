@@ -9,7 +9,10 @@ import {
   SAMPLE_SUGGESTIONS,
   SAMPLE_TRIP_ID,
 } from "@/data/sample";
-import { BALI_PAPERS } from "@/lib/bali-papers";
+import { freshToolCalls, redact, toolCallKey, type AgentChanges } from "@/lib/agent-changes";
+import { BALI_PAPERS, getBaliPaper } from "@/lib/bali-papers";
+import { AgentStateSchema } from "@/lib/contracts";
+import { isTerminalStatus, type ToolRequest } from "@/lib/h-agent";
 import type { AgentRun, Formality, ModuleKind, ModuleState, ModuleSuggestion, TripRequestDraft } from "@/lib/contracts";
 import { TripRequestSchema } from "@/lib/contracts";
 import { isOfficialUrl } from "@/lib/official-sites";
@@ -26,7 +29,15 @@ export type ProposalAction = "papers" | "create_visa" | "flights";
 
 export type ConversationItem =
   | { id: string; kind: "user"; text: string }
-  | { id: string; kind: "agent"; text: string }
+  | { id: string; kind: "agent"; text: string; list?: string[] }
+  | {
+      id: string;
+      kind: "agent_question";
+      tool_req: ToolRequest;
+      question: string;
+      field: string;
+      answer: string | null;
+    }
   | {
       id: string;
       kind: "question";
@@ -61,7 +72,9 @@ export type Trip = {
 
 type NewConversationItem = ConversationItem extends infer T ? (T extends ConversationItem ? Omit<T, "id"> : never) : never;
 
-const ACTIVE_AGENT_STATES: AgentRun["state"][] = ["running", "awaiting_tool_results", "paused"];
+const ACTIVE_AGENT_STATES: AgentRun["state"][] = ["pending", "queued", "running", "awaiting_tool_results", "paused"];
+
+export const VISA_READY_MESSAGE = "Visa pre-filled in Chrome, stopped before payment. Check every field, then pay yourself.";
 
 export function isAgentActive(run: AgentRun | null): boolean {
   return run !== null && ACTIVE_AGENT_STATES.includes(run.state);
@@ -84,6 +97,15 @@ const FLIGHTS_PROPOSAL: NewConversationItem = {
   action: "flights",
   text: suggestion("flights").message,
   accept_label: "Find my flight",
+  decline_label: "Not now",
+  decision: null,
+};
+
+const CREATE_VISA_PROPOSAL: NewConversationItem = {
+  kind: "proposal",
+  action: "create_visa",
+  text: "Shall I fill in your visa (e-VOA) on the official site? I stop before payment: you check, you pay.",
+  accept_label: "Create my visa",
   decline_label: "Not now",
   decision: null,
 };
@@ -293,25 +315,21 @@ export function decideProposal(trip: Trip, itemId: string, accepted: boolean, no
           },
           {
             kind: "agent",
-            text: "Here are your 3 entry papers, read by hand on the official sites on 7 Nov 2026. Filling them in for you on the official site is not wired yet.",
+            text: "Here are your 3 entry papers, read by hand on the official sites on 7 Nov 2026. The visa comes first.",
           },
+          CREATE_VISA_PROPOSAL,
           FLIGHTS_PROPOSAL,
         );
       }
       return push(
         { ...decided, modules: setModule(decided.modules, "papers", "accepted"), formalities: SAMPLE_FORMALITIES },
         { kind: "agent", text: "Here are your 3 entry papers, with their official links and costs. The visa comes first." },
-        {
-          kind: "proposal",
-          action: "create_visa",
-          text: "Shall I fill in your visa (e-VOA) on the official site? I stop before payment: you check, you pay.",
-          accept_label: "Create my visa",
-          decline_label: "Not now",
-          decision: null,
-        },
+        CREATE_VISA_PROPOSAL,
       );
     case "create_visa":
       if (!accepted) return push(decided, { kind: "agent", text: "Okay, the visa can wait." });
+      // A real trip starts a real H session: see startVisaRun, called once the session exists.
+      if (!trip.sample) return trip;
       return push(
         {
           ...decided,
@@ -342,7 +360,9 @@ export function decideProposal(trip: Trip, itemId: string, accepted: boolean, no
 
 export function stopAgent(trip: Trip): Trip {
   if (!trip.agent_run || !isAgentActive(trip.agent_run)) return trip;
-  const openAgentQuestion = trip.conversation.find((i) => i.kind === "question" && i.from === "agent_h" && i.answer === null);
+  const openAgentQuestion = trip.conversation.find(
+    (i) => (i.kind === "agent_question" || (i.kind === "question" && i.from === "agent_h")) && i.answer === null,
+  );
   const stopped: Trip = {
     ...trip,
     agent_run: { ...trip.agent_run, state: "interrupted", pending_question: undefined },
@@ -350,4 +370,153 @@ export function stopAgent(trip: Trip): Trip {
   };
   const withQuestionClosed = openAgentQuestion ? updateItem(stopped, openAgentQuestion.id, { answer: "Agent stopped" }) : stopped;
   return push(withQuestionClosed, { kind: "agent", text: "Agent stopped. Nothing was submitted." });
+}
+
+// Live H session (ticket 05, part A). The passport number and birth date are masked before anything is stored.
+
+export function pushAgentMessage(trip: Trip, text: string): Trip {
+  return push(trip, { kind: "agent", text });
+}
+
+export function startVisaRun(trip: Trip, itemId: string, sessionId: string, now: Date): Trip {
+  const item = trip.conversation.find((i) => i.id === itemId);
+  if (!item || item.kind !== "proposal" || item.action !== "create_visa" || item.decision !== null) return trip;
+  const evoa = getBaliPaper("evoa");
+  return push(
+    {
+      ...updateItem(trip, itemId, { decision: "accepted" }),
+      agent_run: {
+        session_id: sessionId,
+        kind: "paper",
+        started_at: now.toISOString(),
+        state: "pending",
+        next_index: 0,
+        handled_tool_ids: [],
+        drained: false,
+      },
+      agent_steps: ["Session created on your local Chrome"],
+    },
+    { kind: "agent", text: `The agent is filling in your visa on ${evoa.domain}, in your Chrome. Keep your hand on Stop agent.` },
+  );
+}
+
+function withRun(trip: Trip, patch: Partial<AgentRun>): Trip {
+  return trip.agent_run ? { ...trip, agent_run: { ...trip.agent_run, ...patch } } : trip;
+}
+
+function closeAgentQuestions(trip: Trip, answer: string): Trip {
+  return {
+    ...trip,
+    conversation: trip.conversation.map((i) => (i.kind === "agent_question" && i.answer === null ? { ...i, answer } : i)),
+  };
+}
+
+export function applyAgentChanges(
+  trip: Trip,
+  changes: AgentChanges,
+  secrets: readonly (string | null | undefined)[],
+): { trip: Trip; toolCalls: ToolRequest[] } {
+  const run = trip.agent_run;
+  if (!run) return { trip, toolCalls: [] };
+  const parsed = AgentStateSchema.safeParse(changes.status);
+  const state = parsed.success ? parsed.data : run.state;
+  const wasTerminal = isTerminalStatus(run.state);
+  const terminal = isTerminalStatus(state);
+  const steps = changes.steps
+    .map((s) => redact(s, secrets))
+    .filter((s, i, all) => s !== (i === 0 ? trip.agent_steps.at(-1) : all[i - 1]));
+  const answer = changes.answer ? redact(changes.answer, secrets) : null;
+
+  let next: Trip = {
+    ...trip,
+    agent_steps: [...trip.agent_steps, ...steps],
+    agent_run: {
+      ...run,
+      state,
+      next_index: changes.next_index,
+      metrics: changes.metrics ?? run.metrics,
+      drained: terminal && changes.no_change,
+      result: answer ? { ...run.result, answer } : run.result,
+      error: changes.error_code ?? run.error,
+    },
+  };
+
+  if (terminal && !wasTerminal) {
+    next = { ...closeAgentQuestions(next, "Agent stopped"), agent_run: { ...next.agent_run!, pending_question: undefined } };
+    const reachedPayment = typeof run.result?.summary === "string";
+    if (state === "failed" || state === "timed_out") {
+      next = pushAgentMessage(next, `The agent stopped before the end (${changes.error_code ?? state}). Nothing was submitted.`);
+    } else if (state === "completed" && !reachedPayment) {
+      next = pushAgentMessage(next, "The agent finished without reaching the payment screen. Nothing was submitted.");
+    } else if (state === "interrupted") {
+      next = pushAgentMessage(next, "The agent session was closed. Nothing was submitted.");
+    }
+  }
+
+  const toolCalls = terminal ? [] : freshToolCalls(changes.pending_tool_calls, run.handled_tool_ids ?? []);
+  return { trip: next, toolCalls };
+}
+
+function markHandled(trip: Trip, call: ToolRequest): Trip {
+  const handled = trip.agent_run?.handled_tool_ids ?? [];
+  const key = toolCallKey(call);
+  return handled.includes(key) ? trip : withRun(trip, { handled_tool_ids: [...handled, key] });
+}
+
+export function isToolHandled(trip: Trip, call: ToolRequest): boolean {
+  return (trip.agent_run?.handled_tool_ids ?? []).includes(toolCallKey(call));
+}
+
+export function askUserFromAgent(trip: Trip, call: ToolRequest, secrets: readonly (string | null | undefined)[]): Trip {
+  const key = toolCallKey(call);
+  const shown = trip.conversation.some((i) => i.kind === "agent_question" && toolCallKey(i.tool_req) === key);
+  if (shown || isToolHandled(trip, call)) return trip;
+  const question = redact(typeof call.args.question === "string" && call.args.question.trim() ? call.args.question : "The agent needs your help in Chrome.", secrets);
+  const field = typeof call.args.field === "string" ? call.args.field : "";
+  return push(withRun(trip, { pending_question: { tool_req: key, question, field } }), {
+    kind: "agent_question",
+    tool_req: call,
+    question,
+    field,
+    answer: null,
+  });
+}
+
+// Returns the trip unchanged when the card was already answered: the caller then sends nothing.
+export function answerAgentQuestion(trip: Trip, itemId: string, value: string): Trip {
+  const item = trip.conversation.find((i) => i.id === itemId);
+  if (!item || item.kind !== "agent_question" || item.answer !== null || isToolHandled(trip, item.tool_req)) return trip;
+  return withRun(markHandled(updateItem(trip, itemId, { answer: value }), item.tool_req), { pending_question: undefined });
+}
+
+export function reopenAgentQuestion(trip: Trip, itemId: string): Trip {
+  const item = trip.conversation.find((i) => i.id === itemId);
+  if (!item || item.kind !== "agent_question" || !trip.agent_run) return trip;
+  const key = toolCallKey(item.tool_req);
+  const reopened = withRun(updateItem(trip, itemId, { answer: null }), {
+    handled_tool_ids: (trip.agent_run.handled_tool_ids ?? []).filter((k) => k !== key),
+    pending_question: { tool_req: key, question: item.question, field: item.field },
+  });
+  return pushAgentMessage(reopened, "Your answer could not be sent to the agent. Try again.");
+}
+
+export function reportReady(trip: Trip, call: ToolRequest, secrets: readonly (string | null | undefined)[]): Trip {
+  if (!trip.agent_run || isToolHandled(trip, call)) return trip;
+  const summary = redact(typeof call.args.summary === "string" ? call.args.summary : "", secrets);
+  const filled = Array.isArray(call.args.filled_fields)
+    ? call.args.filled_fields.filter((f): f is string => typeof f === "string").map((f) => redact(f, secrets))
+    : [];
+  const marked = markHandled(trip, call);
+  return push(
+    {
+      ...withRun(marked, { result: { ...marked.agent_run!.result, summary, filled_fields: filled } }),
+      agent_steps: [...marked.agent_steps, "Reached the payment screen, stopped, nothing clicked"],
+      formalities: marked.formalities.map((f) => (f.id === "evoa" ? { ...f, status: "pending_approval" } : f)),
+    },
+    { kind: "agent", text: VISA_READY_MESSAGE, list: filled },
+  );
+}
+
+export function markToolHandled(trip: Trip, call: ToolRequest): Trip {
+  return markHandled(trip, call);
 }

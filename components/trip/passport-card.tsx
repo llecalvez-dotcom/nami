@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Camera, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { DocumentExtraction, PassportFieldKey } from "@/lib/contracts";
+import { PassportFieldsSchema, type DocumentExtraction, type PassportFieldKey, type PassportFields } from "@/lib/contracts";
 
 const FIELDS: { key: PassportFieldKey; label: string; placeholder: string }[] = [
   { key: "surname", label: "Surname", placeholder: "MARTIN" },
@@ -30,16 +30,32 @@ export function maskField(key: PassportFieldKey, value: string): string {
 const SENSITIVE: PassportFieldKey[] = ["passport_number", "birth_date"];
 
 // The photo and the fields stay in this component's memory: never stored in the browser nor on the server.
-export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; returnDate: string | null; arrivalAt: string | null }) {
+// onConfirm hands the confirmed fields to the Trip screen (memory only), for the visa agent.
+export function PassportCard({
+  demo,
+  returnDate,
+  arrivalAt,
+  onConfirm,
+}: {
+  demo: boolean;
+  returnDate: string | null;
+  arrivalAt: string | null;
+  onConfirm?: (fields: PassportFields | null) => void;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [extraction, setExtraction] = useState<DocumentExtraction | null>(null);
   const [values, setValues] = useState<Values | null>(null);
   const [confirmed, setConfirmed] = useState(false);
 
+  const unconfirm = () => {
+    setConfirmed(false);
+    onConfirm?.(null);
+  };
+
   const upload = async (file: File) => {
     setError(null);
-    setConfirmed(false);
+    unconfirm();
     if (!["image/jpeg", "image/png"].includes(file.type)) return setError("Send a JPEG or PNG photo.");
     if (file.size > MAX_BYTES) return setError("Photo too large (5 MB max).");
     const body = new FormData();
@@ -108,7 +124,16 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
           className="grid gap-3 sm:grid-cols-2"
           onSubmit={(e) => {
             e.preventDefault();
+            const parsed = PassportFieldsSchema.safeParse(
+              Object.fromEntries(FIELDS.map((f) => [f.key, values[f.key].trim()])),
+            );
+            if (!parsed.success) {
+              setError("Check the fields: dates as YYYY-MM-DD, nationality as 2 letters (FR).");
+              return;
+            }
+            setError(null);
             setConfirmed(true);
+            onConfirm?.(parsed.data);
           }}
         >
           {FIELDS.map(({ key, label, placeholder }) => {
@@ -129,7 +154,7 @@ export function PassportCard({ demo, returnDate, arrivalAt }: { demo: boolean; r
                   aria-label={label}
                   aria-invalid={!values[key].trim() || undefined}
                   onChange={(e) => {
-                    setConfirmed(false);
+                    if (confirmed) unconfirm();
                     setValues({ ...values, [key]: e.target.value });
                   }}
                 />

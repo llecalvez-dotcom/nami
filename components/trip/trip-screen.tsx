@@ -2,31 +2,62 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useMemo, useState } from "react";
 import { ArrowLeft, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SampleBadge } from "@/components/status-badge";
+import { AgentSettingsCard, filePaths, readAgentSettings } from "@/components/trip/agent-settings";
 import { Conversation } from "@/components/trip/conversation";
 import { Dossier } from "@/components/trip/dossier";
 import { useLivePapers } from "@/components/trip/live-papers";
 import { PassportCard } from "@/components/trip/passport-card";
 import { TryAnotherCountry } from "@/components/trip/try-another-country";
+import { cancelAgent, sendAgentAnswer, useAgentRun } from "@/components/trip/use-agent-run";
 import { SAMPLE_TRIP_ID } from "@/data/sample";
 import { requestTripParse } from "@/lib/trip-parse-client";
+import type { PassportFields } from "@/lib/contracts";
 import {
+  answerAgentQuestion,
   answerQuestion,
   answerQuestionWithText,
   createSampleTrip,
   decideProposal,
+  pushAgentMessage,
+  reopenAgentQuestion,
+  startVisaRun,
   stopAgent,
   type Trip,
 } from "@/lib/trip-state";
-import { saveTrip, useTrips } from "@/lib/trip-store";
+import { getTrip, saveTrip, useTrips } from "@/lib/trip-store";
+
+async function startVisaSession(trip: Trip, passport: PassportFields): Promise<string> {
+  const settings = readAgentSettings();
+  const response = await fetch("/api/papers/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      request: trip.request,
+      passport,
+      paper_id: "evoa",
+      local_session_id: settings.local_session_id.trim(),
+      file_paths: filePaths(settings.files),
+    }),
+  });
+  const body = (await response.json().catch(() => null)) as { session_id?: string; error?: string } | null;
+  if (!response.ok || !body?.session_id) throw new Error(body?.error ?? `The agent could not start (${response.status}).`);
+  return body.session_id;
+}
 
 export function TripScreen({ id }: { id: string }) {
   const trips = useTrips();
   const demo = useSearchParams().get("demo") === "1";
   const found = trips?.find((t) => t.id === id) ?? null;
   const { destination, country_iso2, arrival_at } = found?.request ?? {};
+  const [passport, setPassport] = useState<PassportFields | null>(null);
+  const [starting, setStarting] = useState(false);
+  const secrets = useMemo(() => [passport?.passport_number, passport?.birth_date], [passport]);
+  const liveRun = found && !found.sample ? found.agent_run : null;
+  useAgentRun(id, liveRun?.session_id ?? null, liveRun !== null && !liveRun.drained, secrets);
   const livePapers = useLivePapers(
     found && !found.sample && found.formalities.length > 0 && destination && country_iso2
       ? { destination, country_iso2, arrival_at }
@@ -50,6 +81,60 @@ export function TripScreen({ id }: { id: string }) {
   }
 
   const update = (next: Trip) => saveTrip(next);
+  const latest = () => getTrip(trip.id) ?? trip;
+
+  const createVisa = async (itemId: string) => {
+    if (starting) return;
+    if (!readAgentSettings().local_session_id.trim()) {
+      update(pushAgentMessage(trip, "Open this page with ?demo=1 and fill in Local browser session (the id printed by holo local browser) first."));
+      return;
+    }
+    if (!passport) {
+      update(pushAgentMessage(trip, "Send me a photo of your passport and confirm its fields first: the agent needs them."));
+      return;
+    }
+    setStarting(true);
+    try {
+      const sessionId = await startVisaSession(trip, passport);
+      update(startVisaRun(latest(), itemId, sessionId, new Date()));
+    } catch (error) {
+      update(pushAgentMessage(latest(), (error as Error).message));
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const decide = (itemId: string, accepted: boolean) => {
+    const item = trip.conversation.find((i) => i.id === itemId);
+    if (accepted && !trip.sample && item?.kind === "proposal" && item.action === "create_visa") return void createVisa(itemId);
+    update(decideProposal(trip, itemId, accepted, new Date()));
+  };
+
+  const onAnswerAgent = async (itemId: string, value: string) => {
+    const current = latest();
+    const answered = answerAgentQuestion(current, itemId, value);
+    const item = current.conversation.find((i) => i.id === itemId);
+    if (answered === current || item?.kind !== "agent_question" || !current.agent_run) return;
+    update(answered);
+    try {
+      await sendAgentAnswer(current.agent_run.session_id, item.tool_req, value);
+    } catch {
+      update(reopenAgentQuestion(latest(), itemId));
+    }
+  };
+
+  const stop = async () => {
+    const current = latest();
+    if (!current.sample && current.agent_run) {
+      try {
+        await cancelAgent(current.agent_run.session_id);
+      } catch (error) {
+        update(pushAgentMessage(latest(), `${(error as Error).message} Run holo local stop in a terminal to stop it.`));
+        return;
+      }
+    }
+    update(stopAgent(latest()));
+  };
 
   const answerWithText = async (itemId: string, text: string) => {
     const item = trip.conversation.find((i) => i.id === itemId);
@@ -99,15 +184,22 @@ export function TripScreen({ id }: { id: string }) {
             items={trip.conversation}
             onAnswer={(itemId, value, label) => update(answerQuestion(trip, itemId, value, label))}
             onAnswerText={answerWithText}
-            onDecide={(itemId, accepted) => update(decideProposal(trip, itemId, accepted, new Date()))}
+            onAnswerAgent={(itemId, value) => void onAnswerAgent(itemId, value)}
+            onDecide={decide}
           />
         </section>
         <aside aria-label="Trip folder" className="min-w-0 lg:sticky lg:top-20 lg:self-start">
           <div className="rounded-3xl border bg-[#efebe4]/60 p-6">
-            <Dossier trip={trip} onStop={() => update(stopAgent(trip))} livePapers={livePapers}>
+            <Dossier trip={trip} onStop={() => void stop()} livePapers={livePapers}>
               {trip.formalities.length > 0 || demo ? (
-                <PassportCard demo={demo} returnDate={trip.request.return_date} arrivalAt={trip.request.arrival_at} />
+                <PassportCard
+                  demo={demo}
+                  returnDate={trip.request.return_date}
+                  arrivalAt={trip.request.arrival_at}
+                  onConfirm={setPassport}
+                />
               ) : null}
+              {demo && !trip.sample ? <AgentSettingsCard /> : null}
               {demo ? <TryAnotherCountry /> : null}
             </Dossier>
           </div>

@@ -40,6 +40,11 @@ export function useTrips(): Trip[] | null {
   return useSyncExternalStore(subscribe, readTrips, () => null);
 }
 
+// Latest saved version, for async loops that must not work on a stale render.
+export function getTrip(id: string): Trip | null {
+  return readTrips().find((t) => t.id === id) ?? null;
+}
+
 export function saveTrip(trip: Trip) {
   const others = readTrips().filter((t) => t.id !== trip.id);
   writeTrips([trip, ...others]);

@@ -1,0 +1,154 @@
+import { describe, expect, it } from "vitest";
+import { freshToolCalls, redact, toAgentChanges, type AgentChanges } from "@/lib/agent-changes";
+import { TripRequestDraftSchema } from "@/lib/contracts";
+import {
+  answerAgentQuestion,
+  applyAgentChanges,
+  askUserFromAgent,
+  createTripFromRequest,
+  decideProposal,
+  reopenAgentQuestion,
+  reportReady,
+  startVisaRun,
+  stopAgent,
+  VISA_READY_MESSAGE,
+  type Trip,
+} from "@/lib/trip-state";
+
+const now = new Date("2026-11-08T12:52:00Z");
+const SECRETS = ["24AB12345", "1990-04-12"];
+const ASK = { tool_name: "ask_user", args: { question: "Which email should receive your visa?", field: "email" }, id: "c1" };
+const REPORT = { tool_name: "report_ready", args: { summary: "Stopped on payment", filled_fields: ["surname", "passport_number"] }, id: "c2" };
+
+function changes(patch: Partial<AgentChanges>): AgentChanges {
+  return { ...toAgentChanges(null, 0), no_change: false, status: "running", ...patch };
+}
+
+function liveTrip(): Trip {
+  const request = TripRequestDraftSchema.parse({
+    raw_text: "Je pars à Bali lundi",
+    nationality: "FR",
+    origin_country: "FR",
+    destination: "Bali",
+    country_iso2: "ID",
+    departure_date: "2026-11-09",
+    arrival_at: "2026-11-10T14:30+08:00",
+    purpose: "tourism",
+    travellers: 1,
+  });
+  let trip = createTripFromRequest("t1", request, now);
+  trip = decideProposal(trip, trip.conversation.findLast((i) => i.kind === "proposal")!.id, true, now);
+  const visa = trip.conversation.find((i) => i.kind === "proposal" && i.action === "create_visa");
+  if (!visa) throw new Error("no create_visa proposal");
+  // A real trip never fakes the agent: accepting without a session changes nothing.
+  expect(decideProposal(trip, visa.id, true, now)).toBe(trip);
+  return startVisaRun(trip, visa.id, "s-1", now);
+}
+
+describe("real Bali trip", () => {
+  it("proposes Create my visa and starts a live run", () => {
+    const trip = liveTrip();
+    expect(trip.agent_run).toMatchObject({ session_id: "s-1", state: "pending", next_index: 0, handled_tool_ids: [] });
+    expect(trip.conversation.find((i) => i.kind === "proposal" && i.action === "create_visa")).toMatchObject({ decision: "accepted" });
+  });
+});
+
+describe("applyAgentChanges", () => {
+  it("adds masked steps, state, index and metrics", () => {
+    const { trip } = applyAgentChanges(
+      liveTrip(),
+      changes({ next_index: 4, steps: ["Typed passport 24AB12345"], metrics: { steps: 4, total_cost: 0.01 } }),
+      SECRETS,
+    );
+    expect(trip.agent_run).toMatchObject({ state: "running", next_index: 4, metrics: { steps: 4, total_cost: 0.01 }, drained: false });
+    expect(trip.agent_steps.at(-1)).toBe("Typed passport •••••••45");
+    expect(JSON.stringify(trip)).not.toContain("24AB12345");
+  });
+
+  it("keeps state and index on a 204", () => {
+    let { trip } = applyAgentChanges(liveTrip(), changes({ next_index: 3 }), SECRETS);
+    ({ trip } = applyAgentChanges(trip, toAgentChanges(null, 3), SECRETS));
+    expect(trip.agent_run).toMatchObject({ state: "running", next_index: 3, drained: false });
+  });
+
+  it("keeps polling after the terminal state and takes the answer that arrives later", () => {
+    let { trip } = applyAgentChanges(liveTrip(), changes({ status: "completed", next_index: 9, steps: ["Agent finished"] }), SECRETS);
+    expect(trip.agent_run).toMatchObject({ state: "completed", drained: false });
+    ({ trip } = applyAgentChanges(trip, changes({ status: "completed", next_index: 10, steps: [], answer: "Stopped before payment" }), SECRETS));
+    expect(trip.agent_run?.result).toMatchObject({ answer: "Stopped before payment" });
+    expect(trip.agent_run?.drained).toBe(false);
+    ({ trip } = applyAgentChanges(trip, changes({ status: "completed", no_change: true, next_index: 10 }), SECRETS));
+    expect(trip.agent_run?.drained).toBe(true);
+  });
+
+  it("ignores a pending tool call whose id was already handled", () => {
+    let trip = liveTrip();
+    const first = applyAgentChanges(trip, changes({ status: "awaiting_tool_results", pending_tool_calls: [ASK] }), SECRETS);
+    expect(first.toolCalls).toEqual([ASK]);
+    trip = askUserFromAgent(first.trip, ASK, SECRETS);
+    const card = trip.conversation.findLast((i) => i.kind === "agent_question")!;
+    trip = answerAgentQuestion(trip, card.id, "me@example.com");
+    const again = applyAgentChanges(trip, changes({ status: "awaiting_tool_results", pending_tool_calls: [ASK] }), SECRETS);
+    expect(again.toolCalls).toEqual([]);
+  });
+
+  it("says why the agent stopped when it fails", () => {
+    const { trip } = applyAgentChanges(liveTrip(), changes({ status: "failed", error_code: "environment_error" }), SECRETS);
+    expect(trip.conversation.at(-1)).toMatchObject({ kind: "agent", text: expect.stringContaining("environment_error") });
+  });
+});
+
+describe("ask_user", () => {
+  it("shows the question once and answers each call id once", () => {
+    let trip = askUserFromAgent(liveTrip(), ASK, SECRETS);
+    trip = askUserFromAgent(trip, ASK, SECRETS);
+    const cards = trip.conversation.filter((i) => i.kind === "agent_question");
+    expect(cards).toHaveLength(1);
+    expect(trip.agent_run?.pending_question).toMatchObject({ tool_req: "c1", field: "email" });
+
+    const answered = answerAgentQuestion(trip, cards[0].id, "me@example.com");
+    expect(answered.agent_run?.handled_tool_ids).toEqual(["c1"]);
+    expect(answered.agent_run?.pending_question).toBeUndefined();
+    expect(answerAgentQuestion(answered, cards[0].id, "other@example.com")).toBe(answered);
+    expect(askUserFromAgent(answered, ASK, SECRETS)).toBe(answered);
+  });
+
+  it("reopens the card when the answer could not be sent", () => {
+    let trip = askUserFromAgent(liveTrip(), ASK, SECRETS);
+    const card = trip.conversation.findLast((i) => i.kind === "agent_question")!;
+    trip = reopenAgentQuestion(answerAgentQuestion(trip, card.id, "me@example.com"), card.id);
+    expect(trip.conversation.find((i) => i.id === card.id)).toMatchObject({ answer: null });
+    expect(trip.agent_run?.handled_tool_ids).toEqual([]);
+  });
+
+  it("closes the open question when the agent is stopped", () => {
+    let trip = askUserFromAgent(liveTrip(), ASK, SECRETS);
+    trip = stopAgent(trip);
+    expect(trip.conversation.find((i) => i.kind === "agent_question")).toMatchObject({ answer: "Agent stopped" });
+    expect(trip.agent_run?.state).toBe("interrupted");
+  });
+});
+
+describe("report_ready", () => {
+  it("sets the e-VOA to pending approval and lists the filled fields, once", () => {
+    const trip = reportReady(liveTrip(), REPORT, SECRETS);
+    expect(trip.formalities.find((f) => f.id === "evoa")?.status).toBe("pending_approval");
+    expect(trip.agent_run?.result).toMatchObject({ summary: "Stopped on payment", filled_fields: ["surname", "passport_number"] });
+    expect(trip.conversation.at(-1)).toMatchObject({ kind: "agent", text: VISA_READY_MESSAGE, list: ["surname", "passport_number"] });
+    expect(reportReady(trip, REPORT, SECRETS)).toBe(trip);
+
+    const done = applyAgentChanges(trip, changes({ status: "completed" }), SECRETS).trip;
+    expect(done.conversation.at(-1)).toMatchObject({ text: VISA_READY_MESSAGE });
+  });
+});
+
+describe("helpers", () => {
+  it("freshToolCalls drops handled and duplicate calls", () => {
+    expect(freshToolCalls([ASK, ASK, REPORT], ["c1"])).toEqual([REPORT]);
+  });
+
+  it("redact keeps the last 2 characters only", () => {
+    expect(redact("n° 24AB12345, born 1990-04-12", SECRETS)).toBe("n° •••••••45, born ••••••••12");
+    expect(redact("nothing", [null, undefined, ""])).toBe("nothing");
+  });
+});
