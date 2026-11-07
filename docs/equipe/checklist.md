@@ -1,6 +1,6 @@
 # ✅ Checklist globale Nami
 
-État vérifié sur `main` le samedi 7 novembre à 15 h 15 (dernières fusions : PR #13 design et World map, PR #11 fiche du coffre chiffré, PR #16 feuille de route). `main` : 172 tests OK. PR ouverte : #14 (agent H sur l'e-VOA : corrections faites, 214 tests, conflit à résoudre sur `trip-screen.tsx`, test réel à faire). À mettre à jour à chaque PR fusionnée ou test passé.
+État vérifié sur `main` le samedi 7 novembre à 15 h 15 (dernières fusions : PR #13 design et World map, PR #11 fiche du coffre chiffré, PR #16 feuille de route). `main` : 172 tests OK. PR ouverte : #14 (agent H sur l'e-VOA : corrections faites, à jour avec `main`, 222 tests, lint et compilation OK, test réel à faire). À mettre à jour à chaque PR fusionnée ou test passé.
 
 **Légende** : ✅ fait et testé en réel · 🟡 codé et testé automatiquement, pas encore testé en réel · 🔵 en cours · ⬜ à faire · ❓ fait peut-être, mais rien sur GitHub
 
@@ -35,7 +35,7 @@
 | B3 | `lib/planner/` : quelles questions, quels modules, fenêtres d'ouverture | ✅ | Nathan | 02 |
 | B4 | `/api/formalities` : papiers cherchés en direct (Linkup) + contrôle des domaines officiels | ✅ (PR #6, L1 réussi) | Ali | 03 |
 | B5 | `/api/documents/extract` : lecture du passeport (vision H), un seul fournisseur, consentement exigé par le serveur | 🟡 (sur une fausse image, « Z » lu « 2 » sans alerte : à juger en T8) | Ali | 03, PR #12 |
-| B6 | `lib/h-agent.ts` + `/api/papers/start` + routes `agent` (suivre, répondre, arrêter) | 🔵 PR #14 : relue par Claude, 214 tests, arrêt hors domaine ajouté ; conflit avec `main` sur `trip-screen.tsx` (venu du design) ; test réel à faire | Clément | 05 |
+| B6 | `lib/h-agent.ts` + `/api/papers/start` + routes `agent` (suivre, répondre, arrêter) | 🔵 PR #14 : relue par Claude, arrêt hors domaine ajouté, à jour avec `main` (222 tests, lint, compilation OK) ; test réel à faire | Clément | 05 |
 | B6b | `/api/papers/start` accepte un papier en direct de n'importe quel pays, domaine officiel revérifié par le serveur | ⬜ (après la partie A) | Clément | 05, partie B |
 | B7 | Mode démo préparé (sessions lancées 5 min avant, heure réelle affichée) | ⬜ (ticket 06 à écrire) | Nathan | 06 |
 | B8 | Module Vol (Google Flights), seulement s'il reste du temps | ⬜ | Clément | sans ticket |
@@ -83,10 +83,10 @@
 
 ## 6. Ce que chacun fait maintenant, dans l'ordre
 
-**Seule PR ouverte** : #14 (agent). Son Devin doit encore reprendre `main` (conflit sur `trip-screen.tsx` venu du design), puis Clément la teste en réel et la fusionne.
+**Seule PR ouverte** : #14 (agent), prête pour le test réel : Clément la teste sur son portable, puis la fusionne.
 
 **Clément (agent H)**
-1. PR #14 : arrêt hors domaine fait ; faire reprendre `main` par son Devin (conflit sur `trip-screen.tsx`).
+1. PR #14 : arrêt hors domaine fait, à jour avec `main`, relue par Claude.
 2. Installer le CLI de H sur son portable (`pip install "hai-agents[cli,browser]"`), lancer le Chrome dédié et `holo local browser` (note, section 4.6).
 3. Test réel de la PR #14 sur son portable : 3 passages, arrêt sur l'écran de paiement, une fois « Stop agent » en cours de route ; étapes, blocages, durée et coût dans `docs/tests/f1-evoa.md` (couvre T4, T5 et T6). Puis fusion. Si l'agent s'arrête avec « it left the official site (….imigrasi.go.id) » alors que le site l'y a envoyé normalement, élargir le domaine de l'e-VOA à `imigrasi.go.id` dans `lib/bali-papers.ts`.
 4. Ensuite seulement : partie B (tout pays en beta), un passage réel sur le Kenya ou la Tanzanie.
