@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { API_LIMITS, guard, readJsonLimited, resetGuards } from "@/lib/api-guard";
+import { API_LIMITS, guard, quotaEntryCount, readJsonLimited, resetGuards } from "@/lib/api-guard";
 
 const request = (headers: HeadersInit = {}) => new Request("http://localhost/api/test", { headers });
 
@@ -91,6 +91,19 @@ describe("api guard quotas", () => {
     expect((blockedCookieClient as Response).status).toBe(429);
     expect(separateIpClient).not.toBeInstanceOf(Response);
     lease(separateIpClient).release();
+  });
+
+  it("prunes expired entries when the quota map reaches 1000 entries", () => {
+    let timestamp = 1000;
+    for (let index = 0; index < 1000; index++) {
+      const ip = `192.0.${Math.floor(index / 256)}.${index % 256}`;
+      lease(guard(request({ "x-forwarded-for": ip }), "parse", () => timestamp)).release();
+    }
+    expect(quotaEntryCount()).toBe(1000);
+
+    timestamp += 10 * 60 * 1000 + 1;
+    lease(guard(request({ "x-forwarded-for": "203.0.113.10" }), "parse", () => timestamp)).release();
+    expect(quotaEntryCount()).toBe(1);
   });
 });
 

@@ -76,6 +76,11 @@ export function guard(request: Request, route: ApiRoute, now: () => number = Dat
   const active = activeByRoute.get(route) ?? 0;
   if (active >= CONCURRENCY_LIMITS[route]) return Response.json({ error: "Busy, try again in a moment." }, { status: 429 });
 
+  if (quotas.size >= 1000) {
+    for (const [entry, value] of quotas) {
+      if (value.resetAt <= timestamp) quotas.delete(entry);
+    }
+  }
   quotas.set(key, { count: quota.count + 1, resetAt: quota.resetAt });
   activeByRoute.set(route, active + 1);
   let released = false;
@@ -138,4 +143,8 @@ export async function readJsonLimited(request: Request, maxBytes: number): Promi
 export function resetGuards(): void {
   quotas.clear();
   activeByRoute.clear();
+}
+
+export function quotaEntryCount(): number {
+  return quotas.size;
 }
