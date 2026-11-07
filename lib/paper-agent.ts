@@ -9,8 +9,24 @@ export const PAPER_MAX_STEPS = 80;
 import { H_SLOTS_BUSY } from "@/lib/paper-start-client";
 export { H_SLOTS_BUSY };
 
-// The only Bali paper the agent fills in (part A of ticket 05).
+// The first Bali paper the agent fills in (part A of ticket 05), and the default of a session started before the others.
 export const PILOT_PAPER_ID = "evoa";
+// The papers the agent fills in, one after the other (the arrival card since 2026-11-07).
+export const AGENT_PAPER_IDS = ["evoa", "arrival_card"] as const;
+export type AgentPaperId = (typeof AGENT_PAPER_IDS)[number];
+
+// The paper of each running session, so that the domain guard follows the right official site.
+// In memory: after a server restart a session counts as the e-VOA.
+const shared = globalThis as typeof globalThis & { namiSessionPapers?: Map<string, AgentPaperId> };
+const sessionPapers = () => (shared.namiSessionPapers ??= new Map());
+
+export function bindSessionPaper(sessionId: string, paperId: AgentPaperId) {
+  sessionPapers().set(sessionId, paperId);
+}
+
+export function sessionPaper(sessionId: string): AgentPaperId {
+  return sessionPapers().get(sessionId) ?? PILOT_PAPER_ID;
+}
 
 export const ASK_USER_TOOL: ToolSpec = {
   name: "ask_user",
@@ -77,7 +93,7 @@ export const LOCAL_SESSION_ID = z
 export const PaperStartSchema = z.object({
   request: TripRequestSchema,
   passport: PassportFieldsSchema,
-  paper_id: z.literal(PILOT_PAPER_ID),
+  paper_id: z.enum(AGENT_PAPER_IDS),
   local_session_id: LOCAL_SESSION_ID,
   document_id: z.string().min(1).max(100).optional(),
   photo_document_id: z.string().min(1).max(100).optional(),

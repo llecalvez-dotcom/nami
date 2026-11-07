@@ -13,8 +13,11 @@ import {
   PAPER_MAX_TIME_S,
   PAPER_TOOLS,
   PaperStartSchema,
-  PILOT_PAPER_ID,
+  AGENT_PAPER_IDS,
+  type AgentPaperId,
+  bindSessionPaper,
 } from "@/lib/paper-agent";
+import { getBaliPaper } from "@/lib/bali-papers";
 
 // Route 5. The task holds the passport for the agent only: it is never logged nor sent back.
 export async function POST(request: Request) {
@@ -32,7 +35,9 @@ async function start(request: Request): Promise<Response> {
   if (read instanceof Response) return read;
   const body = read.value as Record<string, unknown> | null;
   if (!body || typeof body !== "object") return fail("Invalid request.", 400);
-  if (body.paper_id !== PILOT_PAPER_ID) return fail("Only the Bali e-VOA can be filled in by the agent for now.", 400);
+  if (!AGENT_PAPER_IDS.includes(body.paper_id as AgentPaperId)) {
+    return fail("Only the Bali e-VOA and the All Indonesia arrival card can be filled in by the agent for now.", 400);
+  }
   // The side panel (/panel) shows no settings: the server's NAMI_LOCAL_SESSION_ID fills the gap.
   const serverSession = process.env.NAMI_LOCAL_SESSION_ID?.trim();
   if ((typeof body.local_session_id !== "string" || !body.local_session_id.trim()) && serverSession) {
@@ -67,8 +72,8 @@ async function start(request: Request): Promise<Response> {
       } catch {}
     }
     const session = await createSession({
-      task: buildPilotTask(input.data),
-      instructions: buildPilotInstructions(),
+      task: buildPilotTask(input.data, getBaliPaper(input.data.paper_id)),
+      instructions: buildPilotInstructions(getBaliPaper(input.data.paper_id)),
       tools: PAPER_TOOLS,
       localBrowserSessionId: input.data.local_session_id,
       maxTimeS: PAPER_MAX_TIME_S,
@@ -76,6 +81,7 @@ async function start(request: Request): Promise<Response> {
       idempotencyKey: input.data.idempotency_key,
     });
     browser.commit(session.id, input.data.idempotency_key);
+    bindSessionPaper(session.id, input.data.paper_id);
     if (input.data.document_id) bindSessionDocument(session.id, documentPaths[0], photoPaths[0]);
     return Response.json({ session_id: session.id, status: session.status }, { status: 201 });
   } catch (error) {

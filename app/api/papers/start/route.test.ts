@@ -377,7 +377,7 @@ describe("POST /api/papers/start (route 5)", () => {
   it.each([
     ["without local_session_id", { ...BODY, local_session_id: undefined }, "Missing local browser session"],
     ["with an empty local_session_id", { ...BODY, local_session_id: "  " }, "Missing local browser session"],
-    ["for another paper than the e-VOA", { ...BODY, paper_id: "arrival_card" }, "Only the Bali e-VOA"],
+    ["for a paper the agent does not fill", { ...BODY, paper_id: "bali_levy" }, "Only the Bali e-VOA and the All Indonesia arrival card"],
     ["without paper_id", { ...BODY, paper_id: undefined }, "Only the Bali e-VOA"],
     ["without passport", { ...BODY, passport: undefined }, "passport"],
   ])("refuses %s", async (_label, body, message) => {
