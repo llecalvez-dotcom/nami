@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, MessagesSquare, Plus, X } from "lucide-react";
-import { FocusStage, Sentence, STAGE_TEXTS, TypeInstead, VoiceHint, WaveMic, waveState, type AgentView, type StageVisual, type Translate } from "@/components/panel/focus-stage";
+import { FocusStage, PAPER_COLORS, Sentence, STAGE_TEXTS, TypeInstead, VoiceHint, WaveMic, waveState, type AgentView, type StageVisual, type Translate } from "@/components/panel/focus-stage";
 import { Painting } from "@/components/panel/backdrop";
 import { PassportCard } from "@/components/trip/passport-card";
 import { PhotoCard } from "@/components/trip/photo-card";
@@ -16,7 +16,8 @@ import { useSpokenLanguage } from "@/lib/voice/language";
 import { requestTranslations, translated, useTranslatedConversation, useTranslationsVersion } from "@/lib/voice/translations";
 import type { DocumentExtraction, PassportFields } from "@/lib/contracts";
 import { bestFirst, foundPassportText, foundPhotoText, foundReturnTicketText, readSummary, type Reader } from "@/lib/panel-documents";
-import { agentChecklist, CHECKLIST_LABELS, focusItem, paperInFocus, readyPaper, sceneFor } from "@/lib/panel-focus";
+import { agentChecklist, CHECKLIST_LABELS, focusItem, paperInFocus, readyPaper, sceneFor, type Paper } from "@/lib/panel-focus";
+import { isFlightReadyMessage } from "@/lib/flights/flow";
 import { requestTripParse } from "@/lib/trip-parse-client";
 import {
   acceptProposal,
@@ -156,7 +157,7 @@ function History({ items, t, onClose }: { items: ConversationItem[]; t: Translat
   );
 }
 
-type Mark = { label: string; done: boolean; paper?: "visa" | "arrival_card" };
+type Mark = { label: string; done: boolean; paper?: Paper };
 
 // The shore: what is already done, in the color of its paper.
 function Shore({ marks, t, onPassport }: { marks: Mark[]; t: Translate; onPassport?: () => void }) {
@@ -168,7 +169,7 @@ function Shore({ marks, t, onPassport }: { marks: Mark[]; t: Translate; onPasspo
             <span
               aria-hidden
               className={cn("grid size-4 place-items-center rounded-full", mark.done ? "text-[var(--np-on-accent)]" : "ring-1 ring-[var(--np-line)] ring-inset")}
-              style={mark.done ? { background: mark.paper === "arrival_card" ? "var(--np-coral)" : "var(--np-lagoon)" } : undefined}
+              style={mark.done ? { background: PAPER_COLORS[mark.paper ?? "visa"] } : undefined}
             >
               {mark.done ? <Check className="size-2.5" strokeWidth={3.5} /> : null}
             </span>
@@ -479,7 +480,7 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
           : focus.action === "use_photo" && seen.photo
             ? { kind: "photo", id: seen.photo.id }
             : null;
-  const runPaper = run?.paper_id === "arrival_card" ? "arrival_card" : "visa";
+  const runPaper: Paper = run?.kind === "flights" ? "flights" : run?.paper_id === "arrival_card" ? "arrival_card" : "visa";
   const agent: AgentView | null = isAgentActive(run) ? { paper: runPaper, checklist: agentChecklist(runPaper, trip.agent_steps, false), step: t(lastStep) } : null;
   const has = (text: string) => trip.conversation.some((item) => item.kind === "agent" && item.text === text);
   const marks: Mark[] = [
@@ -487,6 +488,7 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
     { label: "Photo", done: photoDocumentId !== null },
     { label: "Visa", done: has(VISA_READY_MESSAGE), paper: "visa" },
     { label: "Arrival card", done: has(ARRIVAL_CARD_READY_MESSAGE), paper: "arrival_card" },
+    { label: "Flight", done: trip.conversation.some((item) => item.kind === "agent" && isFlightReadyMessage(item.text)), paper: "flights" },
   ];
 
   const showCard = manual || reconfirm;

@@ -18,6 +18,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/agent/[id]/c
     captureAgentScreen(id, changes);
     const summary = toAgentChanges(changes, fromIndex);
     const running = changes !== null && !(changes.status !== null && isTerminalStatus(changes.status));
+    // Flight sessions are known in memory only: after a server restart one counts as the e-VOA and is cut on google.com.
     const left = running ? offDomainHost(changes.new_events, isFlightsSession(id) ? FLIGHTS_DOMAIN : getBaliPaper(sessionPaper(id)).domain) : null;
     if (!left) return Response.json(summary);
     const cancelled = await cancelSession(id).then(

@@ -1,9 +1,11 @@
+import { flightsResult } from "@/lib/flights/flow";
 import type { Trip } from "@/lib/trip-state";
 
 export const FOCUS_OFFICIAL = "nami:focus-official";
 const DONE = `${FOCUS_OFFICIAL}:done`;
 
 export function agentOfficialUrl(trip: Pick<Trip, "agent_run" | "formalities">): string | null {
+  if (trip.agent_run?.kind === "flights") return flightsResult(trip.agent_run)?.url ?? null;
   if (trip.agent_run?.kind !== "paper") return null;
   const paper = trip.formalities.find((f) => f.id === "evoa") ?? trip.formalities.find((f) => f.required) ?? trip.formalities[0];
   return paper?.official_url ?? null;
