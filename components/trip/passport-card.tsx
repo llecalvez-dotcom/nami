@@ -203,7 +203,7 @@ export function PassportCard({
         </p>
       ) : (
         <>
-          <p className="text-sm text-muted-foreground">The identity page, sharp and flat. It is read in memory and never stored.</p>
+          <p className="text-sm text-muted-foreground">The identity page, sharp and flat. It is read in memory and never stored. For the official site, use a flat, well-lit scan of the photo page.</p>
           <label className="flex items-start gap-2 text-sm">
             <input
               type="checkbox"
