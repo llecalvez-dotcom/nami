@@ -28,9 +28,9 @@ const CRITERION_QUESTION = "What matters most for your flights: the cheapest, th
 const ORDINALS = ["The first", "The second", "The third"];
 // What a traveller says to name a flight or a criterion, in the languages Gladia transcribes for us.
 const ORDINAL_WORDS = [
-  ["first", "1", "premier", "premiere", "primero", "primera", "erste", "primo"],
-  ["second", "2", "two", "deuxieme", "second", "seconde", "segundo", "segunda", "zweite", "secondo"],
-  ["third", "3", "three", "troisieme", "tercero", "tercera", "dritte", "terzo"],
+  ["first", "1", "1st", "1er", "1ere", "premier", "premiere", "primero", "primera", "erste", "primo"],
+  ["second", "2", "2nd", "2e", "2eme", "two", "deuxieme", "second", "seconde", "segundo", "segunda", "zweite", "secondo"],
+  ["third", "3", "3rd", "3e", "3eme", "three", "troisieme", "tercero", "tercera", "dritte", "terzo"],
 ];
 const CRITERION_WORDS: Record<FlightCriterion, string[]> = {
   cheapest: ["cheap", "cheapest", "price", "moins cher", "pas cher", "barato", "billig", "gunstig", "economico"],
