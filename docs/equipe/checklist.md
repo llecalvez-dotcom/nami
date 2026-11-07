@@ -53,7 +53,7 @@
 | T6 | F1 agent : l'agent remplit le visa jusqu'au paiement, 3 fois sur 3, une fois arrêté par « Stop agent » | ⬜ (PR #14) | Clément | `docs/tests/f1-evoa.md` |
 | T6b | Autre pays en beta (Kenya ou Tanzanie) : l'agent s'arrête avant le paiement ou passe la main, 1 passage | ⬜ (après T6) | Clément | `docs/tests/f1-autres-pays.md` |
 | T7 | L1 : Linkup trouve les papiers justes (Bali + 5 pays) | ✅ 5 pays sur 5 pour le papier principal, Bali identique à la table | Ali | `docs/tests/l1-linkup.md` |
-| T8 | F7 : contrôle de lecture sur données fictives uniquement | 🟡 (cette PR : test de régression injectant 1 erreur « Z » lu « 2 », 1 détectée par le MRZ ; autres divergences et chiffres invalides couverts en tests unitaires, pas de nouveau test vision) | Ali | `docs/tests/f7-passeport.md` |
+| T8 | F7 : lecture du vrai passeport, 7 champs justes (avec `PASSPORT_READER=h` en local) ; noter aussi combien d'erreurs le contrôle MRZ a signalées | ❓ | Ali | `docs/tests/f7-passeport.md` |
 
 ## 4. Sécurité et données
 
