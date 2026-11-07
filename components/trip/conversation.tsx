@@ -81,7 +81,7 @@ function QuestionCard({
   return (
     <div
       className={cn(
-        "rounded-[28px] bg-card p-6 shadow-soft",
+        "rounded-[18px] bg-card p-6 shadow-soft",
         item.answer === null && "ring-2 ring-primary/25",
       )}
     >
@@ -128,7 +128,7 @@ function ProposalCard({ item, onDecide }: { item: Extract<ConversationItem, { ki
   return (
     <div
       className={cn(
-        "rounded-[28px] bg-card p-6 shadow-soft",
+        "rounded-[18px] bg-card p-6 shadow-soft",
         item.decision === null && "ring-2 ring-primary/25",
       )}
     >

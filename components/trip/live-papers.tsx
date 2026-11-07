@@ -55,10 +55,10 @@ export function LivePaperCard({ paper, observedOn }: { paper: Paper; observedOn?
   const clickable = paper.link_official ?? paper.sources.every((s) => s.official);
   const when = windowText(paper);
   return (
-    <li className="rounded-[24px] bg-card p-5 shadow-soft">
+    <li className="rounded-[18px] bg-card p-5 shadow-soft">
       <div className="flex flex-col-reverse items-start gap-2 sm:flex-row sm:justify-between sm:gap-3">
         <div>
-          <p className="text-lg leading-snug font-semibold tracking-tight">{paper.name}</p>
+          <p className="text-[20px] leading-snug font-medium tracking-[-0.5px]">{paper.name}</p>
           {when ? <p className="mt-1 text-sm text-muted-foreground">{when}</p> : null}
         </div>
         <StatusBadge status={paper.status} checkedAt={paper.checked_at} />
@@ -118,13 +118,13 @@ export function LivePaperCard({ paper, observedOn }: { paper: Paper; observedOn?
 export function LivePapersList({ papers }: { papers: LivePapersState }) {
   if (papers.state === "loading") {
     return (
-      <p className="animate-pulse rounded-[24px] bg-card p-5 text-sm text-muted-foreground shadow-soft" aria-busy="true">
+      <p className="animate-pulse rounded-[18px] bg-card p-5 text-sm text-muted-foreground shadow-soft" aria-busy="true">
         Searching the official sources live for {papers.query.destination}…
       </p>
     );
   }
   if (papers.state === "error") {
-    return <p className="rounded-[24px] bg-card p-5 text-sm text-attention-foreground shadow-soft">{papers.message}</p>;
+    return <p className="rounded-[18px] bg-card p-5 text-sm text-attention-foreground shadow-soft">{papers.message}</p>;
   }
   const { result } = papers;
   return (
