@@ -5,6 +5,7 @@ import { ArrowRight, Check, Plus, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Conversation } from "@/components/trip/conversation";
 import { PassportCard } from "@/components/trip/passport-card";
+import { PhotoCard } from "@/components/trip/photo-card";
 import { useAgentRun } from "@/components/trip/use-agent-run";
 import { useTripActions } from "@/components/trip/use-trip-actions";
 import { MicButton, VoiceStatusLine } from "@/components/voice/mic-button";
@@ -160,6 +161,8 @@ async function documentReader(): Promise<Reader | null> {
 function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
   const [passport, setPassport] = useState<PassportFields | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(null);
+  // Set by the photo card when the spoken path falls back to the cards.
+  const [photoDocumentId, setPhotoDocumentId] = useState<string | null>(null);
   const [searchRequest, setSearchRequest] = useState(0);
   const [manual, setManual] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -182,6 +185,7 @@ function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
     trip,
     passport,
     documentId,
+    photoDocumentId,
     onNeedPassport: () => setSearchRequest((request) => request + 1),
     // No tab is opened here: the agent drives the tab already open next to the panel. Opening the official site
     // before the agent reaches it would create a second official tab, and upload_file refuses to choose between two.
@@ -353,6 +357,7 @@ function TripView({ trip, onNewTrip }: { trip: Trip; onNewTrip: () => void }) {
                 }
               }}
             />
+            {documentId ? <div className="mt-4"><PhotoCard demo onConfirm={setPhotoDocumentId} /></div> : null}
           </section>
         ) : null}
       </main>

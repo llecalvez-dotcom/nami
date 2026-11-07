@@ -11,11 +11,18 @@ export type FoundDocument = {
   score: number;
 };
 
-type Entry = { root: string; path: string };
+export type DocumentKind = "passport" | "photo";
+type Entry = { root: string; path: string; kind: DocumentKind };
 const shared = globalThis as typeof globalThis & { namiDocuments?: Map<string, Entry> };
 const store = () => shared.namiDocuments ??= new Map<string, Entry>();
 const TYPES = new Set([".jpg", ".jpeg", ".png", ".heic", ".pdf"]);
+// The identity photo goes straight to the official site, which accepts images only.
+const PHOTO_TYPES = new Set([".jpg", ".jpeg", ".png"]);
 const MAX_BYTES = 10 * 1024 * 1024;
+
+export function isDocumentKind(value: string | null): value is DocumentKind {
+  return value === "passport" || value === "photo";
+}
 
 export function documentsEnabled(env: Record<string, string | undefined> = process.env): boolean {
   return env.NODE_ENV !== "production" && Boolean(env.NAMI_DOCUMENTS_DIR && isAbsolute(env.NAMI_DOCUMENTS_DIR));
@@ -26,15 +33,23 @@ function inside(root: string, path: string): boolean {
   return rel !== "" && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
 }
 
-function scoreName(name: string): number {
+function scoreName(name: string, kind: DocumentKind): number {
   const normalized = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (kind === "photo") {
+    return (/photo|portrait|identite|identity/.test(normalized) ? 100 : 0)
+      + (/\bid\b|id[-_.]|[-_]id/.test(normalized) ? 10 : 0)
+      - (/passport|passeport|pasaporte|reisepass/.test(normalized) ? 50 : 0);
+  }
   return (/passport|passeport|pasaporte|reisepass/.test(normalized) ? 100 : 0)
     + (/(^|[^a-z0-9])(id|identity|identite|scan)(?=[^a-z0-9]|$)/.test(normalized) ? 10 : 0);
 }
 
-export async function findDocuments(): Promise<FoundDocument[]> {
-  store().clear();
+// A search refreshes the tokens of its own kind only: the confirmed passport survives the photo search.
+export async function findDocuments(kind: DocumentKind = "passport"): Promise<FoundDocument[]> {
+  const current = store();
+  for (const [id, entry] of current) if (entry.kind === kind) current.delete(id);
   if (!documentsEnabled()) return [];
+  const types = kind === "photo" ? PHOTO_TYPES : TYPES;
   const root = await realpath(process.env.NAMI_DOCUMENTS_DIR!);
   const candidates: (Omit<FoundDocument, "id"> & { path: string })[] = [];
   async function scan(directory: string, depth: number) {
@@ -51,7 +66,7 @@ export async function findDocuments(): Promise<FoundDocument[]> {
         if (depth < 2) await scan(path, depth + 1);
         continue;
       }
-      if (!TYPES.has(extname(entry.name).toLowerCase())) continue;
+      if (!types.has(extname(entry.name).toLowerCase())) continue;
       try {
         const resolved = await realpath(path);
         if (!inside(root, resolved)) continue;
@@ -59,7 +74,7 @@ export async function findDocuments(): Promise<FoundDocument[]> {
         if (!info.isFile() || info.size > MAX_BYTES) continue;
         candidates.push({
           path: resolved, name: entry.name, folder: relative(root, directory) || ".",
-          size_bytes: info.size, modified_at: info.mtime.toISOString(), score: scoreName(entry.name),
+          size_bytes: info.size, modified_at: info.mtime.toISOString(), score: scoreName(entry.name, kind),
         });
       } catch {
         // Files can disappear while scanning.
@@ -67,20 +82,18 @@ export async function findDocuments(): Promise<FoundDocument[]> {
     }
   }
   await scan(root, 0);
-  const refreshed = new Map<string, Entry>();
-  const results = candidates.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name)).slice(0, 5).map(({ path, ...file }) => {
+  return candidates.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name)).slice(0, 5).map(({ path, ...file }) => {
     const id = randomBytes(24).toString("hex");
-    refreshed.set(id, { root, path });
+    current.set(id, { root, path, kind });
     return { id, ...file };
   });
-  shared.namiDocuments = refreshed;
-  return results;
 }
 
-export async function resolveDocumentPath(id: string): Promise<string | null> {
+// Without a kind (previews), any token resolves; the start route asks for the kind it binds.
+export async function resolveDocumentPath(id: string, kind?: DocumentKind): Promise<string | null> {
   if (!documentsEnabled() || !/^[a-f0-9]{48}$/.test(id)) return null;
   const entry = store().get(id);
-  if (!entry) return null;
+  if (!entry || (kind !== undefined && entry.kind !== kind)) return null;
   return validateDocumentPath(entry.path, entry.root);
 }
 
@@ -97,8 +110,8 @@ export async function validateDocumentPath(filePath: string, expectedRoot?: stri
   }
 }
 
-export async function documentFilePaths(ids: readonly string[]): Promise<string[] | null> {
+export async function documentFilePaths(ids: readonly string[], kind: DocumentKind = "passport"): Promise<string[] | null> {
   if (!documentsEnabled()) return null;
-  const paths = await Promise.all([...new Set(ids)].map(resolveDocumentPath));
+  const paths = await Promise.all([...new Set(ids)].map((id) => resolveDocumentPath(id, kind)));
   return paths.every((path): path is string => path !== null) ? paths : null;
 }

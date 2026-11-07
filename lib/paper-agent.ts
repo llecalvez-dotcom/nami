@@ -56,7 +56,7 @@ export const PICK_OPTION_TOOL: ToolSpec = {
 
 export const UPLOAD_FILE_TOOL: ToolSpec = {
   name: "upload_file",
-  description: "Ask Nami to give the confirmed passport file to the official form. Never open the OS file picker. After success, take a screenshot to verify the file is shown; do not reload or refresh the page or navigate away. If unavailable, call ask_user for a manual upload.",
+  description: "Ask Nami to give the confirmed passport file (purpose passport) or the confirmed identity photo (purpose photo) to the official form. Never open the OS file picker. After success, take a screenshot to verify the file is shown; do not reload or refresh the page or navigate away. If unavailable, call ask_user for a manual upload.",
   input_schema: {
     type: "object",
     properties: { purpose: { type: "string", enum: ["passport", "photo"] } },
@@ -80,6 +80,7 @@ export const PaperStartSchema = z.object({
   paper_id: z.literal(PILOT_PAPER_ID),
   local_session_id: LOCAL_SESSION_ID,
   document_id: z.string().min(1).max(100).optional(),
+  photo_document_id: z.string().min(1).max(100).optional(),
   idempotency_key: z.uuid().optional(),
   resume: z.literal(true).optional(),
   file_paths: z.array(z.string().trim().min(1).max(500)).max(10).default([]),

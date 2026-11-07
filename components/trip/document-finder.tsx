@@ -29,11 +29,26 @@ export function DocumentPreview({ document, demo = false }: { document: Document
   ) : <FileImage className="size-10 text-muted-foreground" aria-label="No image preview available" />;
 }
 
-export function DocumentFinder({ onConfirm, demo = false, focusOnMount = false }: {
+const TEXTS = {
+  passport: {
+    prompt: "I don't have your passport yet. Shall I look for it in your documents?",
+    empty: "No matching files found. Upload a photo or type the fields below.",
+    failed: "I could not search your documents. Upload a photo or type the fields below.",
+  },
+  photo: {
+    prompt: "The e-VOA also needs your identity photo. Shall I look for it in your documents?",
+    empty: "No photo found. The agent will ask you to upload it on the official site.",
+    failed: "I could not search your documents. The agent will ask you to upload the photo on the official site.",
+  },
+} as const;
+
+export function DocumentFinder({ onConfirm, demo = false, focusOnMount = false, kind = "passport" }: {
   onConfirm: (document: DocumentChoice) => void;
   demo?: boolean;
   focusOnMount?: boolean;
+  kind?: "passport" | "photo";
 }) {
+  const texts = TEXTS[kind];
   const [enabled, setEnabled] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -59,12 +74,12 @@ export function DocumentFinder({ onConfirm, demo = false, focusOnMount = false }
     setBusy(true);
     setError(null);
     try {
-      const response = await fetch("/api/documents/find?kind=passport", { cache: "no-store" });
+      const response = await fetch(`/api/documents/find?kind=${kind}`, { cache: "no-store" });
       if (!response.ok) throw new Error();
       const result = await response.json() as { documents: DocumentChoice[] };
       setDocuments(result.documents);
     } catch {
-      setError("I could not search your documents. Upload a photo or type the fields below.");
+      setError(texts.failed);
     } finally {
       setBusy(false);
     }
@@ -73,7 +88,7 @@ export function DocumentFinder({ onConfirm, demo = false, focusOnMount = false }
   if (!enabled || dismissed) return null;
   return (
     <div ref={searchCard} className="space-y-3 rounded-2xl bg-muted p-4">
-      <p className="text-sm">I don&apos;t have your passport yet. Shall I look for it in your documents?</p>
+      <p className="text-sm">{texts.prompt}</p>
       <p className="text-xs text-muted-foreground">Only file names in your configured local folder are searched. Nothing is sent to a model.</p>
       {documents === null ? (
         <div className="flex gap-2">
@@ -82,7 +97,7 @@ export function DocumentFinder({ onConfirm, demo = false, focusOnMount = false }
         </div>
       ) : (
         <>
-          {documents.length === 0 ? <p className="text-sm">No matching files found. Upload a photo or type the fields below.</p> : null}
+          {documents.length === 0 ? <p className="text-sm">{texts.empty}</p> : null}
           {documents.map((document) => (
             <div key={document.id} className="flex flex-wrap items-center gap-3 rounded-xl bg-card p-3">
               <DocumentPreview document={document} demo={demo} />
