@@ -38,6 +38,26 @@ async function fakeImage(name = "passeport-scan.jpg") {
 
 describe("local documents", () => {
   it.each([
+    ["id-card.jpg", 10],
+    ["ID_scan.png", 10],
+    ["scan 2024.pdf", 10],
+    ["identite.jpg", 10],
+    ["identité.jpg", 10],
+    ["identity.jpg", 10],
+    ["video-holiday.png", 0],
+    ["scandinavie.jpg", 0],
+    ["invalid.pdf", 0],
+    ["passeport-scan.jpg", 110],
+    ["mypāssport.jpg", 100],
+    ["monpasseport.jpg", 100],
+    ["mipasaporte.jpg", 100],
+    ["meinreisepass.jpg", 100],
+  ])("scores filename %s as %i", async (name, score) => {
+    await writeFile(join(root, name), "fictitious");
+    expect(await findDocuments()).toEqual([expect.objectContaining({ name, score })]);
+  });
+
+  it.each([
     { NAMI_DOCUMENTS_DIR: "", NODE_ENV: "development" },
     { NAMI_DOCUMENTS_DIR: "relative", NODE_ENV: "development" },
     { NAMI_DOCUMENTS_DIR: "/configured", NODE_ENV: "production" },
