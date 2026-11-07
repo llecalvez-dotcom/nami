@@ -55,10 +55,10 @@ export function LivePaperCard({ paper, observedOn }: { paper: Paper; observedOn?
   const clickable = paper.link_official ?? paper.sources.every((s) => s.official);
   const when = windowText(paper);
   return (
-    <li className="rounded-2xl border bg-card p-5">
-      <div className="flex items-start justify-between gap-3">
+    <li className="rounded-[24px] bg-card p-5 shadow-soft">
+      <div className="flex flex-col-reverse items-start gap-2 sm:flex-row sm:justify-between sm:gap-3">
         <div>
-          <p className="font-heading text-2xl leading-tight">{paper.name}</p>
+          <p className="text-lg leading-snug font-semibold tracking-tight">{paper.name}</p>
           {when ? <p className="mt-1 text-sm text-muted-foreground">{when}</p> : null}
         </div>
         <StatusBadge status={paper.status} checkedAt={paper.checked_at} />
@@ -78,7 +78,7 @@ export function LivePaperCard({ paper, observedOn }: { paper: Paper; observedOn?
             {host} <ExternalLink className="size-3.5" />
           </a>
         ) : (
-          <span className="inline-flex items-center gap-1 text-attention" title="Not an official government site: not clickable">
+          <span className="inline-flex items-center gap-1 text-attention-foreground" title="Not an official government site: not clickable">
             <ShieldAlert className="size-3.5" /> {host} (not official)
           </span>
         )}
@@ -88,7 +88,7 @@ export function LivePaperCard({ paper, observedOn }: { paper: Paper; observedOn?
         <p className="mt-2 text-xs text-muted-foreground">The exact page did not answer: link to the site&apos;s home page.</p>
       ) : null}
       {paper.differs && paper.differs.length > 0 ? (
-        <p className="mt-2 text-xs text-attention">Differs from our last check: {paper.differs.join("; ")}.</p>
+        <p className="mt-2 text-xs text-attention-foreground">Differs from our last check: {paper.differs.join("; ")}.</p>
       ) : null}
       <ul className="mt-3 flex flex-wrap gap-x-3 gap-y-1">
         {paper.sources.map((source) => (
@@ -96,7 +96,7 @@ export function LivePaperCard({ paper, observedOn }: { paper: Paper; observedOn?
             {source.official ? (
               <ShieldCheck className="size-3.5 text-primary" />
             ) : (
-              <ShieldAlert className="size-3.5 text-attention" />
+              <ShieldAlert className="size-3.5 text-attention-foreground" />
             )}
             {hostOf(source.url) ?? source.url}
             {source.official ? "" : " (non-official)"}
@@ -119,22 +119,22 @@ export function LivePaperCard({ paper, observedOn }: { paper: Paper; observedOn?
 export function LivePapersList({ papers, statuses = {} }: { papers: LivePapersState; statuses?: Record<string, Formality["status"]> }) {
   if (papers.state === "loading") {
     return (
-      <p className="rounded-2xl border bg-card p-5 text-sm text-muted-foreground" aria-busy="true">
+      <p className="animate-pulse rounded-[24px] bg-card p-5 text-sm text-muted-foreground shadow-soft" aria-busy="true">
         Searching the official sources live for {papers.query.destination}…
       </p>
     );
   }
   if (papers.state === "error") {
-    return <p className="rounded-2xl border bg-card p-5 text-sm text-attention">{papers.message}</p>;
+    return <p className="rounded-[24px] bg-card p-5 text-sm text-attention-foreground shadow-soft">{papers.message}</p>;
   }
   const { result } = papers;
   return (
     <div className="space-y-3">
-      <p className={result.mode === "live" && !result.differs_from_last_check ? "text-sm text-muted-foreground" : "text-sm text-attention"}>
+      <p className={result.mode === "live" && !result.differs_from_last_check ? "text-sm text-muted-foreground" : "text-sm text-attention-foreground"}>
         {result.notice}
       </p>
       {result.missing_from_live.length > 0 ? (
-        <p className="text-xs text-attention">Not found live, but on our last check: {result.missing_from_live.join(", ")}.</p>
+        <p className="text-xs text-attention-foreground">Not found live, but on our last check: {result.missing_from_live.join(", ")}.</p>
       ) : null}
       {result.formalities.length > 0 ? (
         <ul className="space-y-3">

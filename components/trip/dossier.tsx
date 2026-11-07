@@ -16,7 +16,7 @@ const MODULES: { module: ModuleKind; label: string }[] = [
 ];
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <h3 className="text-xs font-medium tracking-[0.18em] text-muted-foreground uppercase">{children}</h3>;
+  return <h3 className="text-lg font-semibold tracking-tight">{children}</h3>;
 }
 
 function Summary({ request }: { request: TripRequestDraft }) {
@@ -29,11 +29,11 @@ function Summary({ request }: { request: TripRequestDraft }) {
     ["Travellers", request.travellers?.toString() ?? null],
   ];
   return (
-    <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-3">
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
       {rows.map(([label, value]) => (
         <div key={label}>
-          <dt className="text-xs text-muted-foreground">{label}</dt>
-          <dd className={value ? "text-sm font-medium" : "text-sm text-muted-foreground/70 italic"}>{value ?? "To confirm"}</dd>
+          <dt className="text-sm text-muted-foreground">{label}</dt>
+          <dd className={value ? "mt-0.5 text-[17px] font-semibold tracking-tight" : "mt-0.5 text-[17px] font-semibold text-muted-foreground/50"}>{value ?? "To confirm"}</dd>
         </div>
       ))}
     </dl>
@@ -42,9 +42,9 @@ function Summary({ request }: { request: TripRequestDraft }) {
 
 function Modules({ modules }: { modules: ModuleSuggestion[] }) {
   return (
-    <ul className="grid gap-2 sm:grid-cols-3">
+    <ul className="grid gap-2">
       {MODULES.map(({ module, label }) => (
-        <li key={module} className="flex items-center justify-between gap-2 rounded-xl border bg-card px-3.5 py-3">
+        <li key={module} className="flex items-center justify-between gap-2 rounded-2xl bg-muted px-4 py-3">
           <span className="text-sm font-medium">{label}</span>
           <ModuleStateBadge state={modules.find((m) => m.module === module)?.state ?? null} />
         </li>
@@ -62,10 +62,10 @@ function windowText(formality: Formality): string {
 function PaperCard({ formality }: { formality: Formality }) {
   const paper = getBaliPaper(formality.id as BaliPaperId);
   return (
-    <li className="rounded-2xl border bg-card p-5">
+    <li className="rounded-[24px] bg-card p-5 shadow-soft">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-heading text-2xl leading-tight">{formality.name}</p>
+          <p className="text-lg leading-snug font-semibold tracking-tight">{formality.name}</p>
           <p className="mt-1 text-sm text-muted-foreground">{windowText(formality)}</p>
         </div>
         <StatusBadge status={formality.status} checkedAt={formality.checked_at} />
@@ -93,7 +93,7 @@ function PaperCard({ formality }: { formality: Formality }) {
               </>
             ) : (
               <>
-                <ShieldAlert className="size-3.5 text-attention" /> Non-official source
+                <ShieldAlert className="size-3.5 text-attention-foreground" /> Non-official source
               </>
             )}
           </li>
@@ -108,14 +108,14 @@ function AgentActivity({ trip, onStop }: { trip: Trip; onStop: () => void }) {
   const run = trip.agent_run;
   const active = isAgentActive(run);
   return (
-    <div className="rounded-2xl border bg-[#242a29] p-5 text-[#f7f5f1]">
+    <div className="rounded-[28px] bg-foreground p-6 text-background shadow-float">
       <div className="flex items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <SectionTitle>Agent Activity</SectionTitle>
             {trip.sample && run ? <SampleBadge className="h-5 text-[10px]" /> : null}
           </div>
-          <p className="mt-1 text-sm text-[#f7f5f1]/70">
+          <p className="mt-1 text-sm text-background/60">
             {run ? `Started at ${formatTime(run.started_at)} · ${run.state.replaceAll("_", " ")}` : "No agent running."}
           </p>
           {run?.metrics ? (
@@ -128,7 +128,7 @@ function AgentActivity({ trip, onStop }: { trip: Trip; onStop: () => void }) {
         <Button
           variant="destructive"
           size="lg"
-          className="h-9 rounded-full bg-[#a6402f] px-4 text-white hover:bg-[#8f3526]"
+          className="h-10 rounded-full bg-destructive px-4 text-white hover:bg-destructive/85 disabled:bg-white/10 disabled:text-white/50"
           disabled={!active}
           onClick={onStop}
         >
@@ -136,10 +136,10 @@ function AgentActivity({ trip, onStop }: { trip: Trip; onStop: () => void }) {
         </Button>
       </div>
       {trip.agent_steps.length > 0 ? (
-        <ol className="mt-4 space-y-2 border-t border-white/10 pt-4">
+        <ol className="mt-5 space-y-2.5 border-t border-white/10 pt-5">
           {trip.agent_steps.map((step, i) => (
             <li key={`${i}-${step}`} className="flex gap-3 text-sm">
-              <span className="w-5 shrink-0 text-right font-mono text-xs leading-5 text-[#f7f5f1]/50">{i + 1}</span>
+              <span className="grid size-5 shrink-0 place-items-center rounded-full bg-white/10 font-mono text-[10px] text-background/70">{i + 1}</span>
               <span>{step}</span>
             </li>
           ))}
@@ -161,17 +161,17 @@ export function Dossier({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-8">
-      <section className="space-y-4">
+    <div className="flex flex-col gap-5">
+      <section className="space-y-5 rounded-[28px] bg-card p-6 shadow-soft">
         <SectionTitle>Your trip</SectionTitle>
         <Summary request={trip.request} />
       </section>
-      <section className="space-y-3">
+      <section className="space-y-4 rounded-[28px] bg-card p-6 shadow-soft">
         <SectionTitle>What I can do</SectionTitle>
         <Modules modules={trip.modules} />
       </section>
       {trip.formalities.length > 0 ? (
-        <section className="space-y-3">
+        <section className="space-y-4 pt-2">
           <SectionTitle>Entry papers</SectionTitle>
           {livePapers ? (
             <LivePapersList

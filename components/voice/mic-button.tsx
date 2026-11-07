@@ -21,14 +21,14 @@ export function MicButton({ voice, className }: { voice: VoiceInput; className?:
       aria-pressed={status === "recording"}
       title={status === "recording" ? `Recording, ${MAX_RECORDING_SECONDS - seconds} s left. Click to stop.` : LABELS[status]}
       className={cn(
-        "relative grid shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-70",
-        status === "recording" && "bg-attention",
+        "relative grid shrink-0 place-items-center rounded-xl bg-accent text-accent-foreground transition-colors outline-none hover:bg-primary hover:text-primary-foreground focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-70",
+        status === "recording" && "bg-attention text-white hover:bg-attention",
         className,
       )}
     >
       {status === "recording" ? (
         <>
-          <span aria-hidden className="absolute inset-0 animate-ping rounded-xl bg-attention/40" />
+          <span aria-hidden className="absolute inset-0 animate-ping rounded-[inherit] bg-attention/40" />
           <Square className="relative size-1/3 fill-current" />
         </>
       ) : status === "transcribing" ? (
@@ -51,7 +51,7 @@ export function VoiceStatusLine({ voice, className }: { voice: VoiceInput; class
   return (
     <p
       role={voice.error && voice.status === "idle" ? "alert" : "status"}
-      className={cn("text-sm", voice.error && voice.status === "idle" ? "text-[#8a5a24]" : "text-muted-foreground", className)}
+      className={cn("text-sm", voice.error && voice.status === "idle" ? "text-attention-foreground" : "text-muted-foreground", className)}
     >
       {voice.status === "recording" ? <span aria-hidden className="mr-2 inline-block size-2 animate-pulse rounded-full bg-attention" /> : null}
       {text}
