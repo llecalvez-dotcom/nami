@@ -59,7 +59,7 @@ export const REPORT_READY_TOOL: ToolSpec = {
 export const PICK_OPTION_TOOL: ToolSpec = {
   name: "pick_option",
   description:
-    "Pick a value in a dropdown list of the current page without opening it. Use it for every dropdown, instead of clicking it. The page already shows the selection. Do not reload or refresh the page or navigate away; take a screenshot and continue with the next field.",
+    "Pick a value in a dropdown list of the current page without opening it, even when the list is not on screen. Use it for every dropdown, instead of clicking it. The page already shows the selection. Do not reload or refresh the page or navigate away; continue with the next field.",
   input_schema: {
     type: "object",
     properties: {
@@ -85,10 +85,11 @@ export const FILL_FIELD_TOOL: ToolSpec = {
 };
 
 export const UPLOAD_PURPOSES = ["passport", "photo", "return_ticket"] as const;
+export type UploadPurpose = (typeof UPLOAD_PURPOSES)[number];
 
 export const UPLOAD_FILE_TOOL: ToolSpec = {
   name: "upload_file",
-  description: "Ask Nami to give a confirmed file to the official form: the passport (purpose passport), the identity photo (purpose photo) or the return flight ticket in PDF (purpose return_ticket). Never open the OS file picker. After success, take a screenshot to verify the file is shown; do not reload or refresh the page or navigate away. If unavailable, call ask_user for a manual upload: never upload another file in its place.",
+  description: "Ask Nami to give a confirmed file to the official form: the passport (purpose passport), the identity photo (purpose photo) or the return flight ticket in PDF (purpose return_ticket). Never open the OS file picker. Nami checks that the page received the file; after success, do what the result says next, without reloading or refreshing the page or navigating away. If unavailable, call ask_user for a manual upload: never upload another file in its place.",
   input_schema: {
     type: "object",
     properties: { purpose: { type: "string", enum: [...UPLOAD_PURPOSES] } },

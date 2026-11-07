@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { agentName, agentSettings, cancelSession, createSession, createSessionBody, getAvailableSessionSlots, getChanges, HAgentError, sendToolResult } from "@/lib/h-agent";
+import { browserSettings, agentName, agentSettings, cancelSession, createSession, createSessionBody, getAvailableSessionSlots, getChanges, HAgentError, sendToolResult } from "@/lib/h-agent";
 import { PAPER_ANSWER_FORMAT } from "@/lib/agent-answer";
 
 const API = "https://agp.eu.hcompany.ai/api/v2";
@@ -163,9 +163,23 @@ describe("agent model and reasoning settings", () => {
     expect(agentSettings({ HAI_MODEL: "holo4-35b-a3b" })).toEqual({ model: "holo4-27b", reasoning_effort: "medium" });
   });
 
-  it.each(["holo4-27b", "holo4-35b-a3b", "holo3-1-35b-a3b", "holo3-122b-a10b"])("accepts documented model %s", (model) => {
+  it.each(["holo4-27b", "holo4-35b-a3b", "holo3-1-35b-a3b"])("accepts documented model %s", (model) => {
     vi.stubEnv("NAMI_AGENT_MODEL", model);
     expect(createSessionBody(INPUT).agent.model).toBe(model);
+  });
+
+  it("refuses holo3-122b-a10b, which has no tools on H's models page", () => {
+    vi.stubEnv("NAMI_AGENT_MODEL", "holo3-122b-a10b");
+    expect(createSessionBody(INPUT).agent.model).toBe("holo4-27b");
+  });
+
+  it("keeps settle_s at 2 s and the page text by default, and takes the speed-run settings from the env", () => {
+    expect(browserSettings({})).toEqual({ settle_s: 2, markdown: true });
+    expect(browserSettings({ NAMI_AGENT_SETTLE_S: "0.5", NAMI_AGENT_MARKDOWN: "off" })).toEqual({ settle_s: 0.5, markdown: false });
+    expect(browserSettings({ NAMI_AGENT_SETTLE_S: "11" }).settle_s).toBe(2);
+    expect(browserSettings({ NAMI_AGENT_SETTLE_S: "x" }).settle_s).toBe(2);
+    vi.stubEnv("NAMI_AGENT_SETTLE_S", "1");
+    expect(createSessionBody(INPUT).agent.environments[0]).toMatchObject({ settle_s: 1, mode: { type: "visual", markdown: true } });
   });
 
   it.each(["disabled", "low", "medium", "xhigh"])("accepts documented Agents API reasoning %s", (effort) => {

@@ -148,7 +148,8 @@ describe("agent tasks", () => {
     expect(instructions).toContain("no return ticket means ask_user, not the passport");
     expect(instructions).toContain("never drop a word of a surname such as LE CALVEZ");
     expect(instructions).toContain("call fill_field with the label of the field and the value instead of typing it");
-    expect(instructions).toContain("take a screenshot to verify that the page shows the file");
+    expect(instructions).toContain("Nami has already checked that the page received the file, and the result says what to do next");
+    expect(instructions).not.toContain("take a screenshot to verify that the page shows the file");
     expect(instructions).toContain("Never reload or refresh the e-VOA page, including with refresh_web: it erases filled fields.");
     expect(instructions).toContain("Only reload or refresh if the page is visibly broken.");
     expect(instructions).toContain("Re-observe by taking a screenshot, not by reloading, refreshing or navigating.");
@@ -172,14 +173,14 @@ describe("agent tasks", () => {
     expect(task).toContain("Say which value to pick");
     expect(task).toContain("Wait for the human's answer before continuing, then take a screenshot and continue from the updated form without reloading, refreshing or navigating");
     expect(task).toContain("If the result does not confirm a successful upload, call ask_user");
-    expect(task).toContain("wait for any dependent lists to update, then take a screenshot and continue with the next field");
+    expect(task).toContain("pick_option also works on a list that is not on screen: call it for the next list right away, without scrolling to it first");
   });
 
   it("keeps the per-session task focused on the traveller and trip with only a safety reminder", () => {
     const task = buildPaperTask({
       officialUrl: "https://example.gov/form", formName: "Visa", traveller: "Nationality: France.", trip: "Purpose: tourism.",
     });
-    expect(task).toContain("Go to https://example.gov/form");
+    expect(task).toContain("Open https://example.gov/form in the current tab with go_to; do not look for or switch to another tab.");
     expect(task).toContain("Traveller: Nationality: France.");
     expect(task).toContain("Trip: Purpose: tourism.");
     expect(task).toContain("stop before final submission or payment");
@@ -190,7 +191,7 @@ describe("agent tasks", () => {
   it("adds the route hint right after the first line of the task, and nothing without one", () => {
     const input = { officialUrl: "https://example.gov/form", formName: "Visa", traveller: "Nationality: France.", trip: "Purpose: tourism." };
     const lines = buildPaperTask({ ...input, routeHint: "Pick FRANCE, then Tourism." }).split("\n");
-    expect(lines[0]).toContain("Go to https://example.gov/form");
+    expect(lines[0]).toContain("Open https://example.gov/form in the current tab");
     expect(lines[1]).toBe("Pick FRANCE, then Tourism.");
     expect(lines).toHaveLength(5);
     expect(buildPaperTask(input).split("\n")).toHaveLength(4);

@@ -7,6 +7,8 @@ import { agentChromePort } from "@/lib/chrome-cdp";
 type CdpTab = { type: string; url: string; webSocketDebuggerUrl?: string };
 
 export const SCREENSHOT_GUIDANCE = "Do not reload or refresh the page or navigate away; take a screenshot and continue with the next field.";
+// After a pick the agent needs no new look: the next list can be picked off screen (2026-11-08, one step less per list).
+export const PICK_GUIDANCE = "Do not reload or refresh the page or navigate away; continue with the next field (pick_option also works on lists that are not on screen).";
 // The page's postal code lookup is an AJAX call: fill_field waits this long before reading the fields it filled.
 export const FILL_SETTLE_MS = 2500;
 
@@ -79,7 +81,7 @@ export function pickExpression(field: string, option: string): string {
       window.jQuery(s).trigger({ type: "select2:select", params: { data: { id: hit.value, text: hit.text, element: hit } } });
     }
     else { s.value = hit.value; s.dispatchEvent(new Event("input", { bubbles: true })); s.dispatchEvent(new Event("change", { bubbles: true })); }
-    return "Picked " + hit.text.trim() + " in " + (s.name || s.id || "the list") + ". The page already shows it. ${SCREENSHOT_GUIDANCE}";
+    return "Picked " + hit.text.trim() + " in " + (s.name || s.id || "the list") + ". The page already shows it. ${PICK_GUIDANCE}";
   }
   const target = named[0];
   if (!target) {
@@ -131,6 +133,7 @@ export const AGENT_POINT_EVENT = "nami-agent-point";
 // scrolles pour aller chercher France »): the purple cursor of the extension goes to the list, the Select2 list opens,
 // the option is typed letter by letter in its search field, the cursor points at the line found, then the list closes.
 // It never selects anything itself; pickExpression does, right after. Resolves "no" when there is nothing to show.
+// Timings shortened on 2026-11-08 (Nathan's go): about 1.2 s per list plus 45 ms per letter, instead of 2.6 to 3.1 s.
 export function showPickExpression(field: string, option: string): string {
   return `((field, option) => new Promise((resolve) => {${FIELD_HELPERS}
   const $ = window.jQuery;
@@ -149,11 +152,11 @@ export function showPickExpression(field: string, option: string): string {
     if (!s || !$ || !$(s).data("select2") || !box) return resolve("no");
     (async () => {
       box.scrollIntoView({ block: "center", behavior: "smooth" });
-      await wait(400);
-      point(box);
-      await wait(500);
-      $(s).select2("open");
       await wait(250);
+      point(box);
+      await wait(300);
+      $(s).select2("open");
+      await wait(150);
       const search = document.querySelector(".select2-container--open .select2-search__field");
       const text = String(option).slice(0, 14);
       if (search) {
@@ -161,14 +164,14 @@ export function showPickExpression(field: string, option: string): string {
           search.value = text.slice(0, i);
           search.dispatchEvent(new Event("input", { bubbles: true }));
           search.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }));
-          await wait(70);
+          await wait(45);
         }
       }
-      await wait(300);
+      await wait(150);
       const line = document.querySelector(".select2-container--open .select2-results__option--highlighted");
       if (line) {
         point(line);
-        await wait(500);
+        await wait(300);
       }
       $(s).select2("close");
       resolve("shown");
@@ -219,11 +222,45 @@ async function evaluateInOfficialTab(expression: string, domains: string[], urls
   });
 }
 
-export async function pickOption(field: string, option: string, domains: string[], urls = cdpUrls()): Promise<string> {
-  // Showing the pick is a nicety: whatever happens there, the pick itself runs right after (unless no official tab is open).
-  const shown = await evaluateInOfficialTab(showPickExpression(field, option), domains, urls, "no", 6000).catch(() => "no");
-  if (shown === NO_OFFICIAL_TAB) return shown;
-  return evaluateInOfficialTab(pickExpression(field, option), domains, urls, "Chrome could not pick the option.", 5000);
+const NO_MATCH = "No list has an option matching";
+export const PICK_RETRY_MS = 700;
+const PICK_ATTEMPTS = 4;
+
+export async function pickOption(field: string, option: string, domains: string[], urls = cdpUrls(), retryMs = PICK_RETRY_MS): Promise<string> {
+  let result = "";
+  // The agent now picks the next list right away: a list filled by the page after the previous pick (Purpose after
+  // Category) may still be loading, so a missing option is looked for again a few times before giving up.
+  for (let attempt = 1; attempt <= PICK_ATTEMPTS; attempt += 1) {
+    // Showing the pick is a nicety: whatever happens there, the pick itself runs right after (unless no official tab is open).
+    const shown = await evaluateInOfficialTab(showPickExpression(field, option), domains, urls, "no", 6000).catch(() => "no");
+    if (shown === NO_OFFICIAL_TAB) return shown;
+    result = await evaluateInOfficialTab(pickExpression(field, option), domains, urls, "Chrome could not pick the option.", 5000);
+    if (!result.startsWith(NO_MATCH) || attempt === PICK_ATTEMPTS) return result;
+    await new Promise((resolve) => setTimeout(resolve, retryMs));
+  }
+  return result;
+}
+
+// Runs in the page: resolves true as soon as the page shows the text (its reading window after an upload), false after
+// timeoutMs. Reads only the visible text, sends nothing.
+export function waitForTextExpression(text: string, timeoutMs: number): string {
+  return `((text, timeoutMs) => new Promise((resolve) => {
+  const start = Date.now();
+  const check = () => {
+    if (String(document.body ? document.body.innerText : "").includes(text)) return resolve(true);
+    if (Date.now() - start >= timeoutMs) return resolve(false);
+    setTimeout(check, 250);
+  };
+  check();
+}))(${JSON.stringify(text)}, ${Number(timeoutMs) || 0})`;
+}
+
+export const UPLOAD_WAIT_MS = 6000;
+
+export async function waitForPageText(text: string, domains: string[], urls = cdpUrls(), timeoutMs = UPLOAD_WAIT_MS): Promise<boolean> {
+  const value = await evaluateInOfficialTab(`(${waitForTextExpression(text, timeoutMs)}).then((seen) => seen ? "seen" : "not seen")`,
+    domains, urls, "not seen", timeoutMs + 3000).catch(() => "not seen");
+  return value === "seen";
 }
 
 export async function fillField(field: string, value: string, domains: string[], urls = cdpUrls()): Promise<string> {

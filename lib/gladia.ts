@@ -33,7 +33,7 @@ export async function transcribeWithGladia(audio: Blob, options: Options): Promi
 }
 
 export async function transcribeWithLanguage(audio: Blob, options: Options): Promise<Transcript> {
-  const { apiKey, timeoutMs = 30_000, pollIntervalMs = 1_000, fetch: fetchImpl = fetch } = options;
+  const { apiKey, timeoutMs = 30_000, pollIntervalMs = 250, fetch: fetchImpl = fetch } = options;
   const deadline = Date.now() + timeoutMs;
   const signal = AbortSignal.timeout(timeoutMs);
 
