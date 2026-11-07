@@ -18,18 +18,40 @@ function readMuted(): boolean {
   }
 }
 
+// The longest a line may take before the queue moves on: Chrome sometimes never fires onend nor onerror (a line
+// started before any click, a voice still loading, a paused synthesis), and the whole queue then stayed silent.
+export function speechWatchdogMs(text: string): number {
+  return 3_000 + text.length * 90;
+}
+
 function browserEngine(): SpeechEngine {
   let utterance: SpeechSynthesisUtterance | null = null;
+  let watchdog: ReturnType<typeof setTimeout> | undefined;
   return {
     speak(text, done) {
+      const synth = window.speechSynthesis;
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(watchdog);
+        done();
+      };
       // Kept in a variable: Chrome drops onend when the utterance is garbage collected.
       utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = speechLocale(readSpokenLanguage());
-      utterance.onend = done;
-      utterance.onerror = done;
-      window.speechSynthesis.speak(utterance);
+      const locale = speechLocale(readSpokenLanguage());
+      utterance.lang = locale;
+      const voices = synth.getVoices();
+      const voice = voices.find((v) => v.lang === locale) ?? voices.find((v) => v.lang.startsWith(locale.slice(0, 2)));
+      if (voice) utterance.voice = voice;
+      utterance.onend = finish;
+      utterance.onerror = finish;
+      if (synth.paused) synth.resume();
+      synth.speak(utterance);
+      watchdog = setTimeout(finish, speechWatchdogMs(text));
     },
     cancel() {
+      clearTimeout(watchdog);
       utterance = null;
       window.speechSynthesis.cancel();
     },
