@@ -1,10 +1,11 @@
 import type { AgentRun } from "@/lib/contracts";
 import { redact } from "@/lib/agent-changes";
+import { isTerminalStatus } from "@/lib/h-agent";
 
 export function agentStateMessage(run: AgentRun | null, steps: readonly string[], secrets: readonly (string | null | undefined)[] = []) {
   return {
     type: "nami:agent-state" as const,
-    active: run !== null && !run.drained && !run.pending_question && ["pending", "queued", "running"].includes(run.state),
+    active: run !== null && !run.drained && !run.pending_question && !isTerminalStatus(run.state),
     step: run ? redact(steps.at(-1) ?? "", secrets).replace(/[–—]/g, ", ") : "",
   };
 }

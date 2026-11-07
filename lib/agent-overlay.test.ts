@@ -12,7 +12,12 @@ describe("agent overlay state", () => {
     expect(agentStateMessage(null, ["Old step"])).toEqual({ type: "nami:agent-state", active: false, step: "" });
     expect(agentStateMessage(run("pending"), [])).toMatchObject({ active: true, step: "" });
   });
-  it.each(["awaiting_tool_results", "paused", "interrupted", "completed", "failed"] as const)("removes the active frame in state %s", (state) => {
+  it.each(["pending", "queued", "running", "awaiting_tool_results", "paused", "idle"] as const)("keeps the active frame in nonterminal state %s", (state) => {
+    expect(agentStateMessage(run(state), ["Last step"]).active).toBe(true);
+    expect(agentStateMessage({ ...run(state), drained: true }, []).active).toBe(false);
+    expect(agentStateMessage({ ...run(state), pending_question: { tool_req: "q", question: "Email?", field: "email" } }, []).active).toBe(false);
+  });
+  it.each(["interrupted", "completed", "failed", "timed_out"] as const)("removes the active frame in state %s", (state) => {
     expect(agentStateMessage(run(state), ["Last step"]).active).toBe(false);
   });
   it("removes the active frame for a pending question or drained run", () => {
