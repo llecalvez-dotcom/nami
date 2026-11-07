@@ -31,6 +31,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 [[ "$PORT" =~ ^[0-9]+$ ]] || die "Port must be a number, got: $PORT"
+export NAMI_AGENT_CHROME_PORT="$PORT"
 mkdir -p "$STATE_DIR" "$LOG_DIR"
 
 # --- H key: holo reads HAI_API_KEY, else ~/.config/hai/.env. Take it from .env.local if needed, without printing it.

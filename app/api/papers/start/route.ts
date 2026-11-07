@@ -2,6 +2,7 @@ import { API_LIMITS, guard, readJsonLimited } from "@/lib/api-guard";
 import { createSession } from "@/lib/h-agent";
 import { documentFilePaths } from "@/lib/documents";
 import { bindSessionDocument } from "@/lib/agent-passport-upload";
+import { AgentPreflightError, preflightBrowser } from "@/lib/agent-preflight";
 import {
   buildPilotTask,
   fail,
@@ -48,7 +49,9 @@ async function start(request: Request): Promise<Response> {
   const filePaths = input.data.document_id === undefined
     ? input.data.file_paths
     : [...new Set([...input.data.file_paths, ...documentPaths])];
+  let browser: Awaited<ReturnType<typeof preflightBrowser>> | undefined;
   try {
+    browser = await preflightBrowser(input.data.local_session_id);
     const session = await createSession({
       task: buildPilotTask({ ...input.data, file_paths: filePaths }),
       tools: PAPER_TOOLS,
@@ -56,9 +59,13 @@ async function start(request: Request): Promise<Response> {
       maxTimeS: PAPER_MAX_TIME_S,
       maxSteps: PAPER_MAX_STEPS,
     });
+    browser.commit(session.id);
     if (input.data.document_id) bindSessionDocument(session.id, documentPaths[0]);
     return Response.json({ session_id: session.id, status: session.status }, { status: 201 });
   } catch (error) {
+    if (error instanceof AgentPreflightError) return fail(error.message, error.status);
     return hErrorResponse(error);
+  } finally {
+    browser?.release();
   }
 }

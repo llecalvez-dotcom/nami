@@ -7,6 +7,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { findDocuments } from "@/lib/documents";
 import { uploadSessionDocument } from "@/lib/agent-passport-upload";
+import { connectChrome } from "@/lib/chrome-cdp";
+import { resetBrowserPreflight } from "@/lib/agent-preflight";
+
+vi.mock("@/lib/chrome-cdp", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/chrome-cdp")>(),
+  connectChrome: vi.fn(),
+}));
 
 const PASSPORT = {
   surname: "MARTIN",
@@ -44,6 +51,12 @@ const start = (body: unknown) =>
 let fetch: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   resetGuards();
+  resetBrowserPreflight();
+  vi.stubEnv("NODE_ENV", "test");
+  vi.stubEnv("NAMI_AGENT_CHROME_PORT", "9333");
+  vi.mocked(connectChrome).mockReset().mockResolvedValue({
+    send: vi.fn(async () => ({ targetInfos: [] })), close: vi.fn(),
+  });
   vi.stubEnv("HAI_API_KEY", "h-key");
   vi.stubEnv("HAI_AGENT_NAME", "nami-agent");
   fetch = vi.fn(async () => Response.json({ id: "s-1", status: { status: "pending" } }, { status: 201 }));
@@ -221,6 +234,7 @@ describe("POST /api/papers/start (route 5)", () => {
   });
 
   it("is behind api-guard: low quota of H sessions per client", async () => {
+    vi.stubEnv("NODE_ENV", "production");
     for (let i = 0; i < 5; i += 1) expect((await start(BODY)).status).toBe(201);
     const response = await start(BODY);
     expect(response.status).toBe(429);
@@ -240,5 +254,57 @@ describe("POST /api/papers/start (route 5)", () => {
     const response = await start(BODY);
     expect(response.status).toBe(502);
     expect(await response.text()).not.toContain("24AB12345");
+  });
+});
+
+describe("local browser preflight", () => {
+  it("refuses unreachable Chrome before creating an H session, with configured-port guidance", async () => {
+    vi.mocked(connectChrome).mockRejectedValue(new Error("private setup details"));
+    const response = await start(BODY);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: expect.stringContaining("holo local browser --debug-port 9333") });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("refuses extra official tabs before creating an H session", async () => {
+    vi.mocked(connectChrome).mockResolvedValue({
+      send: vi.fn(async () => ({ targetInfos: [
+        { type: "page", url: "https://evisa.imigrasi.go.id/form" },
+        { type: "page", url: "https://apply.evisa.imigrasi.go.id/form" },
+      ] })), close: vi.fn(),
+    });
+    const response = await start(BODY);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: expect.stringContaining("Close the extra tabs") });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("refuses a running Nami session, then allows a new one after Stop agent", async () => {
+    expect((await start(BODY)).status).toBe(201);
+    fetch.mockResolvedValueOnce(Response.json({ status: "running" }));
+    const blocked = await start({ ...BODY, local_session_id: "another-bridge-id" });
+    expect(blocked.status).toBe(409);
+    expect(await blocked.json()).toEqual({ error: expect.stringContaining("Use Stop agent in its trip") });
+    expect(fetch.mock.calls.filter(([, init]) => init.method === "POST")).toHaveLength(1);
+    fetch.mockResolvedValueOnce(Response.json({ status: "interrupted" }))
+      .mockResolvedValueOnce(Response.json({ id: "s-2", status: { status: "pending" } }, { status: 201 }));
+    expect((await start(BODY)).status).toBe(201);
+    expect(fetch.mock.calls.filter(([, init]) => init.method === "POST")).toHaveLength(2);
+  });
+
+  it("releases the reservation when H refuses creation so a corrected attempt can proceed", async () => {
+    fetch.mockResolvedValueOnce(new Response(null, { status: 422 }));
+    expect((await start(BODY)).status).toBe(502);
+    expect((await start(BODY)).status).toBe(201);
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("leaves production starts unchanged, without probing local Chrome or storing active sessions", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.mocked(connectChrome).mockRejectedValue(new Error("Should not connect"));
+    expect((await start(BODY)).status).toBe(201);
+    expect((await start(BODY)).status).toBe(201);
+    expect(connectChrome).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });

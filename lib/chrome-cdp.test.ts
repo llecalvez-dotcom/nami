@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { connectChrome } from "@/lib/chrome-cdp";
+import { agentChromePort, connectChrome } from "@/lib/chrome-cdp";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -7,6 +7,15 @@ afterEach(() => {
 });
 
 describe("native loopback CDP connection", () => {
+  it("validates the shared agent port without falling back to another Chrome", () => {
+    expect(agentChromePort({})).toBe(9222);
+    expect(agentChromePort({ NAMI_AGENT_CHROME_PORT: "9333" })).toBe(9333);
+    expect(agentChromePort({ NAMI_AGENT_CHROME_PORT: "65535" })).toBe(65535);
+    for (const value of ["0", "65536", "-1", "NaN", "9222/path", "1.5"]) {
+      expect(agentChromePort({ NAMI_AGENT_CHROME_PORT: value })).toBeNull();
+    }
+  });
+
   function mockTransport(error = false) {
     const messages: Record<string, unknown>[] = [];
     class Socket extends EventTarget {

@@ -148,6 +148,13 @@ export async function cancelSession(id: string, options: HClientOptions = {}): P
   await call(sessionPath(id), { method: "DELETE" }, options);
 }
 
+export async function getSessionStatus(id: string, options: HClientOptions = {}): Promise<string> {
+  const response = await call(`${sessionPath(id)}/status`, { method: "GET" }, options);
+  const body = await response.json() as { status?: unknown };
+  if (typeof body.status !== "string") throw new HAgentError("H session status is unavailable", 502);
+  return body.status;
+}
+
 export const TERMINAL_STATUSES = ["completed", "failed", "timed_out", "interrupted"] as const;
 
 export function isTerminalStatus(status: string): boolean {
