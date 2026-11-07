@@ -147,8 +147,10 @@ export function useMuted(): boolean {
   return useSyncExternalStore(subscribeMuted, readMuted, () => false);
 }
 
-// Reads aloud every new item from Nami or the agent, one at a time, in order.
-export function useConversationSpeech(items: ConversationItem[]) {
+// Reads aloud every new item from Nami or the agent, one at a time, in order. What counts as already heard when the page
+// opens is decided on the whole conversation (`all`): the translated items arrive later, and a reload of the panel
+// re-read old messages aloud (measured 2026-11-07, voices heard with no Nami page in sight).
+export function useConversationSpeech(items: ConversationItem[], all: ConversationItem[] = items) {
   const heard = useRef<Set<string> | null>(null);
   const awaiting = useRef<Set<string>>(new Set());
 
@@ -162,13 +164,13 @@ export function useConversationSpeech(items: ConversationItem[]) {
 
   useEffect(() => {
     const speech = getQueue();
-    heard.current ??= alreadyHeard(items);
+    heard.current ??= alreadyHeard(all);
     const plan = speechPlan(items, heard.current, awaiting.current);
     if (plan.interrupted) speech?.clear();
     for (const { id, text } of plan.toRead) speech?.enqueue(id, text);
     items.forEach((item) => heard.current!.add(item.id));
     awaiting.current = new Set(items.filter(awaitsAnswer).map((item) => item.id));
-  }, [items]);
+  }, [items, all]);
 }
 
 // True while Nami is saying something aloud (the side panel's wave follows it).

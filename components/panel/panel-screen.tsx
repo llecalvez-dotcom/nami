@@ -304,9 +304,10 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
 
   // Nami answers in the language the traveller speaks (detected by Gladia), the agent's steps included.
   const shownItems = useTranslatedConversation(trip.conversation, language);
-  useConversationSpeech(shownItems);
+  useConversationSpeech(shownItems, trip.conversation);
   const translationsVersion = useTranslationsVersion();
-  const spokenStep = useRef({ index: -1, at: 0 });
+  // The agent's steps already there when the panel opens are not read again.
+  const spokenStep = useRef({ index: trip.agent_steps.length - 1, at: 0 });
   useEffect(() => {
     const index = trip.agent_steps.length - 1;
     if (!trip.agent_run || index <= spokenStep.current.index) return;
