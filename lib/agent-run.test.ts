@@ -143,6 +143,31 @@ describe("ask_user", () => {
     expect(trip.agent_run?.handled_tool_ids).toEqual([]);
   });
 
+  it("stops the run and says why when the agent left the official site", () => {
+    const { trip, toolCalls } = applyAgentChanges(
+      liveTrip(),
+      changes({ status: "awaiting_tool_results", pending_tool_calls: [ASK], left_official_site: "pay.example.com", cancel_failed: false }),
+      SECRETS,
+    );
+    expect(toolCalls).toEqual([]);
+    expect(trip.agent_run).toMatchObject({ state: "interrupted", drained: false });
+    expect(trip.conversation.at(-1)).toMatchObject({ kind: "agent", text: "Agent stopped: it left the official site (pay.example.com)." });
+  });
+
+  it("after Stop agent, keeps polling until H confirms the session is stopped", () => {
+    let trip = stopAgent(applyAgentChanges(liveTrip(), changes({ status: "running" }), SECRETS).trip);
+    ({ trip } = applyAgentChanges(trip, changes({ status: "running", steps: ["Typing"] }), SECRETS));
+    expect(trip.agent_run).toMatchObject({ state: "interrupted", drained: false });
+    ({ trip } = applyAgentChanges(trip, toAgentChanges(null, 0), SECRETS));
+    expect(trip.agent_run?.drained).toBe(false);
+    ({ trip } = applyAgentChanges(trip, changes({ status: "interrupted" }), SECRETS));
+    expect(trip.agent_steps.at(-1)).toBe("H confirmed the session is stopped");
+    ({ trip } = applyAgentChanges(trip, changes({ status: "interrupted", no_change: true }), SECRETS));
+    expect(trip.agent_run?.drained).toBe(true);
+    expect(trip.agent_steps.filter((s) => s === "H confirmed the session is stopped")).toHaveLength(1);
+    expect(trip.conversation.filter((i) => i.kind === "agent" && i.text.includes("Nothing was submitted"))).toHaveLength(1);
+  });
+
   it("closes the open question when the agent is stopped", () => {
     let trip = askUserFromAgent(liveTrip(), ASK, SECRETS);
     trip = stopAgent(trip);

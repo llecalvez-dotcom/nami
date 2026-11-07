@@ -131,6 +131,8 @@ export const AgentRunSchema = z.object({
   metrics: z.object({ steps: z.number(), total_cost: z.number().nullable() }).optional(),
   // Terminal and every event read: polling stops.
   drained: z.boolean().optional(),
+  // Last state reported by H itself: a local stop waits for H to confirm it.
+  h_status: AgentStateSchema.optional(),
 });
 export type AgentRun = z.infer<typeof AgentRunSchema>;
 

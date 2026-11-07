@@ -14,6 +14,9 @@ export type AgentChanges = {
   outcome: string | null;
   error_code: string | null;
   metrics: AgentMetrics | null;
+  // Set by the changes route when the agent left the paper's official domain: the H session was cancelled.
+  left_official_site?: string;
+  cancel_failed?: boolean;
 };
 
 const MAX_STEP_LENGTH = 160;
@@ -64,6 +67,16 @@ function uniqueCalls(calls: ToolRequest[]): ToolRequest[] {
     seen.add(key);
     return true;
   });
+}
+
+// Host of the first page (observation_event metadata.url) outside the official domain and its subdomains.
+export function offDomainHost(events: HEvent[], domain: string): string | null {
+  for (const event of events) {
+    if (event.type !== "AgentEvent" || event.data?.kind !== "observation_event") continue;
+    const host = hostOfUrl((event.data.metadata as { url?: unknown } | undefined)?.url);
+    if (host && host !== domain && !host.endsWith(`.${domain}`)) return host;
+  }
+  return null;
 }
 
 export function summarizeEvents(events: HEvent[]): string[] {

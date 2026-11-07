@@ -1,3 +1,4 @@
+import { API_LIMITS, guard, readJsonLimited } from "@/lib/api-guard";
 import { createSession } from "@/lib/h-agent";
 import {
   buildPilotTask,
@@ -12,7 +13,19 @@ import {
 
 // Route 5. The task holds the passport for the agent only: it is never logged nor sent back.
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const lease = guard(request, "papers");
+  if (lease instanceof Response) return lease;
+  try {
+    return await start(request);
+  } finally {
+    lease.release();
+  }
+}
+
+async function start(request: Request): Promise<Response> {
+  const read = await readJsonLimited(request, API_LIMITS.papers);
+  if (read instanceof Response) return read;
+  const body = read.value as Record<string, unknown> | null;
   if (!body || typeof body !== "object") return fail("Invalid request.", 400);
   if (body.paper_id !== PILOT_PAPER_ID) return fail("Only the Bali e-VOA can be filled in by the agent for now.", 400);
   if (typeof body.local_session_id !== "string" || !body.local_session_id.trim()) {

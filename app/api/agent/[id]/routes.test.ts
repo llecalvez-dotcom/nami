@@ -64,6 +64,37 @@ describe("GET /api/agent/[id]/changes (route 6)", () => {
     });
   });
 
+  const observation = (url: string) => ({ type: "AgentEvent", data: { kind: "observation_event", metadata: { url } } });
+  const batch = (status: string, urls: string[]) =>
+    Response.json({ status, answer: null, first_index: 0, new_events: urls.map(observation), pending_tool_calls: [] });
+
+  it("cancels the H session once when the agent leaves the official domain", async () => {
+    fetch.mockResolvedValueOnce(batch("running", ["https://pay.example.com/checkout", "https://pay.example.com/card"]));
+    fetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const body = await (await get("s-1")).json();
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(call(1)[0]).toBe(`${API}/sessions/s-1`);
+    expect(call(1)[1].method).toBe("DELETE");
+    expect(body).toMatchObject({ left_official_site: "pay.example.com", cancel_failed: false });
+  });
+
+  it("does not cancel on a subdomain of the official domain, nor once the session has ended", async () => {
+    fetch.mockResolvedValueOnce(batch("running", ["https://evisa.imigrasi.go.id/a", "https://pay.evisa.imigrasi.go.id/b"]));
+    const body = await (await get("s-1")).json();
+    expect(body.left_official_site).toBeUndefined();
+    fetch.mockResolvedValueOnce(batch("interrupted", ["https://pay.example.com/checkout"]));
+    await get("s-1");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls.every((c) => (c[1] as RequestInit | undefined)?.method !== "DELETE")).toBe(true);
+  });
+
+  it("says when the off-domain cancel failed", async () => {
+    fetch.mockResolvedValueOnce(batch("running", ["https://imigrasi.go.id.evil.example/x"]));
+    fetch.mockResolvedValueOnce(new Response("boom", { status: 500 }));
+    const body = await (await get("s-1")).json();
+    expect(body).toMatchObject({ left_official_site: "imigrasi.go.id.evil.example", cancel_failed: true });
+  });
+
   it("refuses a bad id or index without calling H", async () => {
     expect((await get("../x")).status).toBe(400);
     expect((await get("s-1", "-1")).status).toBe(400);

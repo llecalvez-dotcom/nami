@@ -27,6 +27,15 @@ describe("access proxy", () => {
     expect(response.headers.get("x-middleware-next")).toBe("1");
   });
 
+  it("puts the visa agent routes behind the access cookie", async () => {
+    const token = await accessToken("specimen access code");
+    for (const path of ["/api/papers/start", "/api/agent/s-1/changes?from_index=0", "/api/agent/s-1/answer", "/api/agent/s-1/cancel"]) {
+      expect((await proxy(new NextRequest(`http://localhost${path}`))).status).toBe(401);
+      const allowed = await proxy(new NextRequest(`http://localhost${path}`, { headers: { cookie: `nami_access=${token}` } }));
+      expect(allowed.headers.get("x-middleware-next")).toBe("1");
+    }
+  });
+
   it("skips the access-code endpoint", async () => {
     const response = await proxy(new NextRequest("http://localhost/api/access"));
     expect(response.headers.get("x-middleware-next")).toBe("1");

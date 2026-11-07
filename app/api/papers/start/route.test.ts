@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "@/app/api/papers/start/route";
+import { resetGuards } from "@/lib/api-guard";
 import { getBaliPaper } from "@/lib/bali-papers";
 
 const PASSPORT = {
@@ -37,6 +38,7 @@ const start = (body: unknown) =>
 
 let fetch: ReturnType<typeof vi.fn>;
 beforeEach(() => {
+  resetGuards();
   vi.stubEnv("HAI_API_KEY", "h-key");
   vi.stubEnv("HAI_AGENT_NAME", "nami-agent");
   fetch = vi.fn(async () => Response.json({ id: "s-1", status: { status: "pending" } }, { status: 201 }));
@@ -99,6 +101,13 @@ describe("POST /api/papers/start (route 5)", () => {
     expect(response.status).toBe(400);
     expect((await response.json()).error).toContain(message);
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("is behind api-guard: low quota of H sessions per client", async () => {
+    for (let i = 0; i < 5; i += 1) expect((await start(BODY)).status).toBe(201);
+    const response = await start(BODY);
+    expect(response.status).toBe(429);
+    expect(fetch).toHaveBeenCalledTimes(5);
   });
 
   it("answers 429 when another H session runs", async () => {

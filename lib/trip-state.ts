@@ -424,7 +424,11 @@ export function applyAgentChanges(
   const run = trip.agent_run;
   if (!run) return { trip, toolCalls: [] };
   const parsed = AgentStateSchema.safeParse(changes.status);
-  const state = parsed.success ? parsed.data : run.state;
+  const hStatus = parsed.success ? parsed.data : run.h_status;
+  const hTerminal = hStatus !== undefined && isTerminalStatus(hStatus);
+  // Stopped here (Stop agent, or off the official site): a late "running" from H does not reopen the run.
+  const stoppedHere = run.state === "interrupted" && !(run.h_status && isTerminalStatus(run.h_status));
+  const state = changes.left_official_site || (stoppedHere && !hTerminal) ? "interrupted" : (hStatus ?? run.state);
   const wasTerminal = isTerminalStatus(run.state);
   const terminal = isTerminalStatus(state);
   const steps = changes.steps
@@ -432,15 +436,18 @@ export function applyAgentChanges(
     .filter((s, i, all) => s !== (i === 0 ? trip.agent_steps.at(-1) : all[i - 1]));
   const answer = changes.answer ? redact(changes.answer, secrets) : null;
 
+  if (stoppedHere && hTerminal) steps.push("H confirmed the session is stopped");
+
   let next: Trip = {
     ...trip,
     agent_steps: [...trip.agent_steps, ...steps],
     agent_run: {
       ...run,
       state,
+      h_status: hStatus,
       next_index: changes.next_index,
       metrics: changes.metrics ?? run.metrics,
-      drained: terminal && changes.no_change,
+      drained: hTerminal && changes.no_change,
       result: answer ? { ...run.result, answer } : run.result,
       error: changes.error_code ?? run.error,
     },
@@ -449,7 +456,13 @@ export function applyAgentChanges(
   if (terminal && !wasTerminal) {
     next = { ...closeAgentQuestions(next, "Agent stopped"), agent_run: { ...next.agent_run!, pending_question: undefined } };
     const reachedPayment = typeof run.result?.summary === "string";
-    if (state === "failed" || state === "timed_out") {
+    if (changes.left_official_site) {
+      const host = redact(changes.left_official_site, secrets);
+      next = pushAgentMessage(
+        next,
+        `Agent stopped: it left the official site (${host}).${changes.cancel_failed ? " Run holo local stop in a terminal to stop it." : ""}`,
+      );
+    } else if (state === "failed" || state === "timed_out") {
       next = pushAgentMessage(next, `The agent stopped before the end (${changes.error_code ?? state}). Nothing was submitted.`);
     } else if (state === "completed" && !reachedPayment) {
       next = pushAgentMessage(next, "The agent finished without reaching the payment screen. Nothing was submitted.");
