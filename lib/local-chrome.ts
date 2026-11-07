@@ -40,14 +40,19 @@ export function pickExpression(field: string, option: string): string {
   return `((field, option) => {
   const norm = (s) => String(s || "").replace(/\\s+/g, " ").trim().toLowerCase();
   const f = norm(field), o = norm(option);
-  const labelOf = (el) => norm([el.name, el.id, el.getAttribute("aria-label"), el.labels && [...el.labels].map((l) => l.innerText).join(" "), el.closest(".form-group, .mb-3, div")?.innerText.split("\\n")[0]].join(" "));
+  const labelTexts = (el) => [el.name, el.id, el.getAttribute("aria-label"), ...(el.labels ? [...el.labels].map((l) => l.innerText) : []), el.closest(".form-group, .mb-3, div")?.innerText.split("\\n")[0]].map(norm).filter(Boolean);
+  const labelOf = (el) => labelTexts(el).join(" ");
   const selects = [...document.querySelectorAll("select")].filter((s) => !s.disabled);
-  const named = selects.filter((s) => f && labelOf(s).includes(f));
+  const exact = selects.filter((s) => f && labelTexts(s).some((t) => t === f));
+  const named = exact.length ? exact : selects.filter((s) => f && labelOf(s).includes(f));
   for (const s of named.length ? named : selects) {
     const opts = [...s.options];
     const hit = opts.find((x) => norm(x.text) === o) || opts.find((x) => norm(x.text).startsWith(o)) || opts.find((x) => norm(x.text).includes(o));
     if (!hit) continue;
-    if (window.jQuery) window.jQuery(s).val(hit.value).trigger("change");
+    if (window.jQuery) {
+      window.jQuery(s).val(hit.value).trigger("change");
+      window.jQuery(s).trigger({ type: "select2:select", params: { data: { id: hit.value, text: hit.text, element: hit } } });
+    }
     else { s.value = hit.value; s.dispatchEvent(new Event("input", { bubbles: true })); s.dispatchEvent(new Event("change", { bubbles: true })); }
     return "Picked " + hit.text.trim() + " in " + (s.name || s.id || "the list") + ". The page already shows it. Do not reload or refresh the page or navigate away; take a screenshot and continue with the next field.";
   }
