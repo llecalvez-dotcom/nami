@@ -21,7 +21,9 @@ export async function GET(request: Request, ctx: RouteContext<"/api/agent/[id]/c
       () => true,
       () => false,
     );
-    return Response.json({ ...summary, left_official_site: left, cancel_failed: !cancelled });
+    if (cancelled) return Response.json({ ...summary, left_official_site: left, cancel_failed: false });
+    // Cancel refused: the index does not move, so the next poll reads the same page again and retries the cancel.
+    return Response.json({ ...summary, next_index: fromIndex, steps: [], left_official_site: left, cancel_failed: true });
   } catch (error) {
     return hErrorResponse(error);
   }

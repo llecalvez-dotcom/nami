@@ -94,6 +94,7 @@ export function useAgentRun(tripId: string, sessionId: string | null, enabled: b
           const { trip, toolCalls } = applyAgentChanges(latest, changes, secretsRef.current);
           saveTrip(trip);
           failures = 0;
+          if (changes.cancel_failed) await sleep(RETRY_MS);
           for (const call of toolCalls) {
             if (controller.signal.aborted) return;
             await handleToolCall(tripId, sessionId, call, secretsRef.current, failedAcks);

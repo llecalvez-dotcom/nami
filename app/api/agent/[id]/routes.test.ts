@@ -65,8 +65,8 @@ describe("GET /api/agent/[id]/changes (route 6)", () => {
   });
 
   const observation = (url: string) => ({ type: "AgentEvent", data: { kind: "observation_event", metadata: { url } } });
-  const batch = (status: string, urls: string[]) =>
-    Response.json({ status, answer: null, first_index: 0, new_events: urls.map(observation), pending_tool_calls: [] });
+  const batch = (status: string, urls: string[], first = 0) =>
+    Response.json({ status, answer: null, first_index: first, new_events: urls.map(observation), pending_tool_calls: [] });
 
   it("cancels the H session once when the agent leaves the official domain", async () => {
     fetch.mockResolvedValueOnce(batch("running", ["https://pay.example.com/checkout", "https://pay.example.com/card"]));
@@ -88,11 +88,16 @@ describe("GET /api/agent/[id]/changes (route 6)", () => {
     expect(fetch.mock.calls.every((c) => (c[1] as RequestInit | undefined)?.method !== "DELETE")).toBe(true);
   });
 
-  it("says when the off-domain cancel failed", async () => {
-    fetch.mockResolvedValueOnce(batch("running", ["https://imigrasi.go.id.evil.example/x"]));
+  it("keeps the index when the off-domain cancel failed, so the next poll retries it", async () => {
+    fetch.mockResolvedValueOnce(batch("running", ["https://imigrasi.go.id.evil.example/x"], 3));
     fetch.mockResolvedValueOnce(new Response("boom", { status: 500 }));
-    const body = await (await get("s-1")).json();
-    expect(body).toMatchObject({ left_official_site: "imigrasi.go.id.evil.example", cancel_failed: true });
+    const body = await (await get("s-1", "3")).json();
+    expect(body).toMatchObject({ left_official_site: "imigrasi.go.id.evil.example", cancel_failed: true, next_index: 3, steps: [] });
+    fetch.mockResolvedValueOnce(batch("running", ["https://imigrasi.go.id.evil.example/x"], 3));
+    fetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const retried = await (await get("s-1", "3")).json();
+    expect(call(3)[1].method).toBe("DELETE");
+    expect(retried).toMatchObject({ cancel_failed: false, next_index: 4 });
   });
 
   it("refuses a bad id or index without calling H", async () => {
