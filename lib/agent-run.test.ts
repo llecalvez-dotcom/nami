@@ -198,6 +198,8 @@ describe("report_ready", () => {
     const trip = reportReady(liveTrip(), REPORT, SECRETS);
     expect(trip.formalities.find((f) => f.id === "evoa")?.status).toBe("pending_approval");
     expect(trip.agent_run?.result).toMatchObject({ summary: "Stopped on payment", filled_fields: ["surname", "passport_number"] });
+    expect(trip.agent_run).toMatchObject({ state: "interrupted", drained: true });
+    expect(trip.agent_steps.at(-1)).toBe("Nami stopped the agent at the payment page so you can check and pay");
     expect(trip.conversation.at(-1)).toMatchObject({ kind: "agent", text: VISA_READY_MESSAGE, list: ["surname", "passport_number"] });
     expect(reportReady(trip, REPORT, SECRETS)).toBe(trip);
 
