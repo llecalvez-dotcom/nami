@@ -70,12 +70,33 @@ function uniqueCalls(calls: ToolRequest[]): ToolRequest[] {
   });
 }
 
-// Host of the first page (observation_event metadata.url) outside the official domain and its subdomains.
+// Empty tabs the browser opens by itself: not a site, so not a reason to stop the agent.
+const BLANK_PAGES = new Set(["about:blank", "about:newtab", "chrome://newtab", "chrome://new-tab-page", "chrome-search://local-ntp"]);
+
+function offSite(url: unknown, domain: string): string | null {
+  if (typeof url !== "string") return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+    const host = parsed.hostname;
+    return host === domain || host.endsWith(`.${domain}`) ? null : host;
+  }
+  // Any other scheme (chrome://settings, file://, data:) is off the official site.
+  const page = parsed.host ? `${parsed.protocol}//${parsed.host}` : `${parsed.protocol}${parsed.pathname}`;
+  if (BLANK_PAGES.has(page)) return null;
+  return parsed.host ? page : parsed.protocol;
+}
+
+// Page of the first observation_event (metadata.url) outside the official domain and its subdomains.
 export function offDomainHost(events: HEvent[], domain: string): string | null {
   for (const event of events) {
     if (event.type !== "AgentEvent" || event.data?.kind !== "observation_event") continue;
-    const host = hostOfUrl((event.data.metadata as { url?: unknown } | undefined)?.url);
-    if (host && host !== domain && !host.endsWith(`.${domain}`)) return host;
+    const left = offSite((event.data.metadata as { url?: unknown } | undefined)?.url, domain);
+    if (left) return left;
   }
   return null;
 }

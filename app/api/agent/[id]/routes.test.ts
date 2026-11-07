@@ -88,6 +88,23 @@ describe("GET /api/agent/[id]/changes (route 6)", () => {
     expect(fetch.mock.calls.every((c) => (c[1] as RequestInit | undefined)?.method !== "DELETE")).toBe(true);
   });
 
+  it("ignores empty browser tabs but cancels on other browser pages and local files", async () => {
+    fetch.mockResolvedValueOnce(batch("running", ["about:blank", "chrome://newtab/", "chrome://new-tab-page/"]));
+    expect((await (await get("s-1")).json()).left_official_site).toBeUndefined();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    for (const [url, left] of [
+      ["chrome://extensions/", "chrome://extensions"],
+      ["file:///Users/clement/private/passport.jpg", "file:"],
+      ["data:text/html,hi", "data:"],
+    ]) {
+      fetch.mockReset();
+      fetch.mockResolvedValueOnce(batch("running", [url]));
+      fetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
+      expect((await (await get("s-1")).json()).left_official_site).toBe(left);
+      expect(call(1)[1].method).toBe("DELETE");
+    }
+  });
+
   it("keeps the index when the off-domain cancel failed, so the next poll retries it", async () => {
     fetch.mockResolvedValueOnce(batch("running", ["https://imigrasi.go.id.evil.example/x"], 3));
     fetch.mockResolvedValueOnce(new Response("boom", { status: 500 }));
