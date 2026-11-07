@@ -22,8 +22,8 @@
 | F6 | Champ « Try another country » pour le jury (visible avec `?demo=1`) | ✅ | Ali | 03 |
 | F7 | Passeport : saisie à la main par défaut ; lecture de la photo seulement si `PASSPORT_READER=h` et case de consentement cochée | 🟡 (cette PR : contrôle MRZ par champ et alerte de validité en direct, même en saisie manuelle ; données fictives uniquement) | Ali | 03, PR #12 |
 | F8 | Masquage des données sensibles en démo (`?demo=1`) | ✅ (2 derniers caractères du numéro, date de naissance cachée) | Ali | 03 |
-| F9 | Réglages de démo : « Local browser session », chemins des fichiers | 🟡 PR #14 fusionnée ; ticket 15 (PR `feat/15-agent-evoa-complet`) : session prise dans `NAMI_LOCAL_SESSION_ID` du `.env.local` quand le panneau n'en envoie pas, ligne affichée par `scripts/lancer-demo.sh` ; à vérifier au passage réel | Clément | 05, 15 |
-| F10 | Agent Activity en direct + « Stop agent » qui arrête vraiment la session H | 🟡 PR #14 fusionnée, suivi vu en réel aux passages de 18 h à 19 h 30 ; « Stop » en cours de passage jamais testé en réel (T6) | Clément | 05, 15 |
+| F9 | Réglages de démo : « Local browser session », chemins des fichiers | 🟡 PR #40 et #48 fusionnées : réglages H et session prise dans `NAMI_LOCAL_SESSION_ID` du `.env.local` quand le panneau n'en envoie pas, ligne affichée par `scripts/lancer-demo.sh` ; configuration complète à vérifier au passage réel | Clément | 05, 15 |
+| F10 | Agent Activity en direct + « Stop agent » qui arrête vraiment la session H | 🟡 PR #44 fusionnée (aperçu de l'écran) ; aperçu et « Stop agent » rapportés OK par Ali sur le passage partiel du ticket 16 ([résultat](../tests/t12-depot-fichier-cdp.md)) ; T6 complet reste à faire | Clément | 05, 15 |
 | F11 | Question de l'agent lue à voix haute, réponse validée au clic | 🔵 relié à l'agent dans la PR #14 | Nathan, puis Clément | 04, 05 |
 | F12 | Design premium (cartes arrondies, accent violet, photos des destinations, navigation) | ✅ (PR #13, testée par Devin avec les vraies API et relue par Claude) | Léon | sans ticket |
 | F14 | Page World map : globe 3D, pays de résidence, envies, visas en cours, pop-up d'avancement au clic | ✅ (PR #13) | Léon | sans ticket |
@@ -32,20 +32,22 @@
 | F16 | Conversation à la voix : Nami lit tout à voix haute, réponses à la voix partout, fin de parole et envoi automatiques | 🔵 partie B en relecture (branche `feat/06b-voix`, 216 tests, lint et compilation OK) ; test réel T10 à faire | Nathan | 06, partie B |
 | F17 | Validation page par page : l'agent attend un « oui » avant chaque « Suivant » (`confirm_page`) | ⬜ partie A en attente de la fusion de la PR #14 | Nathan | 06, partie A |
 | F18 | Extension Chrome : Nami dans le panneau latéral, l'agent dans l'onglet | 🔵 PR du ticket 08 (`feat/08-extension`), test réel avec l'agent H à faire | Léon | 08 |
-| F19 | Retrouver le passeport : dans un dossier local (A) ou par l'agent dans le Finder (C) | 🟡 A : recherche locale, aperçu et confirmation ; raccordement `file_paths` après #14 ; C à faire | Ali (A), Clément ou Ali (C) | 09, 10 |
-| F20 | UX polish du parcours de démo | 🟡 | Ali | 11 |
-| F21 | Couche visuelle dans l'onglet officiel : curseur, onde, contour du champ, cadre et bulle ; état masqué relayé par le panneau | 🟡 ticket 13 : [tests automatiques et contrôle CDP sur e-VOA](../tests/13-couche-visuelle.md) ; passage réel H et vidéo avec ticket 15 encore requis | Léon | 13 |
+| F19 | Retrouver le passeport : dans un dossier local (A) ou par l'agent dans le Finder (C) | 🟡 A : recherche locale, aperçu et confirmation ; PR #26 fusionnée (score des mots faibles du nom de fichier corrigé) ; C à faire | Ali (A), Clément ou Ali (C) | 09, 10 |
+| F20 | UX polish du parcours de démo | ✅ PR #27 fusionnée (`polish/ux-demo`) | Ali | 11 |
+| F21 | Couche visuelle dans l'onglet officiel : curseur, onde, contour du champ, cadre et bulle ; état masqué relayé par le panneau | 🟡 PR #49 fusionnée, ticket 13 : [tests automatiques et contrôle CDP sur e-VOA](../tests/13-couche-visuelle.md) ; passage réel H et vidéo avec ticket 15 encore requis | Léon | 13 |
+| F22 | Panneau épuré : parcours visa, passeport et photo à la voix | 🟡 PR #52 et #53 fusionnées ; parcours complet à la voix dans le panneau jusqu'au paiement non testé | Nathan | 14 |
+| F23 | Photo d'identité et scan du passeport : recherche, confirmation et dépôt dans les bons champs | 🟡 PR #50, #51 et #53 fusionnées ; dépôts fictifs dans les bons champs rapportés OK par Ali ; page 1 non franchie, scan et photo de démo à préparer manuellement ([résultat](../tests/t12-depot-fichier-cdp.md)) | Ali | 16 |
 
 ## 2. Back (routes serveur et logique)
 
 | # | Fonctionnalité | État | Qui | Ticket |
 |---|---|---|---|---|
 | B1 | `/api/voice/transcribe` : la voix devient du texte (Gladia) | ✅ | Nathan | 04 |
-| B2 | `/api/trip/parse` : la phrase devient une demande structurée (modèle H) | ✅ | Nathan | 02 |
+| B2 | `/api/trip/parse` : la phrase devient une demande structurée (modèle H) | ✅ PR #35 fusionnée (heure d'arrivée en français) | Nathan | 02 |
 | B3 | `lib/planner/` : quelles questions, quels modules, fenêtres d'ouverture | ✅ | Nathan | 02 |
 | B4 | `/api/formalities` : papiers cherchés en direct (Linkup) + contrôle des domaines officiels | ✅ (PR #6, L1 réussi) | Ali | 03 |
 | B5 | `/api/documents/extract` : lecture du passeport (vision H), un seul fournisseur, consentement exigé par le serveur | 🟡 (cette PR : chiffres de contrôle MRZ et comparaison aux champs imprimés ; divergence signalée, jamais corrigée en silence) | Ali | 03, PR #12 |
-| B6 | `lib/h-agent.ts` + `/api/papers/start` + routes `agent` (suivre, répondre, arrêter) | 🟡 PR #14 fusionnée, puis #37 à #45 (`pick_option`, arrêt au paiement, sessions H) ; en réel : étape 1 du formulaire atteinte (19 h 05, 18 étapes, 0,04 $). Ticket 15 : chemin des menus (`route_hint`), options listées par `pick_option`, Chrome en densité 1 ; parcours jusqu'au paiement à faire (T6) | Clément | 05, 15 |
+| B6 | `lib/h-agent.ts` + `/api/papers/start` + routes `agent` (suivre, répondre, arrêter) | 🟡 PR #38 (arrêt au paiement), #39 (vérifications avant lancement), #40 (réglages H), #41 (robustesse des sessions), #45 (réobserver sans recharger) et #48 (ticket 15) fusionnées ; Ali rapporte les 5 menus remplis via `pick_option` sans rechargement ; page 1 non franchie, parcours jusqu'au paiement à faire (T6) | Clément | 05, 15 |
 | B6b | `/api/papers/start` accepte un papier en direct de n'importe quel pays, domaine officiel revérifié par le serveur | ⬜ (après la partie A) | Clément | 05, partie B |
 | B7 | Mode démo préparé (sessions lancées 5 min avant, heure réelle affichée) | ⬜ (ticket 06 à écrire) | Nathan | 06 |
 | B8 | Module Vol (Google Flights), seulement s'il reste du temps | ⬜ | Clément | sans ticket |
@@ -59,8 +61,8 @@
 | T2 | F5 : la voix est comprise dans le bruit de la salle | ❓ jamais fait avec un micro dans la salle ; à refaire au test du ticket 06 | Nathan | `docs/tests/f5-conversation-voix.md` |
 | T3 | ~~F1 manuel~~ : supprimé. Le premier passage réel de l'agent sur l'e-VOA sert de repérage | sans objet | Clément | `docs/tests/f1-evoa.md` |
 | T4 | F6 : l'agent H pilote le Chrome du portable par l'API | ✅ sur le Mac de Nathan, Chrome de l'agent en densité 1 (passage de 19 h 05, `docs/tests/2026-11-07-etat-reel.md`) ; à refaire sur le portable de Clément | Clément | `docs/tests/f1-evoa.md` |
-| T5 | F8 : l'agent H sait déposer un fichier | ⬜ échec au passage de 19 h 05 (`upload_file` « no file input found », champs fichier cachés) ; passeport déposé à la main refusé par le site (photo au téléphone, ticket 16) | Clément, Ali | `docs/tests/f1-evoa.md` |
-| T6 | F1 agent : l'agent remplit le visa jusqu'au paiement, 3 fois sur 3, une fois arrêté par « Stop agent » | ⬜ ticket 15 : 3 passages réels à faire sur le portable de Clément, gabarit vide dans `docs/tests/f1-evoa.md` | Clément | `docs/tests/f1-evoa.md` |
+| T5 | F8 : l'agent H sait déposer un fichier | ✅ dépôt du passeport et de la photo fictifs dans les bons champs rapporté par Ali avec H sur le vrai e-VOA (ticket 16) ; page 1 non franchie, acceptation de vrais documents non testée | Clément, Ali | `docs/tests/t12-depot-fichier-cdp.md` |
+| T6 | F1 agent : l'agent remplit le visa jusqu'au paiement, 3 fois sur 3, une fois arrêté par « Stop agent » | ⬜ ticket 15, PR #48 fusionnée : 3 passages complets à faire sur le portable de Clément ; test partiel d'Ali arrêté avant de franchir la page 1 (limite d'utilisation), « Stop agent » rapporté OK ; paiement non testé | Clément | `docs/tests/f1-evoa.md` |
 | T6b | Autre pays en beta (Kenya ou Tanzanie) : l'agent s'arrête avant le paiement ou passe la main, 1 passage | ⬜ (après T6) | Clément | `docs/tests/f1-autres-pays.md` |
 | T9 | L'agent H pilote l'ordinateur entier : trouve le passeport dans le Finder, le dépose dans une page (30 min, faux passeport) | ⬜ décide entre A et C | Ali | `docs/tests/t9-bureau.md` |
 | T10 | Parcours complet à la voix, sans clavier, dans la salle | ⬜ (après le ticket 06) | Nathan | `docs/tests/f5-conversation-voix.md` |
@@ -74,7 +76,7 @@
 | S1 | Clés API dans les secrets de Devin cloud, jamais dans Git | ✅ (`HAI_API_KEY` remplacée à 14 h 25) | Nathan |
 | S2 | `.env*` et `private/` ignorés par Git | ✅ | Claude |
 | S3 | Accord écrit du titulaire du passeport | ✅ | Nathan |
-| S4 | L'agent ne clique jamais sur payer ou envoyer : consigne, arrêt de la session hors du domaine officiel, main sur « Stop agent » | 🟡 PR #14 et #38 fusionnées : « Submit », « Pay », « Bayar », « Kirim » interdits, arrêt sur l'écran de résumé ou de paiement, `report_ready` arrête la session (tests vitest, revérifiés au ticket 15) ; jamais vu en réel jusqu'au paiement (T6) | Clément |
+| S4 | L'agent ne clique jamais sur payer ou envoyer : consigne, arrêt de la session hors du domaine officiel, main sur « Stop agent » | 🟡 PR #14, #38 et #48 fusionnées : « Submit », « Pay », « Bayar », « Kirim » interdits, arrêt sur l'écran de résumé ou de paiement, `report_ready` arrête la session (tests vitest, revérifiés au ticket 15) ; jamais vu en réel jusqu'au paiement (T6) | Clément |
 | S4b | L'agent ne remplit jamais un site non officiel (domaine revérifié par le serveur) | ⬜ (ticket 05, partie B) | Clément |
 | S4c | L'accord du titulaire du passeport couvre un formulaire d'un autre pays | ✅ (confirmé par Nathan à 15 h 10) | Nathan |
 | S5 | Après la démo : supprimer les sessions H et le dossier `private/` | ⬜ | Nathan |
