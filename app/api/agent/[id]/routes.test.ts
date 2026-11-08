@@ -231,13 +231,22 @@ describe("GET /api/agent/[id]/changes (route 6)", () => {
     bindFlightsSession("f-1");
     fetch.mockResolvedValueOnce(batch("running", ["https://allindonesia.imigrasi.go.id/arrival-card-submission/personal-information"]));
     expect((await (await get("f-1")).json()).left_official_site).toBeUndefined();
-    fetch.mockResolvedValueOnce(batch("running", ["https://www.google.com/travel/flights?q=x"], 1));
+    // The arrival tab and Google in the same poll: the older arrival event is not a leave.
+    fetch.mockResolvedValueOnce(batch("running", ["https://allindonesia.imigrasi.go.id/arrival-card-submission/x", "https://www.google.com/travel/flights?q=x"], 1));
     expect((await (await get("f-1")).json()).left_official_site).toBeUndefined();
     expect(fetch).toHaveBeenCalledTimes(2);
     fetch.mockResolvedValueOnce(batch("running", ["https://www.qatarairways.com/book"], 2));
     fetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
     expect((await (await get("f-1")).json()).left_official_site).toBe("www.qatarairways.com");
     expect(call(3)[1].method).toBe("DELETE");
+  });
+
+  it("cuts a flights session that browses elsewhere than the official tabs before reaching Google", async () => {
+    bindFlightsSession("f-2");
+    fetch.mockResolvedValueOnce(batch("running", ["https://evisa.imigrasi.go.id/web/visa-selection", "https://www.kayak.fr/flights"]));
+    fetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    expect((await (await get("f-2")).json()).left_official_site).toBe("www.kayak.fr");
+    expect(call(1)[1].method).toBe("DELETE");
   });
 
   it("ignores empty browser tabs and a search engine home page, but cancels on any search, other browser pages and local files", async () => {
