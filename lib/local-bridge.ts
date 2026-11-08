@@ -8,9 +8,14 @@ import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 
 export const BRIDGE_READY_LINE = "Local web bridge serving session id";
+// Written by the bridge when H ends a session: from then on its chromedriver is dead.
+export const BRIDGE_DESTROY_LINE = "command destroy";
+// Written by a bridge that exits on H's 410 (idle): the restarted one writes its own ready line a second later.
+export const BRIDGE_ENDED_LINE = "closed; the session ended";
 const NEW_PID_TIMEOUT_MS = 20_000;
 const READY_TIMEOUT_MS = 20_000;
 const READY_FALLBACK_MS = 4_000;
+const RESTART_WAIT_MS = 6_000;
 const POLL_MS = 500;
 
 export type BridgeDeps = {
@@ -82,8 +87,28 @@ export function defaultBridgeDeps(env: Record<string, string | undefined> = proc
   };
 }
 
-// True when the bridge process now running is the one that already served an H session.
-export async function bridgeIsUsed(deps: Pick<BridgeDeps, "pgrep"> = defaultBridgeDeps()): Promise<boolean> {
+// The bridge log is the ground truth: a `destroy` since its last start line means its chromedriver is dead, whatever
+// its pid (the bridge restarts by itself every 20 s or so at idle, so pids are not a reliable identity: seen on the
+// Mac 2026-11-08, the arrival card started 2 s after the visa on a bridge Nami believed new).
+export function usedSinceLastStart(log: string): boolean {
+  const tail = sinceLastStart(log);
+  return tail.includes(BRIDGE_DESTROY_LINE) && !tail.includes(BRIDGE_ENDED_LINE);
+}
+
+// The bridge that wrote the last ready line has exited and the loop is restarting it: not to be killed, just awaited.
+export function bridgeRestarting(log: string): boolean {
+  return sinceLastStart(log).includes(BRIDGE_ENDED_LINE);
+}
+
+function sinceLastStart(log: string): string {
+  const start = log.lastIndexOf(BRIDGE_READY_LINE);
+  return log.slice(start === -1 ? 0 : start);
+}
+
+// True when the bridge process now running already served an H session: by its log when there is one, else by pid.
+export async function bridgeIsUsed(deps: Pick<BridgeDeps, "pgrep" | "readLog"> = defaultBridgeDeps()): Promise<boolean> {
+  const log = await deps.readLog();
+  if (log !== null && usedSinceLastStart(log)) return true;
   if (state.usedPid === null) return false;
   const pid = await deps.pgrep();
   return pid !== null && pid === state.usedPid;
@@ -96,11 +121,11 @@ export async function markBridgeUsed(deps: Pick<BridgeDeps, "pgrep" | "now"> = d
   state.usedAt = pid === null ? null : deps.now();
 }
 
-// Kills the used bridge, waits for the restarted one (new pid), then for its ready line (or 4 s), then for Chrome.
-// Never throws: on any doubt the session is created as before.
+// Kills the running bridge (the caller decided it is used), waits for the restarted one (new pid), then for its ready
+// line (or 4 s), then for Chrome. Never throws: on any doubt the session is created as before.
 export async function refreshBridge(deps: BridgeDeps = defaultBridgeDeps()): Promise<"refreshed" | "skipped" | "timeout"> {
   const oldPid = await deps.pgrep();
-  if (oldPid === null || oldPid !== state.usedPid) return "skipped";
+  if (oldPid === null) return "skipped";
   const start = deps.now();
   const logBefore = (await deps.readLog())?.length ?? null;
   try {
@@ -147,10 +172,28 @@ export async function refreshBridge(deps: BridgeDeps = defaultBridgeDeps()): Pro
 export async function freshBridgeBeforeSession(deps: BridgeDeps = defaultBridgeDeps()): Promise<void> {
   if (!bridgeManaged()) return;
   try {
-    if (await bridgeIsUsed(deps)) await refreshBridge(deps);
+    if (await bridgeIsUsed(deps)) return void (await refreshBridge(deps));
+    await awaitRestartingBridge(deps);
   } catch {
     // The session is created as before.
   }
+}
+
+// A bridge caught mid-restart (its predecessor just exited on 410): wait for its ready line, a few seconds at most.
+export async function awaitRestartingBridge(deps: Pick<BridgeDeps, "readLog" | "sleep" | "now" | "log">): Promise<boolean> {
+  const first = await deps.readLog();
+  if (first === null || !bridgeRestarting(first)) return false;
+  const start = deps.now();
+  while (deps.now() - start < RESTART_WAIT_MS) {
+    await deps.sleep(POLL_MS);
+    const log = await deps.readLog();
+    if (log === null || !bridgeRestarting(log)) {
+      deps.log(`bridge was restarting, ready after ${deps.now() - start} ms`);
+      return true;
+    }
+  }
+  deps.log("bridge still restarting after 6 s; creating the session anyway");
+  return true;
 }
 
 export async function rememberBridgeForSession(deps: BridgeDeps = defaultBridgeDeps()): Promise<void> {

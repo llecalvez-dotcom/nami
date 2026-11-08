@@ -13,3 +13,8 @@ Cause, lue dans la lib H (`hai_agents_local/bridge.py`, `hai_drivers/web/seleniu
 Correctif côté Nami seulement (`lib/local-bridge.ts`, banc uniquement : darwin ou linux, `NODE_ENV` différent de production, `NAMI_LOCAL_SESSION_ID` défini) : avant `createSession`, si le pont en cours est celui qui a déjà servi une session, Nami l'arrête (SIGTERM), attend un nouveau pid (20 s au plus), la ligne « Local web bridge serving session id » dans son log (`NAMI_BRIDGE_LOG`, sinon 4 s), puis `GET /json/version` du Chrome de l'agent. Après `createSession`, le pid courant est noté comme utilisé. Sans `pgrep`, sans pont trouvé ou hors banc : rien ne change, jamais d'erreur bloquante, une ligne de log serveur.
 
 À vérifier au prochain passage réel : deux sessions d'affilée à la voix (visa puis carte d'arrivée) sans « A step failed », délai ajouté de 5 à 10 s entre le « oui » et le premier clic de l'agent.
+
+
+## Complément (8 nov, 3 h 27)
+
+Le pid ne suffit pas : au repos le pont reçoit 410 et se relance toutes les ~22 s, donc son pid change sans cesse. Une session créée juste au moment d'un redémarrage est servie par un autre processus que celui dont Nami a noté le pid ; à la session suivante (carte d'arrivée 2 s après la fin du visa) Nami croyait le pont neuf et la session échouait (« Max retries exceeded » sur le port du chromedriver). Désormais Nami lit le journal du pont (`NAMI_BRIDGE_LOG`) : un « command destroy » après la dernière ligne « Local web bridge serving session id » signifie que le processus courant a un chromedriver mort, et il est relancé avant la session, quel que soit son pid. Le pid reste le repli quand il n'y a pas de journal.
