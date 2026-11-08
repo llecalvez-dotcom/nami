@@ -182,6 +182,9 @@ describe("yes to the flights", () => {
     expect(matchOption("the cheapest", criterion.options)?.value).toBe("cheapest");
     expect(matchOption("no stop if possible", criterion.options)?.value).toBe("fewest_stops");
     expect(matchOption("best compromise", criterion.options)?.value).toBe("best");
+    // "price" or "stops" said alone must not land on the compromise label (Devin Review on #96).
+    expect(matchOption("price", criterion.options)).toBeNull();
+    expect(matchOption("stops", criterion.options)).toBeNull();
     expect(spokenShort(criterion.question)).toBe(criterion.question);
   });
 
@@ -251,7 +254,7 @@ describe("yes to the flights", () => {
     expect(flightCriterion(combined)).toBe("best");
     expect(agentTexts(combined)).toContain(BALANCED_CRITERIA_MESSAGE);
     expect(agentTexts(combined).at(-1)).toBe(FLIGHTS_SEARCHING_MESSAGE);
-    expect(combined.conversation.findLast((i) => i.kind === "question" && i.field === "flight_criterion")).toMatchObject({ answer: "Best compromise (price, duration, stops)" });
+    expect(combined.conversation.findLast((i) => i.kind === "question" && i.field === "flight_criterion")).toMatchObject({ answer: "Best compromise" });
   });
 
   it("longDate is deterministic and in English", () => {
