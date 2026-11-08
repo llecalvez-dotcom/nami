@@ -1,20 +1,18 @@
-import { awaitsAnswer } from "@/lib/voice/conversation-speech";
+import { focusItem } from "@/lib/voice/conversation-speech";
 import type { AgentRun } from "@/lib/contracts";
 import { flightsResult } from "@/lib/flights/flow";
 import { isTerminalStatus } from "@/lib/h-agent";
 import { ARRIVAL_CARD_READY_MESSAGE, VISA_READY_MESSAGE, type ConversationItem, type Trip } from "@/lib/trip-state";
 import { isFlightQuestion, isFlightReadyMessage } from "@/lib/flights/flow";
+import { hotelsResult, isHotelQuestion, isHotelReadyMessage } from "@/lib/hotels/flow";
 
 // The side panel shows one thing at a time (docs/specs/2026-11-07-refonte-panneau.md): what Nami waits for, or else
 // the last thing Nami said. Computed on the English conversation; the panel shows the translated item with the same id.
 
 // "flights" is the third one: the flight search (ticket 18), evening sky.
-export type Paper = "visa" | "arrival_card" | "flights";
+export type Paper = "visa" | "arrival_card" | "flights" | "hotels";
 
-// The first item still waiting for an answer, or the last item from Nami or the agent.
-export function focusItem(items: readonly ConversationItem[]): ConversationItem | null {
-  return items.find(awaitsAnswer) ?? items.findLast((item) => item.kind !== "user") ?? null;
-}
+export { focusItem };
 
 // The paper just made ready by the agent, when the item in focus is what comes right after it.
 export function readyPaper(items: readonly ConversationItem[], focus: ConversationItem | null): Paper | null {
@@ -25,6 +23,7 @@ export function readyPaper(items: readonly ConversationItem[], focus: Conversati
   if (ready.text === VISA_READY_MESSAGE) return "visa";
   if (ready.text === ARRIVAL_CARD_READY_MESSAGE) return "arrival_card";
   if (isFlightReadyMessage(ready.text)) return "flights";
+  if (isHotelReadyMessage(ready.text)) return "hotels";
   return null;
 }
 
@@ -33,7 +32,9 @@ export function paperInFocus(trip: Trip, focus: ConversationItem | null): Paper 
   if (focus?.kind === "proposal" && focus.action === "create_arrival_card") return "arrival_card";
   if (focus?.kind === "proposal" && focus.action === "create_visa") return "visa";
   if ((focus?.kind === "proposal" && focus.action === "flights") || (focus?.kind === "question" && isFlightQuestion(focus.field))) return "flights";
+  if ((focus?.kind === "proposal" && focus.action === "hotels") || (focus?.kind === "question" && isHotelQuestion(focus.field))) return "hotels";
   if (trip.agent_run?.kind === "flights") return "flights";
+  if (trip.agent_run?.kind === "hotels") return "hotels";
   return trip.agent_run?.paper_id === "arrival_card" ? "arrival_card" : "visa";
 }
 
@@ -61,6 +62,12 @@ const MILESTONES: Record<Paper, Milestone[]> = {
     { label: "Your choice", pattern: /\byou chose\b|\b(chose|chosen|selected|clicked) .*\bflight\b/i },
     { label: "Booking page", pattern: /\b(booking (options|page)|stopped on the booking)\b/i },
   ],
+  hotels: [
+    { label: "Dates", pattern: /\b(google hotels|opened google)\b/i },
+    { label: "Results", pattern: /\bread \d+ hotels?\b/i },
+    { label: "Your choice", pattern: /\byou chose\b/i },
+    { label: "Prices", pattern: /\bstopped on the hotel\b/i },
+  ],
 };
 
 export type Checklist = { label: string; state: "done" | "current" | "todo" }[];
@@ -81,6 +88,7 @@ export const CHECKLIST_LABELS = Object.values(MILESTONES).flatMap((list) => list
 export function paperOfRun(run: AgentRun | null): Paper | null {
   if (!run) return null;
   if (run.kind === "flights") return "flights";
+  if (run.kind === "hotels") return "hotels";
   return run.paper_id === "arrival_card" ? "arrival_card" : "visa";
 }
 
@@ -88,9 +96,10 @@ const OPENING: Record<Paper, string> = {
   visa: "Nami is opening the e-VOA site",
   arrival_card: "Nami is opening the arrival card site",
   flights: "Nami is opening Google Flights",
+  hotels: "Nami is opening Google Hotels",
 };
 // About how many steps each form takes the agent (visa measured at 19 on 2026-11-07).
-const FORM_STEPS: Record<Paper, number> = { visa: 20, arrival_card: 12, flights: 10 };
+const FORM_STEPS: Record<Paper, number> = { visa: 20, arrival_card: 12, flights: 10, hotels: 8 };
 
 export type AgentStatus = { text: string; progress?: string };
 
@@ -117,6 +126,13 @@ export function agentStatusLine(run: AgentRun | null, steps: readonly string[]):
     if (result?.read) return { text: "Reading the flights" };
     return { text: "Searching flights on Google Flights" };
   }
+  if (paper === "hotels") {
+    const result = hotelsResult(run);
+    if (result?.ready) return { text: "Waiting for you" };
+    if (result?.chosen) return { text: "Opening the hotel's prices" };
+    if (result?.options.length) return { text: "Waiting for you" };
+    return { text: "Searching hotels on Google" };
+  }
   const last = steps.at(-1) ?? "";
   if (/\b(upload\w*|attach\w*|gave)\b/i.test(last)) {
     if (/\bpassport\b/i.test(last)) return { text: "Uploading your passport" };
@@ -133,6 +149,7 @@ export const REOPENED_TEXTS: Record<Paper, string> = {
   visa: "The visa tab was closed, I reopened the site",
   arrival_card: "The arrival card tab was closed, I reopened the site",
   flights: "The Google Flights tab was closed, I reopened it",
+  hotels: "The Google Hotels tab was closed, I reopened it",
 };
 
 export const STATUS_TEXTS = [
@@ -144,6 +161,8 @@ export const STATUS_TEXTS = [
   "Searching flights on Google Flights",
   "Reading the flights",
   "Opening the booking page",
+  "Searching hotels on Google",
+  "Opening the hotel's prices",
   "Waiting for you",
   "Done",
   "Stopped",
@@ -163,7 +182,7 @@ export type Scene = "aube" | "matin" | "dore" | "nuit";
 
 export function sceneFor({ started, paper, visaReady, cardReady }: { started: boolean; paper: Paper; visaReady: boolean; cardReady: boolean }): Scene {
   if (!started) return "aube";
-  if (cardReady || paper === "flights") return "nuit";
+  if (cardReady || paper === "flights" || paper === "hotels") return "nuit";
   if (visaReady || paper === "arrival_card") return "dore";
   return "matin";
 }

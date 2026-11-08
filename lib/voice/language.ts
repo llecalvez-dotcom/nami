@@ -34,10 +34,12 @@ export function resetSpokenLanguage() {
 // Gladia guesses the language of a short answer badly ("oui", "ok", a word through a distant microphone): measured on
 // 2026-11-07, Nami switched to a language the traveller does not speak. Only a sentence of 3 words or more changes it.
 export const MIN_WORDS_FOR_LANGUAGE = 3;
+// A microphone that opened by itself may have heard the room: three words of noise were once read as German (PR #87).
+export const MIN_WORDS_WHEN_AUTO = 6;
 
-export function languageToKeep(transcript: string, detected: string | null | undefined): string | null {
+export function languageToKeep(transcript: string, detected: string | null | undefined, minWords = MIN_WORDS_FOR_LANGUAGE): string | null {
   const words = transcript.trim().split(/\s+/).filter((word) => /\p{L}/u.test(word));
-  return words.length >= MIN_WORDS_FOR_LANGUAGE ? (detected ?? null) : null;
+  return words.length >= minWords ? (detected ?? null) : null;
 }
 
 function subscribe(listener: () => void) {

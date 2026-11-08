@@ -23,6 +23,7 @@ import { bestFirst, foundPassportText, foundPhotoText, foundReturnTicketText, re
 import { agentChecklist, agentStatusLine, type AgentStatus, CHECKLIST_LABELS, focusItem, paperInFocus, paperOfRun, readyPaper, REOPENED_TEXTS, sceneFor, STATUS_TEXTS, type Paper } from "@/lib/panel-focus";
 import { focusOfficialTab, paperUrl, showOfficialSite } from "@/lib/official-tab";
 import { isFlightReadyMessage } from "@/lib/flights/flow";
+import { isHotelReadyMessage } from "@/lib/hotels/flow";
 import { requestTripParse } from "@/lib/trip-parse-client";
 import {
   acceptProposal,
@@ -86,6 +87,7 @@ export const PANEL_TEXTS = [
   "Photo",
   "Visa",
   "Arrival card",
+  "Hotel",
   "Starting…",
   "Looking for your passport…",
   "Reading your passport…",
@@ -351,7 +353,7 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
 
   // Nami answers in the language the traveller speaks (detected by Gladia), the agent's steps included.
   const shownItems = useTranslatedConversation(trip.conversation, language);
-  useConversationSpeech(shownItems, trip.conversation);
+  useConversationSpeech(shownItems, trip.conversation, true);
   const translationsVersion = useTranslationsVersion();
   // The agent's steps already there when the panel opens are not read again.
   const spokenStep = useRef({ index: trip.agent_steps.length - 1, at: 0 });
@@ -616,14 +618,14 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
     { label: "Passport", state: passport !== null ? "done" : "todo", onOpen: passport !== null ? () => { setEditing(true); setManual(true); } : undefined },
     { label: "Photo", state: photoDocumentId !== null ? "done" : "todo" },
     paperMark("Visa", has(VISA_READY_MESSAGE), "visa"),
-    paperMark("Arrival card", has(ARRIVAL_CARD_READY_MESSAGE), "arrival_card"),
     paperMark("Flight", trip.conversation.some((item) => item.kind === "agent" && isFlightReadyMessage(item.text)), "flights"),
+    paperMark("Hotel", trip.conversation.some((item) => item.kind === "agent" && isHotelReadyMessage(item.text)), "hotels"),
   ];
 
   const showCard = manual || reconfirm;
   const compact = passport !== null && !editing;
   const paper = agent?.paper ?? ready ?? paperInFocus(trip, focus);
-  const scene = sceneFor({ started: true, paper, visaReady: marks[2].state === "done", cardReady: marks[3].state === "done" });
+  const scene = sceneFor({ started: true, paper, visaReady: marks[2].state === "done", cardReady: has(ARRIVAL_CARD_READY_MESSAGE) });
 
   return (
     <div className="nami-panel relative flex h-dvh flex-col" data-paper={paper} data-scene={scene}>

@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, Keyboard, Loader2, Mic, Square } from "lucide-react";
 import { Painting } from "@/components/panel/backdrop";
-import { useSpeaking } from "@/components/voice/speech";
+import { useListenAfterSpeech, useSpeaking } from "@/components/voice/speech";
 import { useIntent } from "@/components/voice/use-intent";
-import { useVoiceInput, type VoiceInput } from "@/components/voice/use-voice-input";
+import { logVoiceMeaning, useVoiceInput, type VoiceInput } from "@/components/voice/use-voice-input";
 import { VoiceAnswer } from "@/components/voice/voice-answer";
 import type { WaveState } from "@/components/panel/wave";
 import { isCriterionQuestion, namesSeveralCriteria } from "@/lib/flights/flow";
+import { autoListenEnabled } from "@/lib/voice/auto-listen";
 import { sentenceSize, type Checklist, type Paper, type Scene } from "@/lib/panel-focus";
 import type { ConversationItem } from "@/lib/trip-state";
 import { cn } from "@/lib/utils";
@@ -41,9 +42,9 @@ type Props = Handlers & {
   t: Translate;
 };
 
-const READY_TITLE: Record<Paper, string> = { visa: "Your visa is ready.", arrival_card: "Your arrival card is ready.", flights: "Your flight is found." };
-const AGENT_TITLE: Record<Paper, string> = { visa: "I'm filling in your visa.", arrival_card: "I'm filling in your arrival card.", flights: "I'm searching your flights." };
-export const PAPER_COLORS: Record<Paper, string> = { visa: "var(--np-lagoon)", arrival_card: "var(--np-coral)", flights: "var(--np-sky)" };
+const READY_TITLE: Record<Paper, string> = { visa: "Your visa is ready.", arrival_card: "Your arrival card is ready.", flights: "Your flight is found.", hotels: "Your hotel is found." };
+const AGENT_TITLE: Record<Paper, string> = { visa: "I'm filling in your visa.", arrival_card: "I'm filling in your arrival card.", flights: "I'm searching your flights.", hotels: "I'm searching your hotels." };
+export const PAPER_COLORS: Record<Paper, string> = { visa: "var(--np-lagoon)", arrival_card: "var(--np-coral)", flights: "var(--np-sky)", hotels: "var(--np-coral)" };
 
 export const STAGE_TEXTS = [
   "Nami",
@@ -184,7 +185,7 @@ function Wall(props: Props) {
           {t("Nami")}
         </p>
         <Sentence text={t(READY_TITLE[ready])} size="xl" />
-        <Secondary>{t(ready === "flights" ? "Book it in the tab when you want, Nami never pays." : "Check it in the tab, then send it yourself.")}</Secondary>
+        <Secondary>{t(ready === "flights" || ready === "hotels" ? "Book it in the tab when you want, Nami never pays." : "Check it in the tab, then send it yourself.")}</Secondary>
         <p className="mt-6 border-t border-[var(--np-line)] pt-5 text-[17px] leading-snug font-medium">{sentenceOf(item)}</p>
       </>
     );
@@ -313,21 +314,32 @@ export function TypeInstead({ onSubmit, t, placeholder }: { onSubmit: (text: str
   );
 }
 
-// The item Nami waits for: its microphone sits on the wave and opens on a tap only, never by itself.
+// The item Nami waits for: its microphone sits on the wave and opens by itself once Nami has said the sentence.
 function Answering(props: Props & { item: ConversationItem }) {
   const { item, t, scene, ...handlers } = props;
   const speaking = useSpeaking();
   const [unclear, setUnclear] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const intent = useIntent();
+  // Not understood: the sentence stays on the screen and nothing new is said, so the microphone has to reopen itself,
+  // or the conversation just stops (Nathan, 2026-11-08: « il ne se passe rien »). Twice at most for one question.
+  const listenAgain = useRef<() => void>(() => {});
+  const relistens = useRef(0);
+  const notUnderstood = (text: string) => {
+    setUnclear(text);
+    if (relistens.current >= 2) return;
+    relistens.current += 1;
+    listenAgain.current();
+  };
   const voice = useVoiceInput(async (text) => {
     setUnclear(null);
     if (item.kind !== "proposal" && item.kind !== "question") return;
     // The word lists, then the H model (components/voice/use-intent.ts): the answer is dispatched like a tap.
     const meaning = await intent.interpret(item, text);
+    logVoiceMeaning(meaning.kind);
     if (item.kind === "proposal") {
       if (meaning.kind === "accept" || meaning.kind === "decline") return handlers.onDecide(item.id, meaning.kind === "accept");
-      return setUnclear(text);
+      return notUnderstood(text);
     }
     // Several criteria at once ("le moins cher et le plus rapide"): never one of them, whatever the H model kept. The
     // text path gives the compromise and Nami says so (answerFlightQuestionWithText).
@@ -338,11 +350,18 @@ function Answering(props: Props & { item: ConversationItem }) {
     try {
       await handlers.onAnswerText(item.id, text);
     } catch {
-      setUnclear(text);
+      notUnderstood(text);
       setBusy(false);
     }
   });
   const typed = item.kind === "agent_question" || (item.kind === "question" && item.input === "email");
+  useListenAfterSpeech(typed ? "" : item.id, voice.start);
+  const startVoice = voice.start;
+  useEffect(() => {
+    listenAgain.current = () => {
+      if (!typed && autoListenEnabled()) void startVoice("auto");
+    };
+  }, [typed, startVoice]);
   const working = props.agent !== null || props.busy !== null || busy || intent.thinking;
 
   return (

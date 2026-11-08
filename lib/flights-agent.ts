@@ -121,7 +121,9 @@ export function buildFlightsInstructions(): string {
 export function buildFlightsTask(input: FlightsStart): string {
   const adults = input.travellers === 1 ? "1 adult" : `${input.travellers} adults`;
   return [
-    `Open exactly this URL: ${googleFlightsUrl(input)}`,
+    // Nami has prepared a blank tab (lib/agent-tab.ts), but the bridge starts on the tab that was already open.
+    "Work in the blank tab, never in another one: the other tabs hold the traveller's forms, so never navigate or close them. If the current tab is not about:blank, first call switch_tab_web to go to the about:blank tab.",
+    `Then, in that tab, open exactly this URL: ${googleFlightsUrl(input)}`,
     `It should show round trips from ${input.origin} to ${input.destination}, leaving ${input.departure_date} and returning ${input.return_date}, ${adults}, economy, prices in EUR.`,
     "If the cookie consent page appears first, click \"Tout refuser\" or \"Reject all\".",
     "Do not read the flights and do not scroll: Nami reads the page herself. As soon as the list of flights is displayed with prices, call report_flights with no flights. If the page still says the results are loading, call wait_web for 2 seconds first. Only if the top of the page shows another city, another date, or no search at all, fix the form on the page and search, then call report_flights with no flights.",

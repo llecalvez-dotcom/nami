@@ -5,6 +5,35 @@ import { alreadyHeard, speechPlan, speechText, spokenShort } from "@/lib/voice/c
 
 const now = new Date("2026-11-08T12:52:00Z");
 
+describe("in the side panel, Nami says only the sentence on the screen", () => {
+  const message = (id: string, text: string): ConversationItem => ({ id, kind: "agent", text }) as ConversationItem;
+  const proposal = (id: string, text: string): ConversationItem =>
+    ({ id, kind: "proposal", action: "papers", text, accept_label: "Yes", decline_label: "No", decision: null }) as ConversationItem;
+
+  it("skips the messages that came before the question on the screen", () => {
+    const items = [message("a", "Bali, for a wedding."), message("b", "I looked at your papers."), proposal("c", "Do you travel with a French passport?")];
+    const plan = speechPlan(items, new Set(), new Set(), true);
+    expect(plan.toRead).toEqual([{ id: "c", text: "Do you travel with a French passport?" }]);
+  });
+
+  it("cuts the sentence that has just left the screen", () => {
+    const items = [message("a", "One moment."), proposal("c", "Shall I go on?")];
+    expect(speechPlan(items, new Set(["a"]), new Set(), true).interrupted).toBe(true);
+  });
+
+  it("says nothing new while the question on the screen is still the same", () => {
+    const items = [proposal("c", "Shall I go on?"), message("d", "A late message.")];
+    const plan = speechPlan(items, new Set(["c"]), new Set(["c"]), true);
+    expect(plan.toRead).toEqual([]);
+    expect(plan.interrupted).toBe(false);
+  });
+
+  it("still reads everything in the full conversation screen", () => {
+    const items = [message("a", "One."), proposal("c", "Two?")];
+    expect(speechPlan(items, new Set(), new Set()).toRead.map((entry) => entry.id)).toEqual(["a", "c"]);
+  });
+});
+
 describe("conversation speech", () => {
   it("reads Nami's items, not the user's", () => {
     const items = createSampleTrip(now).conversation;

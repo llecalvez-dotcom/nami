@@ -13,6 +13,7 @@ import {
   decideProposal,
   giveUpAutoRestart,
   markAutoRestart,
+  pushProposal,
   reopenAgentQuestion,
   reportReady,
   recordPassportUpload,
@@ -248,9 +249,9 @@ describe("report_ready", () => {
     expect(trip.agent_run).toMatchObject({ state: "interrupted", drained: true });
     expect(trip.agent_steps.at(-1)).toBe("Nami stopped the agent before anything was sent, so you can check and send it");
     expect(trip.conversation.at(-2)).toMatchObject({ kind: "agent", text: VISA_READY_MESSAGE, list: ["surname", "passport_number"] });
-    // The arrival card comes next, once the visa is ready; the flights only after it.
-    expect(trip.conversation.at(-1)).toMatchObject({ kind: "proposal", action: "create_arrival_card", decision: null });
-    expect(trip.conversation.some((i) => i.kind === "proposal" && i.action === "flights")).toBe(false);
+    // The flights come straight after the visa: Nami no longer offers the arrival card (Nathan, 2026-11-08).
+    expect(trip.conversation.at(-1)).toMatchObject({ kind: "proposal", action: "flights", decision: null });
+    expect(trip.conversation.some((i) => i.kind === "proposal" && i.action === "create_arrival_card")).toBe(false);
     expect(reportReady(trip, REPORT, SECRETS)).toBe(trip);
 
     const done = applyAgentChanges(trip, changes({ status: "completed" }), SECRETS).trip;
@@ -269,9 +270,9 @@ describe("helpers", () => {
   });
 });
 
-describe("second paper: the arrival card after the visa", () => {
-  it("starts an arrival card run from its proposal, then offers the flights once it is ready", () => {
-    const afterVisa = reportReady(liveTrip(), REPORT, SECRETS);
+describe("arrival card: no longer offered, its run still works if it comes back", () => {
+  it("starts an arrival card run from its proposal and reports it ready", () => {
+    const afterVisa = pushProposal(reportReady(liveTrip(), REPORT, SECRETS), "create_arrival_card", "Your arrival card?", "Fill it in", "Not now");
     const card = afterVisa.conversation.at(-1)!;
     const started = startVisaRun(afterVisa, card.id, "s-2", now, true);
     expect(started.agent_run).toMatchObject({ session_id: "s-2", paper_id: "arrival_card", state: "pending" });
@@ -279,14 +280,7 @@ describe("second paper: the arrival card after the visa", () => {
 
     const ready = reportReady(started, { ...REPORT, id: "report-2" }, SECRETS);
     expect(ready.formalities.find((f) => f.id === "arrival_card")?.status).toBe("pending_approval");
-    expect(ready.conversation.at(-2)).toMatchObject({ kind: "agent", text: ARRIVAL_CARD_READY_MESSAGE });
-    expect(ready.conversation.at(-1)).toMatchObject({ kind: "proposal", action: "flights", decision: null });
-  });
-
-  it("offers the flights when the arrival card is declined", () => {
-    const afterVisa = reportReady(liveTrip(), REPORT, SECRETS);
-    const declined = decideProposal(afterVisa, afterVisa.conversation.at(-1)!.id, false, now);
-    expect(declined.conversation.at(-1)).toMatchObject({ kind: "proposal", action: "flights" });
+    expect(ready.conversation.at(-1)).toMatchObject({ kind: "agent", text: ARRIVAL_CARD_READY_MESSAGE });
   });
 });
 

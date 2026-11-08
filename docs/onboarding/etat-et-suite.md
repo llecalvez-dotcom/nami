@@ -9,7 +9,7 @@ Parcours complet **à la voix, dans le panneau, sur le Mac de Clément** dans la
 ### Compréhension et voix
 - Transcription Gladia, compréhension par le modèle H avec repli (`holo4-27b` puis `holo4-35b-a3b`), langue suivie et interface traduite.
 - Réponses naturelles comprises : listes fermées (« ouais carrément », « nope », « non merci ») puis interprétation par le modèle H de toute phrase libre (« je suis chaud » = oui, « le moins cher et le plus rapide » = compromis, « le deuxième, celui de Qatar » = ce vol) ; en cas de doute, texte libre, jamais de clic inventé (PR #91, #94, #103).
-- Le micro ne s'ouvre jamais tout seul (PR #87). Voix par `say` de macOS (ElevenLabs disponible mais non retenu : Nathan s'en charge).
+- Le micro se rouvre tout seul après chaque phrase de Nami dans le panneau, avec des garde-fous contre le bruit (retour de Nathan du 8 novembre, revient sur la PR #87 ; `NEXT_PUBLIC_NAMI_AUTO_MIC=off` pour revenir au clic). Voix par `say` de macOS (ElevenLabs disponible mais non retenu : Nathan s'en charge).
 - Plus de question d'heure d'atterrissage : c'est Nami qui cherche le vol (PR #86, #88).
 
 ### Documents
