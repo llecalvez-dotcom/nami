@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FlightOption } from "@/lib/contracts";
 import type { ToolRequest } from "@/lib/h-agent";
+import { asksDirectOnly, DIRECT_ONLY_KEPT_MESSAGE, knownTransitChecks, pendingTransitChecks, recordTransitChecks } from "@/lib/flights/flow";
 import {
   applyFlightsChanges,
   BALANCED_CRITERIA_MESSAGE,
@@ -389,7 +390,7 @@ describe("the flights session", () => {
     const item = last(trip) as Extract<Trip["conversation"][number], { kind: "question" }>;
     expect(pendingFlightChoice(trip)).toBeNull();
     trip = answerQuestion(trip, item.id, "1", item.options[1].label);
-    expect(last(trip)).toMatchObject({ kind: "agent", text: "I'm opening Qatar Airways at 912 euros, one stop, 18 h 30, watch the tab on the left." });
+    expect(last(trip)).toMatchObject({ kind: "agent", text: "I'm opening Qatar Airways at 912 euros, one stop, 18 h 30, watch the tab on the left. It stops in Doha: I'm checking the transit rules for your passport." });
     expect(trip.agent_steps).toContain("You chose Qatar Airways, 912 €");
     expect(pendingFlightChoice(trip)).toEqual({ tool_req: REPORT, flight: FLIGHTS[0] });
   });
@@ -569,5 +570,141 @@ describe("H never opened Google Flights: one automatic restart with the same sea
     expect(again.conversation.filter((i) => i.kind === "question")).toEqual(second.conversation.filter((i) => i.kind === "question"));
     expect(flightsStartBody(again)).toEqual({ origin: "Paris", destination: "Bali", departure_date: "2026-11-23", return_date: "2026-12-03", travellers: 2, criterion: "cheapest" });
     expect(openRetries(again)).toEqual([]);
+  });
+});
+
+describe("departure city (P0: never Paris in the traveller's place)", () => {
+  it("searches from Lyon when the trip says so, from the city said when asked, and nothing without a city", () => {
+    expect(flightsStartBody(searching({ ...REQUEST, origin: "Lyon" }))?.origin).toBe("Lyon");
+    const noCity = { ...searching(), request: { ...searching().request, origin: null } };
+    expect(flightsStartBody(noCity)).toBeNull();
+    expect(flightsAnswered(noCity)).toBe(false);
+  });
+
+  it("asks the dates without naming a city when none is known yet", () => {
+    let trip: Trip = { ...proposed(), request: { ...REQUEST, origin: null } };
+    trip = decideProposal(trip, last(trip).id, true, NOW);
+    const origin = last(trip);
+    if (origin.kind !== "question") throw new Error("no origin question");
+    const dates = answerQuestionWithText(trip, origin.id, "I leave from Lyon", { ...REQUEST, origin: null });
+    expect(dates.request.origin).toBe("Lyon");
+    expect(last(dates)).toMatchObject({ field: "return_date", question: expect.stringContaining("You leave Lyon on") });
+  });
+});
+
+describe("direct flights only (P0: a hard constraint, never relaxed in silence)", () => {
+  const DIRECT_REQUEST = { ...REQUEST, raw_text: "Bali in November, only direct flights" };
+
+  function directOnly(request = DIRECT_REQUEST): Trip {
+    let trip = decideProposal(proposed(request), last(proposed(request)).id, true, NOW);
+    const dates = last(trip);
+    if (dates.kind !== "question") throw new Error("no date question");
+    trip = answerQuestion(trip, dates.id, dates.options[0].value, dates.options[0].label);
+    const criterion = last(trip);
+    if (criterion.kind !== "question") throw new Error("no criterion question");
+    const option = criterion.options.find((o) => o.value === "direct_only")!;
+    trip = answerQuestion(trip, criterion.id, option.value, option.label);
+    return startFlightsSession(trip, "s-flights", "https://www.google.com/travel/flights?q=x", NOW);
+  }
+
+  it("hears the constraint, in several languages, and not a preference", () => {
+    expect(asksDirectOnly("only direct flights")).toBe(true);
+    expect(asksDirectOnly("que des vols directs")).toBe(true);
+    expect(asksDirectOnly("vol direct uniquement, le moins cher")).toBe(true);
+    expect(asksDirectOnly("pas d'escale")).toBe(true);
+    expect(asksDirectOnly("sans escale si possible")).toBe(false);
+    expect(asksDirectOnly("the cheapest")).toBe(false);
+    expect(matchCriterion("direct only and cheap")).toBe("direct_only");
+    expect(matchCriterion("cheap and direct")).toBe("best");
+  });
+
+  it("offers the Direct flights only button when the trip asked for it, not otherwise", () => {
+    const usual = searching();
+    const criterionQuestion = usual.conversation.find((i) => i.kind === "question" && i.field === "flight_criterion");
+    expect(criterionQuestion?.kind === "question" && criterionQuestion.options.map((o) => o.value)).toEqual(["cheapest", "fastest", "fewest_stops", "best"]);
+    const trip = directOnly();
+    expect(flightCriterion(trip)).toBe("direct_only");
+    expect(flightsStartBody(trip)?.criterion).toBe("direct_only");
+  });
+
+  it("a criterion said without its button still counts", () => {
+    let trip = decideProposal(proposed(), last(proposed()).id, true, NOW);
+    const dates = last(trip);
+    if (dates.kind !== "question") throw new Error("no date question");
+    trip = answerQuestion(trip, dates.id, dates.options[0].value, dates.options[0].label);
+    const criterion = last(trip);
+    trip = answerQuestionWithText(trip, criterion.id, "uniquement des vols directs", REQUEST);
+    expect(flightCriterion(trip)).toBe("direct_only");
+  });
+
+  it("shows only the direct flights when there are some", () => {
+    const direct = [{ ...FLIGHTS[0], index: 9, stops: 0, layovers: [], price: 1250 }];
+    const offered = offerFlights(directOnly(), { ...REPORT, args: { flights: [...FLIGHTS, ...direct] } }, [...FLIGHTS, ...direct]);
+    const item = last(offered);
+    if (item.kind !== "question") throw new Error("no choice");
+    expect(item.field).toBe("flight_choice");
+    expect(item.options).toHaveLength(1);
+    expect(item.question).toContain("Direct flights only, as you asked");
+    expect(item.question).not.toContain("1 stop");
+  });
+
+  it("with no direct flight, says so and asks before showing the ones with a stop; 'no' keeps the constraint", () => {
+    const offered = offerFlights(directOnly(), REPORT, FLIGHTS);
+    const item = last(offered);
+    if (item.kind !== "question") throw new Error("no relax question");
+    expect(item.field).toBe("flight_relax");
+    expect(item.question).toContain("No direct flight from Paris to Bali on those days: I read 4 flights, all with at least one stop. I keep your constraint.");
+    expect(offered.conversation.some((i) => i.kind === "question" && i.field === "flight_choice")).toBe(false);
+    const kept = answerQuestion(offered, item.id, "keep", "Keep direct only");
+    expect(last(kept)).toMatchObject({ kind: "agent", text: DIRECT_ONLY_KEPT_MESSAGE });
+    const no = answerQuestionWithText(offered, item.id, "non merci", REQUEST);
+    expect(last(no)).toMatchObject({ kind: "agent", text: DIRECT_ONLY_KEPT_MESSAGE });
+  });
+
+  it("'yes' shows the flights with the fewest stops, never called direct, and the choice opens one", () => {
+    const offered = offerFlights(directOnly(), REPORT, FLIGHTS);
+    const relax = last(offered);
+    const shown = answerQuestionWithText(offered, relax.id, "oui", REQUEST);
+    const choice = last(shown);
+    if (choice.kind !== "question") throw new Error("no choice");
+    expect(choice.field).toBe("flight_choice");
+    expect(choice.question).toContain("None of these is direct");
+    expect(choice.options.map((o) => o.value)).toEqual(["2", "1", "3"]);
+    const chosen = answerQuestionWithText(shown, choice.id, "the second one", REQUEST);
+    expect(flightsResult(chosen.agent_run)?.chosen?.index).toBe(1);
+  });
+});
+
+describe("transit of the chosen flight (P1)", () => {
+  function chosen(flights = FLIGHTS, request = REQUEST): Trip {
+    const offered = offerFlights(searching(request), { ...REPORT, args: { flights } }, flights);
+    const choice = last(offered);
+    if (choice.kind !== "question") throw new Error("no choice");
+    return answerQuestion(offered, choice.id, choice.options[0].value, choice.options[0].label);
+  }
+
+  it("asks the transit rules of the stop abroad for the actual passport and connection type, once", () => {
+    const trip = chosen();
+    expect(pendingTransitChecks(trip)).toEqual([{ nationality: "FR", city: "Doha", country_iso2: "QA", connection: "airside", layover_min: null, destination: "Bali" }]);
+    const indian = chosen(FLIGHTS.map((f) => ({ ...f, self_transfer: true })), { ...REQUEST, nationality: "IN" });
+    expect(pendingTransitChecks(indian)?.[0]).toMatchObject({ nationality: "IN", connection: "landside" });
+    const direct = chosen(FLIGHTS.map((f) => ({ ...f, stops: 0, layovers: [] })));
+    expect(pendingTransitChecks(direct)).toBeNull();
+    expect(last(direct)).toMatchObject({ text: expect.not.stringContaining("transit") });
+  });
+
+  it("a Schengen stop for a French passport is settled without a search", () => {
+    const trip = chosen(FLIGHTS.map((f) => ({ ...f, layovers: [{ airport: "Amsterdam", duration_min: 90 }] })));
+    expect(knownTransitChecks(trip)).toMatchObject([{ city: "Amsterdam", status: "not_needed" }]);
+  });
+
+  it("records what was found and never calls the journey ready while a transit is unverified", () => {
+    const trip = chosen();
+    const check = { city: "Doha", country_iso2: "QA", country: "Qatar", connection: "airside" as const, layover_min: null, status: "needs_verification" as const, summary: "Transit in Doha: not found on an official site.", sources: [] };
+    const recorded = recordTransitChecks(trip, [check]);
+    expect(pendingTransitChecks(recorded)).toBeNull();
+    expect(flightsResult(recorded.agent_run)?.transit).toEqual([check]);
+    expect(last(recorded)).toMatchObject({ kind: "agent", text: "Transit in Doha: not found on an official site. I do not call this journey ready until that is verified." });
+    expect(recorded.agent_steps.at(-1)).toBe("Checked the transit in Doha");
   });
 });

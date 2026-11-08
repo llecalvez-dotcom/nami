@@ -13,6 +13,8 @@ export const CRITERION_LABELS: Record<FlightCriterion, string> = {
   // "Best" stays in the label (the spoken-answer interpreter relies on it); no "price" or "stops" in it, since a label
   // containing a said word is taken as the answer (matchOption) before the criterion words are looked at.
   best: "Best compromise",
+  // Only offered when the traveller asked for it ("vols directs uniquement"): a one-stop flight is never shown as direct.
+  direct_only: "Direct flights only",
 };
 
 function normalizer(values: number[]): (value: number) => number {
@@ -47,6 +49,8 @@ export function rankFlights(options: FlightOption[], criterion: FlightCriterion,
       sorted.sort((a, b) => score(a) - score(b) || byPriceThenDuration(a, b));
       break;
     }
+    case "direct_only":
+      return sorted.filter((o) => o.stops === 0).sort(byPriceThenDuration).slice(0, count);
   }
   return sorted.slice(0, count);
 }
@@ -102,5 +106,6 @@ export function flightLabel(option: FlightOption): string {
 // What Nami says before the list: the criterion, and a word when no flight is direct.
 export function introduceFlights(criterion: FlightCriterion, options: FlightOption[]): string {
   if (criterion === "fewest_stops" && !hasDirectFlight(options)) return "No direct flight on those days, here are the flights with the fewest stops.";
+  if (criterion === "direct_only") return "Direct flights only, as you asked, cheapest first.";
   return `${CRITERION_LABELS[criterion]} first.`;
 }

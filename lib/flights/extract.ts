@@ -69,6 +69,10 @@ function layovers(line: string): FlightOption["layovers"] {
   return found;
 }
 
+// "Separate tickets booked together", "Transfer here from Milan Linate Airport to Milano Malpensa Airport", and the French
+// of both: the connection is the traveller's own (lib/journey/transit.ts reads it as a landside transit).
+const SELF_TRANSFER = /separate tickets|billets s[ée]par[ée]s|transfer here from|changement d'a[ée]roport|self[- ]transfer/i;
+
 // One aria-label of a result row, or null when it is not a flight (a price alone, a button, a half-read row).
 export function parseResultLabel(label: string, index: number): FlightOption | null {
   const line = label.replace(/[\u00a0\u202f\u2009]/g, " ").replace(/\s+/g, " ").trim();
@@ -92,6 +96,7 @@ export function parseResultLabel(label: string, index: number): FlightOption | n
     depart_at: times[1],
     arrive_at: `${times[3]}${arrivalSuffix(times[2], times[4])}`,
     layovers: layovers(line),
+    self_transfer: SELF_TRANSFER.test(line) || undefined,
   });
   return parsed.success ? parsed.data : null;
 }

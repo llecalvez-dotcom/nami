@@ -27,6 +27,11 @@ Parcours complet **à la voix, dans le panneau, sur le Mac de Clément** dans la
 - Garde-fou hors Google armé seulement une fois Google Flights vu (PR #100) ; une relance ne repose ni la ville, ni les dates, ni le critère (PR #103) ; critères combinés = meilleur compromis.
 - Linkup écarté pour les prix en direct après test (`docs/tests/g0-linkup-vols.md`).
 
+- Ville de départ : celle que le voyageur nomme (« je pars de Lyon » cherche depuis Lyon). Sans ville, Nami la demande (Paris proposé en bouton) et ne cherche jamais à sa place (`lib/flights/flow.ts`, `flightsStartBody`).
+- « Vols directs uniquement » : contrainte dure (`direct_only`). Aucun vol avec escale n'est présenté comme direct ; sans vol direct, Nami le dit, garde la contrainte et demande avant de montrer les vols avec le moins d'escales (question `flight_relax`).
+- Décision de trajet (`lib/journey/decision.ts`, pure, testée) : la ville dite reste la référence, une seule alternative, proposée seulement si l'économie nette (train, transfert aéroport comptés et vérifiés) atteint 90 €, le temps en plus reste raisonnable et la correspondance passe le filtre de sécurité ; des billets séparés ne sont jamais « sans risque ». Pas encore branchée dans la conversation : il manque une lecture des prix depuis l'autre ville.
+- Transit (`lib/journey/transit.ts`, `/api/transit`) : après le choix d'un vol avec escale à l'étranger, Nami cherche sur les sites officiels si le passeport du voyageur a besoin d'un visa de transit pour ce type de correspondance (airside, ou landside quand les billets sont séparés ou l'escale dure un jour). Rien d'officiel trouvé : « à vérifier », et le voyage n'est jamais dit prêt.
+
 ### Panneau et extension
 - Une étape à la fois, « la vague », coches Passeport / Photo / Visa / Carte d'arrivée / Flight avec état, ligne d'état permanente « ce que fait l'agent » (PR #95).
 - Clic sur une coche : l'onglet où l'agent a travaillé revient tel quel, jamais une nouvelle page tant qu'un onglet du site existe ; sinon site rouvert et ligne d'état qui le dit (PR #102).

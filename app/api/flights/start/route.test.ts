@@ -10,7 +10,8 @@ vi.mock("@/lib/chrome-cdp", async (importOriginal) => ({
   connectChrome: vi.fn(),
 }));
 
-const BODY = { destination: "Bali", departure_date: "2026-11-23", return_date: "2026-12-03", travellers: 2, local_session_id: "local-42" };
+const BODY = {
+  origin: "Paris", destination: "Bali", departure_date: "2026-11-23", return_date: "2026-12-03", travellers: 2, local_session_id: "local-42" };
 
 const start = (body: unknown) =>
   POST(new Request("http://localhost/api/flights/start", { method: "POST", body: JSON.stringify(body) }));
@@ -41,6 +42,13 @@ afterEach(() => {
 const sentBody = () => JSON.parse((fetch.mock.calls.find(([, init]) => init.method === "POST") as unknown as [string, RequestInit])[1].body as string);
 
 describe("POST /api/flights/start", () => {
+  it("refuses a search without a departure city: never Paris in the traveller's place", async () => {
+    const { origin: _origin, ...noOrigin } = BODY;
+    void _origin;
+    expect((await start(noOrigin)).status).toBe(400);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("starts a Google Flights session with the flights task, tools and limits, and binds it as a flights session", async () => {
     const response = await start(BODY);
     expect(response.status).toBe(201);

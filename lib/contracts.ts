@@ -179,7 +179,8 @@ export const DocumentExtractionSchema = z.object({
 export type DocumentExtraction = z.infer<typeof DocumentExtractionSchema>;
 
 // Module Vol (ticket 18): a flight read on Google Flights by the agent, checked against the page text before it is shown.
-export const FlightCriterionSchema = z.enum(["cheapest", "fastest", "fewest_stops", "best"]);
+// direct_only: a hard constraint ("only direct flights"), never relaxed by itself: with no direct flight, Nami says so and asks.
+export const FlightCriterionSchema = z.enum(["cheapest", "fastest", "fewest_stops", "best", "direct_only"]);
 export type FlightCriterion = z.infer<typeof FlightCriterionSchema>;
 
 export const FlightOptionSchema = z.object({
@@ -194,6 +195,9 @@ export const FlightOptionSchema = z.object({
   layovers: z.array(z.object({ airport: z.string().trim().min(1).max(80), duration_min: z.number().int().nonnegative().optional() })).default([]),
   // Position in the list shown on the page (1 = first), so the agent knows which one to click.
   index: z.number().int().positive(),
+  // Google says "separate tickets" or "transfer here from X airport to Y airport": the traveller changes airport or
+  // ticket himself, so he goes through immigration and nobody protects the connection.
+  self_transfer: z.boolean().optional(),
 });
 export type FlightOption = z.infer<typeof FlightOptionSchema>;
 
