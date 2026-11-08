@@ -1,4 +1,4 @@
-import { hostWithin, offDomainHost, onDomainIndex, toAgentChanges } from "@/lib/agent-changes";
+import { offDomainHost, onDomainIndex, toAgentChanges } from "@/lib/agent-changes";
 import { abandonSession, isAbandoned, STALLED, trackProgress } from "@/lib/agent-stall";
 import { captureAgentScreen, finishAgentScreen } from "@/lib/agent-screen";
 import { getBaliPaper } from "@/lib/bali-papers";
@@ -43,8 +43,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/agent/[id]/c
       const reached = onDomainIndex(changes.new_events, FLIGHTS_DOMAIN);
       if (reached !== -1) armFlightsGuard(id);
       const before = reached === -1 ? changes.new_events : changes.new_events.slice(0, reached);
-      const elsewhere = offDomainHost(before, FLIGHTS_DOMAIN);
-      left = elsewhere && !hostWithin(elsewhere, BALI_DOMAINS) ? elsewhere : null;
+      left = offDomainHost(before, FLIGHTS_DOMAIN, BALI_DOMAINS);
       if (!left && reached !== -1) left = offDomainHost(changes.new_events.slice(reached), FLIGHTS_DOMAIN);
     } else if (running) {
       left = offDomainHost(changes.new_events, flights ? FLIGHTS_DOMAIN : getBaliPaper(sessionPaper(id)).domain);

@@ -125,11 +125,12 @@ export function hostWithin(host: string, domains: readonly string[]): boolean {
   return domains.some((domain) => host === domain || host.endsWith(`.${domain}`));
 }
 
-export function offDomainHost(events: HEvent[], domain: string): string | null {
+// `tolerated`: other official domains the agent may show without being cut (the paper tabs a flights session starts on).
+export function offDomainHost(events: HEvent[], domain: string, tolerated: readonly string[] = []): string | null {
   for (const event of events) {
     if (event.type !== "AgentEvent" || event.data?.kind !== "observation_event") continue;
     const left = offSite((event.data.metadata as { url?: unknown } | undefined)?.url, domain);
-    if (left) return left;
+    if (left && !hostWithin(left, tolerated)) return left;
   }
   return null;
 }
