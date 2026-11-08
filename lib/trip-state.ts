@@ -36,6 +36,7 @@ import {
   startHotelsFlow,
   type HotelQuestionField,
 } from "@/lib/hotels/flow";
+import { HOTELS_PROPOSAL } from "@/lib/hotels/rank";
 import {
   assumedArrival,
   formalityWindows,
@@ -144,6 +145,10 @@ const FLIGHTS_AFTER_VISA: NewConversationItem = {
   ...FLIGHTS_PROPOSAL,
   text: "Do you also want me to help you find your flights?",
 } as NewConversationItem;
+
+function proposeHotels(trip: Trip): Trip {
+  return trip.conversation.some((i) => i.kind === "proposal" && i.action === "hotels" && i.decision !== "declined") ? trip : push(trip, HOTELS_PROPOSAL);
+}
 
 // One flight proposal at a time, and none once the flights are accepted, being searched or found: the arrival card's
 // report_ready, a declined card or a late paper message must not ask again (Clément, real run 2026-11-08).
@@ -378,7 +383,7 @@ export function answerQuestionWithText(trip: Trip, itemId: string, text: string,
   const item = trip.conversation.find((i) => i.id === itemId);
   if (!item || item.kind !== "question" || item.from !== "nami" || item.answer !== null) return trip;
   if (isFlightQuestion(item.field)) return answerFlightQuestionWithText(trip, { ...item, field: item.field }, text, request);
-  if (isHotelQuestion(item.field)) return answerHotelQuestionWithText(trip, { ...item, field: item.field }, text);
+  if (isHotelQuestion(item.field)) return answerHotelQuestionWithText(trip, { ...item, field: item.field }, text, request);
   const answered = { ...updateItem(trip, itemId, { answer: text }), request };
   const stillMissing = item.field !== "email" && request[item.field] === null;
   return advance(stillMissing ? push(answered, { kind: "agent", text: "Sorry, I didn't catch that." }) : answered);
@@ -454,7 +459,7 @@ export function decideProposal(trip: Trip, itemId: string, accepted: boolean, no
         CREATE_VISA_PROPOSAL,
       );
     case "create_visa":
-      if (!accepted) return push(decided, { kind: "agent", text: "Okay, the visa can wait." });
+      if (!accepted) return proposeFlights(push(decided, { kind: "agent", text: "Okay, the visa can wait." }), FLIGHTS_AFTER_VISA);
       // A real trip starts a real H session: see startVisaRun, called once the session exists.
       if (!trip.sample) return trip;
       return push(
@@ -487,7 +492,7 @@ export function decideProposal(trip: Trip, itemId: string, accepted: boolean, no
       const withModule = { ...decided, modules: setModule(decided.modules, "flights", accepted ? "accepted" : "declined") };
       // The dates, the criterion, then the client starts the Google Flights session (lib/flights/flow.ts).
       if (accepted) return startFlightsFlow(withModule);
-      return push(withModule, { kind: "agent", text: "Okay, no flight search for now." });
+      return proposeHotels(push(withModule, { kind: "agent", text: "Okay, no flight search for now." }));
     }
     case "hotels": {
       const withModule = { ...decided, modules: setModule(decided.modules, "hotel", accepted ? "accepted" : "declined") };

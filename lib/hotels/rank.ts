@@ -2,6 +2,10 @@ import type { HotelCriterion, HotelOption } from "@/lib/contracts";
 
 export const PROPOSED_HOTELS = 3;
 
+export const HOTELS_PROPOSAL = {
+  kind: "proposal", action: "hotels", text: "Do you also want me to find you a hotel?", accept_label: "Find my hotel", decline_label: "Not now", decision: null,
+} as const;
+
 export const HOTEL_CRITERION_LABELS: Record<HotelCriterion, string> = {
   cheapest: "The cheapest",
   best_rated: "The best rated",

@@ -4,13 +4,13 @@
 
 import { z } from "zod";
 import { freshToolCalls, H_NOT_ANSWERING_MESSAGE, H_SLOW_RESTART_MESSAGE, redact, toolCallKey, wantsAutoRestart, type AgentChanges } from "@/lib/agent-changes";
-import { AgentStateSchema, HotelCriterionSchema, HotelOptionSchema, type AgentRun, type HotelCriterion, type HotelOption } from "@/lib/contracts";
-import { ORDINAL_WORDS, saidWord, spokenWords } from "@/lib/flights/flow";
+import { AgentStateSchema, HotelCriterionSchema, HotelOptionSchema, type AgentRun, type HotelCriterion, type HotelOption, type TripRequestDraft } from "@/lib/contracts";
+import { addDays, longDate, ORDINAL_WORDS, saidWord, spokenWords } from "@/lib/flights/flow";
 import { isTerminalStatus, type ToolRequest } from "@/lib/h-agent";
 import { describeHotel, formatHotelPrice, HOTEL_CRITERION_LABELS, hotelLabel, rankHotels } from "@/lib/hotels/rank";
 import type { ConversationItem, Trip } from "@/lib/trip-state";
 
-export const HOTEL_QUESTION_FIELDS = ["hotel_criterion", "hotel_choice"] as const;
+export const HOTEL_QUESTION_FIELDS = ["hotel_checkout", "hotel_criterion", "hotel_choice"] as const;
 export type HotelQuestionField = (typeof HOTEL_QUESTION_FIELDS)[number];
 type HotelQuestion = Extract<ConversationItem, { kind: "question" }> & { field: HotelQuestionField };
 
@@ -75,9 +75,17 @@ const retry = (trip: Trip) =>
   trip.conversation.some((i) => i.kind === "proposal" && i.action === "hotels" && i.decision === null)
     ? trip
     : push(trip, { kind: "proposal", ...HOTELS_RETRY_PROPOSAL, decision: null });
-const question = (field: HotelQuestionField, text: string, options: { label: string; value: string }[]): NewItem => ({
-  kind: "question", from: "nami", field, question: text, options, input: null, answer: null,
+const question = (field: HotelQuestionField, text: string, options: { label: string; value: string }[], input: "text" | null = null): NewItem => ({
+  kind: "question", from: "nami", field, question: text, options, input, answer: null,
 });
+
+// The hotel was reached without the flights, whose questions settle the return date.
+function askCheckout(trip: Trip): Trip {
+  const { departure_date } = trip.request;
+  if (!departure_date) return say(trip, "I need your arrival date first.");
+  const options = [7, 10, 14].map((days) => addDays(departure_date, days)).map((date) => ({ label: longDate(date), value: date }));
+  return push(trip, question("hotel_checkout", `You arrive on ${longDate(departure_date)}. When do you leave your hotel?`, options, "text"));
+}
 
 function askCriterion(trip: Trip): Trip {
   return push(trip, question("hotel_criterion", CRITERION_QUESTION, HotelCriterionSchema.options.map((value) => ({ label: HOTEL_CRITERION_LABELS[value], value }))));
@@ -91,10 +99,11 @@ export function answeredHotelCriterion(trip: Trip): HotelCriterion | null {
   return parsed.success ? parsed.data : null;
 }
 
-export const hotelsAnswered = (trip: Trip) => answeredHotelCriterion(trip) !== null;
+export const hotelsAnswered = (trip: Trip) => !!trip.request.return_date && answeredHotelCriterion(trip) !== null;
 
 // "Yes" to the hotel: the criterion, then the client starts the agent. "Search again" finds it answered and asks nothing.
 export function startHotelsFlow(trip: Trip): Trip {
+  if (!trip.request.return_date) return askCheckout(trip);
   return hotelsAnswered(trip) ? say(trip, HOTELS_SEARCHING_MESSAGE) : askCriterion(trip);
 }
 
@@ -128,14 +137,19 @@ export function matchHotel(text: string, options: HotelOption[]): HotelOption | 
 
 export function answerHotelQuestion(trip: Trip, item: HotelQuestion, value: string, label: string): Trip {
   const answered = answerItem(trip, item.id, label);
+  if (item.field === "hotel_checkout") return askCriterion({ ...answered, request: { ...answered.request, return_date: value } });
   return item.field === "hotel_criterion" ? say(answered, HOTELS_SEARCHING_MESSAGE) : chooseHotel(answered, value);
 }
 
 function askAgain(trip: Trip, item: HotelQuestion, text: string): Trip {
-  return push(say(answerItem(trip, item.id, text), "Sorry, I didn't catch that."), question(item.field, item.question, item.options));
+  return push(say(answerItem(trip, item.id, text), "Sorry, I didn't catch that."), question(item.field, item.question, item.options, item.input === "text" ? "text" : null));
 }
 
-export function answerHotelQuestionWithText(trip: Trip, item: HotelQuestion, text: string): Trip {
+export function answerHotelQuestionWithText(trip: Trip, item: HotelQuestion, text: string, request: TripRequestDraft): Trip {
+  if (item.field === "hotel_checkout") {
+    const date = request.return_date;
+    return date && trip.request.departure_date && date > trip.request.departure_date ? answerHotelQuestion(trip, item, date, longDate(date)) : askAgain(trip, item, text);
+  }
   if (item.field === "hotel_criterion") {
     const criterion = matchHotelCriterion(text);
     return criterion ? answerHotelQuestion(trip, item, criterion, HOTEL_CRITERION_LABELS[criterion]) : askAgain(trip, item, text);

@@ -8,6 +8,7 @@ import { AgentStateSchema, FlightCriterionSchema, FlightOptionSchema, type Agent
 import { isTerminalStatus, type ToolRequest } from "@/lib/h-agent";
 import { CRITERION_LABELS, describeFlight, flightLabel, formatPrice, introduceFlights, rankFlights } from "@/lib/flights/rank";
 import { normalizeText } from "@/lib/flights/read";
+import { HOTELS_PROPOSAL } from "@/lib/hotels/rank";
 import { FLIGHTS_ORIGIN } from "@/lib/flights-agent";
 import { shortAnswer } from "@/lib/voice/short-answers";
 import { assumedArrival, formalityWindows, isBali, nextDay } from "@/lib/planner";
@@ -98,7 +99,7 @@ const retry = (trip: Trip) =>
     ? trip
     : push(trip, { kind: "proposal", ...FLIGHTS_RETRY_PROPOSAL, decision: null });
 
-function addDays(isoDate: string, days: number): string {
+export function addDays(isoDate: string, days: number): string {
   const date = new Date(`${isoDate}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
@@ -466,6 +467,6 @@ export function reportFlightsReady(trip: Trip, call: ToolRequest, secrets: reado
   return push(
     { ...stopped, agent_steps: [...stopped.agent_steps, "Stopped on the booking page, nothing clicked"] },
     { kind: "agent", text: `${FLIGHT_READY_PREFIX}${found}, book it when you want, Nami never pays.` },
-    { kind: "proposal", action: "hotels", text: "Do you also want me to find you a hotel?", accept_label: "Find my hotel", decline_label: "Not now", decision: null },
+    HOTELS_PROPOSAL,
   );
 }
