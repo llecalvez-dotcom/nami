@@ -25,11 +25,30 @@ describe("silence detector", () => {
     expect(feed([[0.005, 0], [0.004, 2000], [0.005, 5000]])).toEqual([false, false, false]);
   });
 
+  it("hears a quiet voice through a distant microphone", () => {
+    const silent = createSilenceDetector();
+    silent(0.002, 0);
+    silent(0.01, 100);
+    silent(0.01, 200);
+    silent(0.01, 300);
+    expect(silent.heard()).toBe(true);
+  });
+
+  it("does not take a short noise for someone speaking", () => {
+    const silent = createSilenceDetector();
+    silent(0.002, 0);
+    silent(0.2, 100);
+    silent(0.002, 200);
+    expect(silent.heard()).toBe(false);
+    expect(silent(0.002, 2_000)).toBe(false);
+  });
+
   it("a new word resets the silence", () => {
     const results = feed([
       [0.005, 0],
       [0.2, 100],
-      [0.005, 200],
+      [0.2, 300],
+      [0.005, 400],
       [0.2, 1500],
       [0.005, 1600],
       [0.005, 3000],

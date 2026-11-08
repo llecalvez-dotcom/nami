@@ -1,6 +1,7 @@
 import { API_LIMITS, guard, readJsonLimited } from "@/lib/api-guard";
 import { createSession, getAvailableSessionSlots } from "@/lib/h-agent";
 import { AgentPreflightError, preflightBrowser } from "@/lib/agent-preflight";
+import { ensureBlankAgentTab } from "@/lib/agent-tab";
 import { freshBridgeBeforeSession, rememberBridgeForSession } from "@/lib/local-bridge";
 import { fail, H_SLOTS_BUSY, hErrorResponse } from "@/lib/paper-agent";
 import {
@@ -46,6 +47,7 @@ async function start(request: Request): Promise<Response> {
     try {
       if (await getAvailableSessionSlots() <= 0) return fail(H_SLOTS_BUSY, 429);
     } catch {}
+    await ensureBlankAgentTab();
     // Bench: a bridge that already served a session holds a dead chromedriver; it is restarted first (lib/local-bridge.ts).
     await freshBridgeBeforeSession();
     const session = await createSession({

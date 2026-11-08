@@ -80,9 +80,10 @@ describe("what a microphone opened by itself listens for", () => {
   it("never gives up on someone who has started speaking, and ends after their silence", () => {
     const watch = createAutoListenWatcher();
     watch(quiet, 0);
-    watch(voice, 7_000);
+    watch(voice, NO_SPEECH_MS - 500);
+    watch(voice, NO_SPEECH_MS - 200);
     expect(watch(quiet, NO_SPEECH_MS + 100)).toBe("listening");
-    expect(watch(quiet, 7_100 + SILENCE_MS)).toBe("listening");
+    expect(watch(quiet, NO_SPEECH_MS + 100 + SILENCE_MS - 1)).toBe("listening");
     expect(watch(quiet, NO_SPEECH_MS + 100 + SILENCE_MS)).toBe("silence");
   });
 
