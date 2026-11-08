@@ -152,7 +152,7 @@ describe("browser preflight", () => {
     expect(connect).toHaveBeenCalledTimes(2);
   });
 
-  it("releases the browser alone too (cancel route): the active record and its reservations go", async () => {
+  it("releases the browser alone too (cancel route): the active record goes", async () => {
     await started();
     acting();
     releaseBrowser("session-1");
@@ -163,17 +163,57 @@ describe("browser preflight", () => {
     releaseBrowser("unknown-session");
   });
 
-  it("gives up a session that never acted in FIRST_STALL_MS and takes the browser, cancelling it best effort", async () => {
+  it("keeps the reservation of a start under way when another session is cancelled meanwhile", async () => {
+    await started();
+    acting();
+    fetch.mockResolvedValue(Response.json({ status: "completed" }));
+    const lease = await preflightBrowser("bridge-1", connect);
+    releaseBrowser("session-1");
+    await expect(preflightBrowser("bridge-1", connect)).rejects.toMatchObject({ status: 409, message: BUSY });
+    lease.commit("session-2");
+    lease.release();
+  });
+
+  const stepsUrl = (id: string) => `https://agp.eu.hcompany.ai/api/v2/sessions/${id}/changes?from_index=0&wait_for_seconds=0`;
+  const hSays = (steps: number | null) => fetch.mockImplementation(async (url: string, init: RequestInit) => {
+    if (init.method === "DELETE") return new Response(null, { status: 204 });
+    if (url === stepsUrl("session-1")) return steps === null ? new Response(null, { status: 204 }) : Response.json({ status: "running", metrics: { steps } });
+    return Response.json({ status: "running" });
+  });
+
+  it.each([0, null])("gives up a session that never acted in FIRST_STALL_MS (H counts %s steps) and takes the browser, cancelling it best effort", async (steps) => {
     const now = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
     await started();
     now.mockReturnValue(1_000_000 + FIRST_STALL_MS);
-    fetch.mockResolvedValue(new Response(null, { status: 204 }));
+    hSays(steps);
     const lease = await preflightBrowser("bridge-1", connect);
     lease.commit("session-2");
     lease.release();
     expect(isAbandoned("session-1")).toBe(true);
     expect(fetch).toHaveBeenCalledWith("https://agp.eu.hcompany.ai/api/v2/sessions/session-1", expect.objectContaining({ method: "DELETE" }));
     expect(fetch).not.toHaveBeenCalledWith("https://agp.eu.hcompany.ai/api/v2/sessions/session-1/status", expect.anything());
+    now.mockRestore();
+  });
+
+  // The panel stopped polling (tab closed) while the agent was filling fields: Nami saw no action, H counts steps.
+  it("keeps a session Nami never saw act when H counts steps for it", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    await started();
+    now.mockReturnValue(1_000_000 + FIRST_STALL_MS);
+    hSays(3);
+    await expect(preflightBrowser("bridge-1", connect)).rejects.toMatchObject({ status: 409, message: BUSY });
+    expect(isAbandoned("session-1")).toBe(false);
+    expect(fetch).not.toHaveBeenCalledWith("https://agp.eu.hcompany.ai/api/v2/sessions/session-1", expect.objectContaining({ method: "DELETE" }));
+    now.mockRestore();
+  });
+
+  it("keeps a session Nami never saw act when H cannot say its steps", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    await started();
+    now.mockReturnValue(1_000_000 + FIRST_STALL_MS);
+    fetch.mockImplementation(async (url: string) => url === stepsUrl("session-1") ? Response.json({ error: "down" }, { status: 400 }) : Response.json({ status: "running" }));
+    await expect(preflightBrowser("bridge-1", connect)).rejects.toMatchObject({ status: 409, message: BUSY });
+    expect(isAbandoned("session-1")).toBe(false);
     now.mockRestore();
   });
 
