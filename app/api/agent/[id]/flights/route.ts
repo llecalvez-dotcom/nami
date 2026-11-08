@@ -3,7 +3,7 @@ import { sendToolResult } from "@/lib/h-agent";
 import { fail, hErrorResponse, SESSION_ID } from "@/lib/paper-agent";
 import { FlightChoiceSchema, flightChoiceResult } from "@/lib/flights-agent";
 import { readFlightsPageText } from "@/lib/flights/page";
-import { enoughFlights, PAGE_UNREADABLE, readFlights, REREAD_FLIGHTS } from "@/lib/flights/read";
+import { enoughFlights, PAGE_UNREADABLE, readFlights, retryMessage } from "@/lib/flights/read";
 
 const ToolReqSchema = z.object({
   tool_name: z.literal("report_flights"),
@@ -11,9 +11,9 @@ const ToolReqSchema = z.object({
   id: z.string().min(1).nullable(),
 });
 
-// Two steps for one report_flights call. Without a choice: Nami checks the reported flights against the text of the
-// Google Flights tab and returns the ones that are really there (H keeps waiting). With a choice: the traveller's
-// flight goes back to H as the tool result.
+// Two steps for one report_flights call. Without a choice: Nami reads the flights in the text of the Google Flights
+// tab (the agent usually reports none), falls back on the reported flights that are really there, and returns them
+// (H keeps waiting). With a choice: the traveller's flight goes back to H as the tool result.
 const BodySchema = z.object({ tool_req: ToolReqSchema, choice: FlightChoiceSchema.optional() });
 
 export async function POST(request: Request, ctx: RouteContext<"/api/agent/[id]/flights">) {
@@ -33,10 +33,10 @@ export async function POST(request: Request, ctx: RouteContext<"/api/agent/[id]/
     }
     const result = readFlights(input.data.tool_req.args, pageText);
     if (!enoughFlights(result)) {
-      await sendToolResult(id, input.data.tool_req, REREAD_FLIGHTS);
-      return Response.json({ flights: [], retry: true, dropped: result.dropped, invalid: result.invalid }, { status: 200 });
+      await sendToolResult(id, input.data.tool_req, retryMessage(result));
+      return Response.json({ flights: [], retry: true, loading: result.loading ?? false, dropped: result.dropped, invalid: result.invalid }, { status: 200 });
     }
-    return Response.json({ flights: result.kept, dropped: result.dropped, invalid: result.invalid }, { status: 200 });
+    return Response.json({ flights: result.kept, source: result.source, dropped: result.dropped, invalid: result.invalid }, { status: 200 });
   } catch (error) {
     return hErrorResponse(error);
   }

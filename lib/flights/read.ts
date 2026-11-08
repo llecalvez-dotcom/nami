@@ -1,26 +1,32 @@
 import { z } from "zod";
 import { FlightOptionSchema, type FlightOption } from "@/lib/contracts";
+import { extractFlights, resultsStillLoading } from "@/lib/flights/extract";
 
-// The agent reports what it reads on Google Flights; Nami keeps only the flights whose airline and price are
-// really in the text of the page (document.body.innerText plus the aria-labels of the results list). Nothing is
-// invented: a flight that is not on the page is dropped, and with fewer than 2 flights left the agent rereads.
+// Nami reads the flights herself from the text of the Google Flights tab (document.body.innerText plus the
+// aria-labels of the results list, lib/flights/extract.ts): the agent only tells her the list is on screen. When
+// that reading gives fewer than 2 flights, the agent's own report is used, kept only where airline and price are
+// really in the text of the page. Nothing is invented: with fewer than 2 flights left the agent rereads or waits.
 
 export const MIN_VERIFIED_FLIGHTS = 2;
 export const MAX_REPORTED_FLIGHTS = 20;
 
-export const ReportFlightsArgsSchema = z.object({ flights: z.array(z.unknown()).max(MAX_REPORTED_FLIGHTS) });
+// flights is optional: the first call carries none, Nami reads the page.
+export const ReportFlightsArgsSchema = z.object({ flights: z.array(z.unknown()).max(MAX_REPORTED_FLIGHTS).default([]) });
 
+export const RESULTS_LOADING =
+  "The results are still loading. Call wait_web for 2 seconds, then call report_flights again with no flights: Nami reads the page.";
 export const REREAD_FLIGHTS =
-  "Nami could not match enough of these flights with the text of the page. Scroll to the list of flights, take a screenshot, read the airline and the total price of each flight exactly as displayed, then call report_flights again.";
+  "Nami could not read enough flights on the page. If the list of flights is on screen, read it yourself and call report_flights with each flight: airline, total price in digits, currency, stops, outbound duration in minutes, departure and arrival times as displayed. If the page shows no search or another trip, fix the form on the page, search, then call report_flights again with no flights.";
 export const PAGE_UNREADABLE =
   "Nami could not read the page to check these flights. Call ask_user and tell the traveller to choose a flight themselves in Chrome.";
 
-export type ReadResult = { kept: FlightOption[]; dropped: number; invalid: number };
+export type ReadResult = { kept: FlightOption[]; dropped: number; invalid: number; source: "page" | "agent"; loading?: boolean };
 
-// Runs in the page (through the CDP guard on google.com): the visible text and the aria-labels of the results.
+// Runs in the page (through the CDP guard on google.com): the visible text, then one aria-label per line (the
+// results list describes each flight in one sentence, see lib/flights/extract.ts).
 export function pageTextExpression(): string {
   return `(() => {
-  const labels = [...document.querySelectorAll("[aria-label]")].map((el) => el.getAttribute("aria-label") || "");
+  const labels = [...document.querySelectorAll("[aria-label]")].map((el) => (el.getAttribute("aria-label") || "").replace(/\\s+/g, " "));
   return [document.body ? document.body.innerText : "", ...labels].join("\\n").slice(0, 400000);
 })()`;
 }
@@ -70,7 +76,7 @@ function airlineOnPage(airline: string, page: string): boolean {
 export function verifyAgainstPage(flights: FlightOption[], pageText: string): ReadResult {
   const page = normalizeText(pageText);
   const kept = flights.filter((f) => priceOnPage(f.price, f.currency, page) && airlineOnPage(f.airline, page));
-  return { kept, dropped: flights.length - kept.length, invalid: 0 };
+  return { kept, dropped: flights.length - kept.length, invalid: 0, source: "agent" };
 }
 
 export function parseReportedFlights(raw: unknown): { flights: FlightOption[]; invalid: number } {
@@ -88,10 +94,19 @@ export function parseReportedFlights(raw: unknown): { flights: FlightOption[]; i
   return { flights: flights.filter((f) => (seen.has(f.index) ? false : (seen.add(f.index), true))), invalid };
 }
 
+// The page first: what Nami reads in the results list is on the page by construction. Otherwise the agent's report,
+// verified against the page. With nothing on either side, "loading" tells whether Google is still fetching the list.
 export function readFlights(raw: unknown, pageText: string): ReadResult {
+  const fromPage = extractFlights(pageText, MAX_REPORTED_FLIGHTS);
+  if (fromPage.length >= MIN_VERIFIED_FLIGHTS) return { kept: fromPage, dropped: 0, invalid: 0, source: "page" };
   const { flights, invalid } = parseReportedFlights(raw);
   const verified = verifyAgainstPage(flights, pageText);
-  return { ...verified, invalid };
+  if (verified.kept.length >= MIN_VERIFIED_FLIGHTS) return { ...verified, invalid };
+  return { ...verified, invalid, loading: fromPage.length === 0 && verified.kept.length === 0 && resultsStillLoading(pageText) };
+}
+
+export function retryMessage(result: ReadResult): string {
+  return result.loading ? RESULTS_LOADING : REREAD_FLIGHTS;
 }
 
 export function enoughFlights(result: ReadResult): boolean {
