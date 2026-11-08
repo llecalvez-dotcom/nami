@@ -449,6 +449,8 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
     if (photo) return ask("use_photo", foundPhotoText(photo), "Yes, use it", "No");
     // Same fallback as the passport: the card is shown with its photo search; the proposal resumes the path either way.
     say("I could not find your ID photo on this computer. Add it to your documents and pick it below, or go on without it: the official site will ask for it.");
+    // The sheet is hidden once the passport is confirmed (compact): editing shows it again, with the photo card.
+    setEditing(true);
     setManual(true);
     ask("use_photo", "Do you have your ID photo ready?", "Yes, use it", "Go on without it");
   };
@@ -468,8 +470,20 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
       if (item.action === "read_passport") return void (accepted ? readPassport() : offerPassport());
       if (item.action === "confirm_passport") return accepted ? void confirmPassport() : fallBackToCard("Check the fields below, then confirm them.");
       if (item.action === "use_photo") {
-        if (!flow.current.photos[0]) setManual(false);
-        return void lookForReturnTicket(accepted ? (flow.current.photos[0]?.id ?? flow.current.pickedPhotoId) : undefined);
+        const found = flow.current.photos[0]?.id;
+        if (found) return void lookForReturnTicket(accepted ? found : undefined);
+        // Fallback card: "yes" needs a picked photo; "no" drops any photo picked meanwhile, the agent gets none.
+        if (accepted && !flow.current.pickedPhotoId) {
+          say("I have no photo yet. Pick it below, or go on without it.");
+          return ask("use_photo", "Do you have your ID photo ready?", "Yes, use it", "Go on without it");
+        }
+        if (!accepted) {
+          flow.current.pickedPhotoId = undefined;
+          setPhotoDocumentId(null);
+        }
+        setManual(false);
+        setEditing(false);
+        return void lookForReturnTicket(accepted ? flow.current.pickedPhotoId : undefined);
       }
       return startAgent(accepted ? flow.current.tickets[0]?.id : undefined);
     }
