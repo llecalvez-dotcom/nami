@@ -25,6 +25,7 @@ export const MODEL_OUTPUT_JSON_SCHEMA = {
   properties: {
     nationality: nullable("string"),
     origin_country: nullable("string"),
+    origin: nullable("string"),
     destination: nullable("string"),
     country_iso2: nullable("string"),
     departure_date: nullable("string"),
@@ -33,7 +34,7 @@ export const MODEL_OUTPUT_JSON_SCHEMA = {
     purpose: nullable("string"),
     travellers: nullable("integer"),
   },
-  required: ["nationality", "origin_country", "destination", "country_iso2", "departure_date", "arrival_at", "return_date", "purpose", "travellers"],
+  required: ["nationality", "origin_country", "origin", "destination", "country_iso2", "departure_date", "arrival_at", "return_date", "purpose", "travellers"],
   additionalProperties: false,
 };
 
@@ -41,6 +42,7 @@ const SYSTEM_PROMPT = `You turn a traveller's request into a JSON trip request. 
 Fields:
 - nationality: ISO 3166-1 alpha-2 of the passport, only if stated ("French passport", "je suis français" -> "FR"). Never infer it from the language.
 - origin_country: ISO alpha-2 of the departure country, only if stated or implied by a departure city ("from Brussels" -> "BE").
+- origin: the departure city or airport exactly as the traveller names it ("je pars de Lyon" -> "Lyon", "from Brussels" -> "Brussels"), only if stated.
 - destination: the place in English as named by the traveller (e.g. "Bali", "Jakarta", "Lombok", "Barcelona", "Geneva", "Tanzania"). Any place on the island of Bali (Ubud, Canggu, Seminyak, Denpasar...) becomes "Bali".
 - country_iso2: ISO alpha-2 of the destination country (Bali -> "ID").
 - departure_date: YYYY-MM-DD, only for an exact day. Resolve relative days from today: "Monday" or "lundi" is the next Monday strictly after today. A month alone ("in March") stays null.

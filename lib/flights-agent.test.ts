@@ -12,9 +12,15 @@ import {
   REPORT_FLIGHTS_TOOL,
 } from "@/lib/flights-agent";
 
-const START = { destination: "Bali", departure_date: "2026-11-23", return_date: "2026-12-03", travellers: 2, local_session_id: "local-42" };
+const START = { origin: "Paris", destination: "Bali", departure_date: "2026-11-23", return_date: "2026-12-03", travellers: 2, local_session_id: "local-42" };
 
 describe("FlightsStartSchema", () => {
+  it("takes the departure city given, Paris when none", () => {
+    expect(FlightsStartSchema.parse({ ...START, origin: undefined }).origin).toBe("Paris");
+    expect(FlightsStartSchema.parse({ ...START, origin: " Lyon " }).origin).toBe("Lyon");
+    expect(googleFlightsUrl({ ...START, origin: "Lyon" })).toContain("q=Flights+from+Lyon+to+Bali+on+2026-11-23");
+  });
+
   it("requires a return date on or after the departure", () => {
     expect(FlightsStartSchema.safeParse(START).success).toBe(true);
     expect(FlightsStartSchema.safeParse({ ...START, return_date: undefined }).success).toBe(false);

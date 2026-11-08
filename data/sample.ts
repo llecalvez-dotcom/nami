@@ -10,6 +10,7 @@ export const SAMPLE_TRIP: TripRequest = {
   raw_text: "I'm flying to Bali on Monday for a friend's wedding, staying ten days.",
   nationality: "FR",
   origin_country: "FR",
+  origin: "Paris",
   destination: "Bali",
   country_iso2: "ID",
   departure_date: "2026-11-09",

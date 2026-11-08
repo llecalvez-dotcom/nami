@@ -60,6 +60,7 @@ function rank(flights) {
 // 1. Start: the request only.
 const localId = readFileSync(`${homedir()}/.config/nami/local-browser-session-id`, "utf8").trim();
 const started = await call("POST", "/api/flights/start", {
+  origin: process.env.NAMI_FLIGHT_ORIGIN ?? "Paris",
   destination: process.env.NAMI_FLIGHT_DESTINATION ?? "Bali",
   departure_date: process.env.NAMI_FLIGHT_DEPART ?? "2026-11-23",
   return_date: process.env.NAMI_FLIGHT_RETURN ?? "2026-12-03",

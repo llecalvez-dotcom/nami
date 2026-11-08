@@ -56,7 +56,7 @@ describe("rankFlights", () => {
     // Scoot: cheap, one stop, average duration; Qatar: fastest, one stop; Turkish: in between. China Southern is cheapest
     // but longest with two stops, KLM is fast but dear with two stops.
     expect(indexes(rankFlights(FLIGHTS, "best"))).toEqual([1, 5, 2]);
-    expect(introduceFlights("best", FLIGHTS)).toBe("The best balance first.");
+    expect(introduceFlights("best", FLIGHTS)).toBe("Best compromise (price, duration, stops) first.");
   });
 
   it("is pure and does not reorder the input", () => {

@@ -10,7 +10,8 @@ export const CRITERION_LABELS: Record<FlightCriterion, string> = {
   cheapest: "The cheapest",
   fastest: "The fastest",
   fewest_stops: "No stop if possible",
-  best: "The best balance",
+  // "Best" stays in the label: the spoken-answer interpreter relies on that word.
+  best: "Best compromise (price, duration, stops)",
 };
 
 function normalizer(values: number[]): (value: number) => number {

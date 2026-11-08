@@ -26,6 +26,18 @@ describe("schema sent to the H model", () => {
   });
 });
 
+describe("departure city", () => {
+  it("keeps the city the traveller names, and never asks for it", async () => {
+    const model = async () => JSON.stringify({
+      nationality: "FR", origin_country: "FR", origin: "Lyon", destination: "Bali", country_iso2: "ID",
+      departure_date: "2026-11-09", arrival_at: null, return_date: null, purpose: "tourism", travellers: 1,
+    });
+    const { request, missing } = await parseTrip({ transcript: "Je pars de Lyon à Bali lundi", today: "2026-11-07" }, model);
+    expect(request.origin).toBe("Lyon");
+    expect(missing).toEqual([]);
+  });
+});
+
 describe("landing time", () => {
   const model = (arrival_at: string | null) => async () => JSON.stringify({
     nationality: "FR", origin_country: "FR", destination: "Bali", country_iso2: "ID",

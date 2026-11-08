@@ -10,6 +10,8 @@ const IsoDateTime = z.union([
 const tripFields = {
   nationality: CountryIso2,
   origin_country: CountryIso2,
+  // Departure city or airport as the traveller names it ("Lyon"); Google Flights resolves it. Module Vol only.
+  origin: z.string().min(1),
   destination: z.string().min(1),
   country_iso2: CountryIso2,
   departure_date: IsoDate,
@@ -32,6 +34,8 @@ export const TripRequestSchema = z.object({
   // Not asked by the agent, so it may stay unknown. The "passport valid 6 months" rule uses
   // return_date when known, otherwise arrival_at + 30 days (length of the e-VOA stay).
   return_date: tripFields.return_date.nullable().default(null),
+  // Asked by the flights flow only (Paris proposed), or given spontaneously ("je pars de Lyon").
+  origin: tripFields.origin.nullable().default(null),
   // Asked only where a paper opens relative to the landing (Bali's arrival card); unknown elsewhere.
   arrival_at: tripFields.arrival_at.nullable().default(null),
   status: tripFields.status
@@ -44,6 +48,7 @@ export const TripRequestDraftSchema = z.object({
   raw_text: z.string().min(1),
   nationality: tripFields.nationality.nullable().default(null),
   origin_country: tripFields.origin_country.nullable().default(null),
+  origin: tripFields.origin.nullable().default(null),
   destination: tripFields.destination.nullable().default(null),
   country_iso2: tripFields.country_iso2.nullable().default(null),
   departure_date: tripFields.departure_date.nullable().default(null),
