@@ -13,7 +13,8 @@ export const STALL_MS = 40_000;
 export const FIRST_STALL_MS = 45_000;
 // H has started but never took its first screenshot (about 1 s when it works): no command ever reached the browser and
 // the tab stayed blank (flights, 2026-11-08 at 10:33; H answered "Error" only after 65 s). Nothing was done either.
-export const NO_SCREEN_MS = 20_000;
+// 35 s and not 20: on the same bench the first screenshot once came at 25.6 s, and the session then worked.
+export const NO_SCREEN_MS = 35_000;
 export const STALLED = "stalled";
 
 type Progress = { lastKind: string | null; lastAt: number; acted: boolean };

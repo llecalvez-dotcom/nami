@@ -169,7 +169,8 @@ describe("yes to the flights", () => {
 
   it("declined: no search, module declined", () => {
     const trip = decideProposal(proposed(), last(proposed()).id, false, NOW);
-    expect(last(trip)).toMatchObject({ kind: "agent", text: "Okay, no flight search for now." });
+    expect(trip.conversation.at(-2)).toMatchObject({ kind: "agent", text: "Okay, no flight search for now." });
+    expect(last(trip)).toMatchObject({ kind: "proposal", action: "hotels", decision: null });
     expect(trip.modules.find((m) => m.module === "flights")?.state).toBe("declined");
   });
 

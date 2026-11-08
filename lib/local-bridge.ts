@@ -168,10 +168,32 @@ export async function refreshBridge(deps: BridgeDeps = defaultBridgeDeps()): Pro
   return ready ? "refreshed" : "timeout";
 }
 
+// A session created too soon after the previous one ended never gets the browser: H starts it and no command comes
+// (bench 2026-11-08: 5 and 11 s after the end, never; 17 s, first screenshot at 25 s; over 30 s, always fine). The visa
+// then the flights hit this when the traveller answers quickly: the new start waits for the rest of those 35 s.
+export const CHANNEL_REST_MS = 35_000;
+
+export function lastDestroyAt(log: string): number | null {
+  const lines = log.split("\n").filter((line) => line.includes(BRIDGE_DESTROY_LINE));
+  const match = /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})/.exec(lines.at(-1) ?? "");
+  return match ? new Date(`${match[1]}T${match[2]}`).getTime() : null;
+}
+
+async function waitForChannelRest(deps: Pick<BridgeDeps, "readLog" | "sleep" | "now" | "log">): Promise<void> {
+  const log = await deps.readLog();
+  const ended = log === null ? null : lastDestroyAt(log);
+  if (ended === null) return;
+  const wait = Math.min(ended + CHANNEL_REST_MS - deps.now(), CHANNEL_REST_MS);
+  if (wait <= 0) return;
+  deps.log(`previous session ended just now, waiting ${Math.round(wait / 1000)} s`);
+  await deps.sleep(wait);
+}
+
 // What the start routes call: nothing outside the bench, never an error.
 export async function freshBridgeBeforeSession(deps: BridgeDeps = defaultBridgeDeps()): Promise<void> {
   if (!bridgeManaged()) return;
   try {
+    await waitForChannelRest(deps);
     if (await bridgeIsUsed(deps)) return void (await refreshBridge(deps));
     await awaitRestartingBridge(deps);
   } catch {

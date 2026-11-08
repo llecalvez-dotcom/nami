@@ -67,13 +67,14 @@
   // For the demo (Nathan, 2026-11-08): while the agent works the cursor is always there and always moving, between the
   // things one could click on the page, even on a page where the agent has not clicked yet. Purely visual: it never
   // clicks, and a real click of the agent takes over at once.
-  const clickable = 'a[href], button, select, input:not([type=hidden]), [role="button"], [role="link"], [role="option"], li';
+  // On the Google Hotels list it goes from hotel to hotel; elsewhere on the page it stays put.
+  const clickable = () => location.pathname.startsWith("/travel/search") ? 'a[aria-label^="Prices starting from"]' : 'a[href], button, select, input:not([type=hidden]), [role="button"], [role="link"], [role="option"], li';
   let wanderTimer;
   const spot = () => {
-    const rects = [...document.querySelectorAll(clickable)].slice(0, 200).map((element) => element.getBoundingClientRect())
+    const rects = [...document.querySelectorAll(clickable())].slice(0, 200).map((element) => element.getBoundingClientRect())
       .filter((r) => r.width > 8 && r.height > 8 && r.top > 40 && r.left >= 0 && r.bottom < innerHeight - 20 && r.right <= innerWidth);
     const r = rects[Math.floor(Math.random() * rects.length)];
-    return r ? [r.left + r.width / 2, r.top + r.height / 2] : [innerWidth * (0.25 + Math.random() * 0.5), innerHeight * (0.25 + Math.random() * 0.5)];
+    return r ? [r.left + r.width / 2, r.top + r.height / 2] : [innerWidth / 2, innerHeight / 2];
   };
   const wander = () => {
     if (!agentActive) return;
