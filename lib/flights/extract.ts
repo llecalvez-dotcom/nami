@@ -54,10 +54,18 @@ function arrivalSuffix(departDate: string, arriveDate: string): string {
   return days > 0 ? `+${days}` : "";
 }
 
+// Google names the place of a layover with its administrative wrapper ("Federal Territory of Kuala Lumpur", "Special
+// Capital Region of Jakarta"): the city alone is kept, it is what Nami shows and says.
+const PLACE_WRAPPERS = /^(?:(?:federal|special|national|autonomous|metropolitan)\s+)*(?:territory|capital region|region|capital|province|state|municipality|city|district|prefecture|emirate|governorate)\s+of\s+/i;
+
+export function layoverCity(place: string): string {
+  return place.trim().replace(PLACE_WRAPPERS, "").trim();
+}
+
 function layovers(line: string): FlightOption["layovers"] {
   const found: FlightOption["layovers"] = [];
-  for (const m of line.matchAll(LAYOVER_EN)) found.push({ airport: (m[4] ?? m[5] ?? m[3]).trim(), duration_min: minutes(m[1], m[2]) });
-  for (const m of line.matchAll(LAYOVER_FR)) found.push({ airport: m[3].trim(), duration_min: minutes(m[1], m[2]) });
+  for (const m of line.matchAll(LAYOVER_EN)) found.push({ airport: layoverCity(m[4] ?? m[5] ?? m[3]), duration_min: minutes(m[1], m[2]) });
+  for (const m of line.matchAll(LAYOVER_FR)) found.push({ airport: layoverCity(m[3]), duration_min: minutes(m[1], m[2]) });
   return found;
 }
 

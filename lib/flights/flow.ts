@@ -6,7 +6,7 @@ import { z } from "zod";
 import { freshToolCalls, H_NOT_ANSWERING_MESSAGE, H_SLOW_RESTART_MESSAGE, redact, toolCallKey, wantsAutoRestart, type AgentChanges } from "@/lib/agent-changes";
 import { AgentStateSchema, FlightCriterionSchema, FlightOptionSchema, type AgentRun, type FlightCriterion, type FlightOption, type TripRequestDraft } from "@/lib/contracts";
 import { isTerminalStatus, type ToolRequest } from "@/lib/h-agent";
-import { CRITERION_LABELS, describeFlight, formatPrice, introduceFlights, rankFlights } from "@/lib/flights/rank";
+import { CRITERION_LABELS, describeFlight, flightLabel, formatPrice, introduceFlights, rankFlights } from "@/lib/flights/rank";
 import { normalizeText } from "@/lib/flights/read";
 import { FLIGHTS_ORIGIN } from "@/lib/flights-agent";
 import { shortAnswer } from "@/lib/voice/short-answers";
@@ -30,7 +30,9 @@ export const FLIGHTS_REREAD_MESSAGE = "I could not match the flights with the pa
 const ORIGIN_QUESTION = "Which city do you fly from?";
 const CRITERION_QUESTION = "What matters most for your flights: the cheapest, the fastest, no stop if possible, or the best compromise?";
 export const BALANCED_CRITERIA_MESSAGE = "Several criteria: I will balance price, duration and stops.";
-const ORDINALS = ["The first", "The second", "The third"];
+// The answer written on a flight question the agent's end closed (applyFlightsChanges, reportFlightsReady, stopAgent):
+// not an answer of the traveller.
+const AGENT_STOPPED_ANSWER = "Agent stopped";
 // What a traveller says to name a flight or a criterion, in the languages Gladia transcribes for us.
 const ORDINAL_WORDS = [
   ["first", "1", "1st", "1er", "1ere", "premier", "premiere", "primero", "primera", "erste", "primo"],
@@ -146,19 +148,42 @@ function askCriterion(trip: Trip): Trip {
   return push(trip, question("flight_criterion", CRITERION_QUESTION, options, null));
 }
 
-// "Yes" to the flights: the departure city (unless already given), the dates, then the criterion, then the client
-// starts the agent (startFlightsRun).
-export function startFlightsFlow(trip: Trip): Trip {
-  return trip.request.origin ? askReturnDate(trip) : askOrigin(trip);
+// The last question of the field the traveller answered (not one the agent's end closed).
+function answeredQuestion(trip: Trip, field: FlightQuestionField): FlightQuestion | undefined {
+  const item = trip.conversation.findLast((i) => i.kind === "question" && i.field === field && i.answer !== null && i.answer !== AGENT_STOPPED_ANSWER);
+  return item?.kind === "question" ? (item as FlightQuestion) : undefined;
 }
 
-// The criterion the traveller chose, from the conversation: the last answered criterion question.
-export function flightCriterion(trip: Trip): FlightCriterion {
-  const answered = trip.conversation.findLast((i) => i.kind === "question" && i.field === "flight_criterion" && i.answer !== null);
-  if (answered?.kind !== "question") return "best";
+// The dates are settled once the return date is known and the traveller confirmed or gave it.
+const datesConfirmed = (trip: Trip) => !!trip.request.return_date && answeredQuestion(trip, "return_date") !== undefined;
+
+// Everything the search needs was answered already (a search that failed or was stopped): the next "yes" asks nothing.
+export function flightsAnswered(trip: Trip): boolean {
+  return !!trip.request.origin && datesConfirmed(trip) && answeredCriterion(trip) !== null;
+}
+
+// "Yes" to the flights: the departure city (unless already given), the dates (unless confirmed), then the criterion
+// (unless chosen), then the client starts the agent (startFlightsRun). After a failed search, "Search again" finds
+// every answer in place and asks nothing: Nami announces the search, the client starts the session with the same
+// origin, dates and criterion (Clément, real run 2026-11-08 04:30: the dates and the criterion were asked again).
+export function startFlightsFlow(trip: Trip): Trip {
+  if (!trip.request.origin) return askOrigin(trip);
+  if (!datesConfirmed(trip)) return askReturnDate(trip);
+  if (answeredCriterion(trip) === null) return askCriterion(trip);
+  return say(trip, FLIGHTS_SEARCHING_MESSAGE);
+}
+
+// The criterion the traveller chose, from the last criterion question answered; null when none was.
+export function answeredCriterion(trip: Trip): FlightCriterion | null {
+  const answered = answeredQuestion(trip, "flight_criterion");
+  if (!answered) return null;
   const option = answered.options.find((o) => o.label === answered.answer);
   const parsed = FlightCriterionSchema.safeParse(option?.value);
-  return parsed.success ? parsed.data : "best";
+  return parsed.success ? parsed.data : null;
+}
+
+export function flightCriterion(trip: Trip): FlightCriterion {
+  return answeredCriterion(trip) ?? "best";
 }
 
 // The criterion question: once it is answered, the client starts the Google Flights session (startFlightsRun).
@@ -190,6 +215,13 @@ export function matchCriteria(text: string): FlightCriterion[] {
 export function matchCriterion(text: string): FlightCriterion | null {
   const hits = matchCriteria(text);
   return hits.length === 0 ? null : hits.length === 1 ? hits[0] : "best";
+}
+
+// "Le moins cher et le plus rapide": the compromise whatever path understood the words. The H model of
+// /api/voice/intent sometimes keeps one criterion only (real run 2026-11-08 04:30: "cheapest"); the panel checks the
+// words itself before trusting it.
+export function namesSeveralCriteria(text: string): boolean {
+  return matchCriteria(text).length > 1;
 }
 
 // The flight named by an ordinal ("the second", "2"), by its airline ("Qatar"), or by a criterion ("the cheapest one":
@@ -292,7 +324,8 @@ export function startFlightsSession(trip: Trip, sessionId: string, url: string, 
 }
 
 // The flights Nami checked against the page: ranked by the criterion, at most three, asked as one question whose
-// options are the flights ("The first: Scoot, 646 €, ..."), so "the first", "Qatar" or a tap all work.
+// options are the flights (one short label each, "Scoot · 646 € · 1 stop Singapore · 22 h 05 · leaves 13:50"), so
+// "the first", "Qatar" or a tap all work. Said aloud in one sentence, shorter (describeFlight).
 export function offerFlights(trip: Trip, call: ToolRequest, flights: FlightOption[]): Trip {
   const run = trip.agent_run;
   if (!run || run.kind !== "flights" || (run.handled_tool_ids ?? []).includes(toolCallKey(call))) return trip;
@@ -303,7 +336,7 @@ export function offerFlights(trip: Trip, call: ToolRequest, flights: FlightOptio
   if (ranked.length === 0) return say(withStep, FLIGHTS_UNREADABLE_MESSAGE);
   const intro = introduceFlights(criterion, flights).replace(/\.$/, "");
   const list = ranked.map((f) => describeFlight(f)).join("; then ");
-  const options = ranked.map((f, i) => ({ label: `${ORDINALS[i]}: ${describeFlight(f)}`, value: String(f.index) }));
+  const options = ranked.map((f) => ({ label: flightLabel(f), value: String(f.index) }));
   return push(withStep, question("flight_choice", `${intro}: ${list}: which one shall I open?`, options, null));
 }
 
@@ -388,7 +421,7 @@ export function applyFlightsChanges(trip: Trip, changes: AgentChanges, secrets: 
   };
 
   if (terminal && !wasTerminal) {
-    next = closeFlightQuestions({ ...next, agent_run: { ...next.agent_run!, pending_question: undefined } }, "Agent stopped");
+    next = closeFlightQuestions({ ...next, agent_run: { ...next.agent_run!, pending_question: undefined } }, AGENT_STOPPED_ANSWER);
     // H never opened Google Flights: the same search starts again by itself (same dates, origin and criterion), once.
     if (wantsAutoRestart(run, changes)) {
       next = say({ ...next, agent_run: { ...next.agent_run!, auto_restart: "due" } }, H_SLOW_RESTART_MESSAGE);
@@ -423,7 +456,7 @@ export function reportFlightsReady(trip: Trip, call: ToolRequest, secrets: reado
   if (!run || (run.handled_tool_ids ?? []).includes(toolCallKey(call))) return trip;
   const summary = redact(typeof call.args.summary === "string" ? call.args.summary : "", secrets);
   const chosen = flightsResult(run)?.chosen;
-  const stopped = withResult(closeFlightQuestions(trip, "Agent stopped"), { ready: true }, {
+  const stopped = withResult(closeFlightQuestions(trip, AGENT_STOPPED_ANSWER), { ready: true }, {
     state: "interrupted",
     drained: true,
     pending_question: undefined,
