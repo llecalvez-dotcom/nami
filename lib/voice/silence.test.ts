@@ -34,6 +34,25 @@ describe("silence detector", () => {
     expect(silent.heard()).toBe(true);
   });
 
+  it("hears a word as short as « oui », and ends after its silence", () => {
+    const silent = createSilenceDetector();
+    silent(0.003, 0);
+    silent(0.08, 100);
+    silent(0.05, 200);
+    silent(0.003, 300);
+    expect(silent.heard()).toBe(true);
+    expect(silent(0.003, 300 + SILENCE_MS)).toBe(true);
+  });
+
+  it("does not add up noises far apart", () => {
+    const silent = createSilenceDetector();
+    silent(0.003, 0);
+    silent(0.2, 100);
+    silent(0.003, 200);
+    silent(0.2, 2_000);
+    expect(silent.heard()).toBe(false);
+  });
+
   it("does not take a short noise for someone speaking", () => {
     const silent = createSilenceDetector();
     silent(0.002, 0);

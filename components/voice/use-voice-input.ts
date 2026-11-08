@@ -23,6 +23,13 @@ export type VoiceInput = {
 
 class NothingHeard extends Error {}
 
+// What each recording did, for the bench (read through DevTools): never a word of what was said.
+type VoiceStats = { mode: "auto" | "tap"; peak: number; ended: string; ms?: number; words?: number; failed?: string };
+function logVoice(stats: VoiceStats) {
+  const log = window as unknown as { namiVoiceLog?: VoiceStats[] };
+  log.namiVoiceLog = [...(log.namiVoiceLog ?? []), { ...stats, peak: Number(stats.peak.toFixed(4)) }].slice(-30);
+}
+
 // The language Gladia detected is kept, from a sentence of 3 words or more: Nami answers in it (lib/voice/language.ts).
 async function transcribe(blob: Blob, auto: boolean): Promise<string> {
   const form = new FormData();
@@ -37,7 +44,7 @@ async function transcribe(blob: Blob, auto: boolean): Promise<string> {
 
 // Stops the recording after a silence that follows speech, measured on the microphone level by Web Audio.
 // onNothing: only for a microphone that opened by itself, when nobody spoke.
-function watchSilence(stream: MediaStream, onSilence: () => void, onNothing?: () => void): () => void {
+function watchSilence(stream: MediaStream, onSilence: () => void, onNothing: (() => void) | undefined, stats: VoiceStats): () => void {
   const Context = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
   if (!Context) return () => {};
   try {
@@ -50,7 +57,10 @@ function watchSilence(stream: MediaStream, onSilence: () => void, onNothing?: ()
     const watch = createAutoListenWatcher(onNothing ? undefined : Infinity);
     const timer = setInterval(() => {
       analyser.getFloatTimeDomainData(samples);
-      const verdict = watch(rms(samples), performance.now());
+      const level = rms(samples);
+      stats.peak = Math.max(stats.peak, level);
+      const verdict = watch(level, performance.now());
+      if (verdict !== "listening") stats.ended = verdict;
       if (verdict === "silence") onSilence();
       if (verdict === "nothing") onNothing?.();
     }, 100);
@@ -73,6 +83,8 @@ export function useVoiceInput(onTranscript: (text: string) => void): VoiceInput 
   const startingRef = useRef(false);
   const mountedRef = useRef(true);
   const onTranscriptRef = useRef(onTranscript);
+  const autoRetriedRef = useRef(false);
+  const startRef = useRef<(mode?: "auto") => Promise<void>>(async () => {});
 
   useEffect(() => {
     onTranscriptRef.current = onTranscript;
@@ -107,6 +119,8 @@ export function useVoiceInput(onTranscript: (text: string) => void): VoiceInput 
     const recorder = new MediaRecorder(mic.stream);
     const chunks: Blob[] = [];
     let nobodySpoke = false;
+    const stats: VoiceStats = { mode: auto ? "auto" : "tap", peak: 0, ended: "stopped" };
+    const recordingSince = Date.now();
     recorderRef.current = recorder;
     recorder.ondataavailable = (event) => {
       if (event.data.size > 0) chunks.push(event.data);
@@ -114,14 +128,30 @@ export function useVoiceInput(onTranscript: (text: string) => void): VoiceInput 
     recorder.onstop = async () => {
       mic.stream.getTracks().forEach((track) => track.stop());
       recorderRef.current = null;
+      stats.ms = Date.now() - recordingSince;
       if (!mountedRef.current) return;
-      if (nobodySpoke) return setStatus("idle");
+      if (nobodySpoke) {
+        logVoice(stats);
+        return setStatus("idle");
+      }
       setStatus("transcribing");
       try {
         const text = await transcribe(new Blob(chunks, { type: recorder.mimeType }), auto);
+        stats.words = text.trim().split(/\s+/).length;
+        logVoice(stats);
+        autoRetriedRef.current = false;
         if (mountedRef.current) onTranscriptRef.current(text);
       } catch (e) {
-        if (mountedRef.current && !(auto && e instanceof NothingHeard)) setError(e instanceof Error ? e.message : "Transcription failed. Type instead.");
+        stats.failed = e instanceof NothingHeard ? "nothing heard" : "transcription";
+        logVoice(stats);
+        // Something was heard but not understood: listens once more by itself, then says so.
+        if (mountedRef.current && auto && e instanceof NothingHeard && !autoRetriedRef.current) {
+          autoRetriedRef.current = true;
+          void startRef.current("auto");
+        } else if (mountedRef.current) {
+          autoRetriedRef.current = false;
+          setError(e instanceof Error ? e.message : "Transcription failed. Type instead.");
+        }
       } finally {
         if (mountedRef.current) setStatus("idle");
       }
@@ -131,7 +161,7 @@ export function useVoiceInput(onTranscript: (text: string) => void): VoiceInput 
     unwatchRef.current = watchSilence(mic.stream, stop, auto ? () => {
       nobodySpoke = true;
       stop();
-    } : undefined);
+    } : undefined, stats);
     setSeconds(0);
     setStatus("recording");
     const startedAt = Date.now();
@@ -141,6 +171,10 @@ export function useVoiceInput(onTranscript: (text: string) => void): VoiceInput 
       if (elapsed >= MAX_RECORDING_SECONDS) stop();
     }, 250);
   }, [stop]);
+
+  useEffect(() => {
+    startRef.current = start;
+  }, [start]);
 
   const toggle = useCallback(() => {
     if (status === "recording") stop();

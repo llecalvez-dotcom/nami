@@ -1,7 +1,8 @@
 export const SILENCE_MS = 1500;
 export const NO_SPEECH_MS = 12_000;
-// A voice lasts: a click or a door is not someone who has started to speak.
-export const SPEECH_MIN_MS = 200;
+// A click or a door is one level alone; a voice, even a short « oui », is at least two close together.
+export const SPEECH_MIN_HITS = 2;
+const SPEECH_GAP_MS = 400;
 
 export function rms(samples: Float32Array): number {
   let sum = 0;
@@ -17,17 +18,18 @@ type Options = { silenceMs?: number; minLevel?: number; ratio?: number };
 export function createSilenceDetector({ silenceMs = SILENCE_MS, minLevel = 0.006, ratio = 2.5 }: Options = {}) {
   let floor: number | null = null;
   let heard = false;
-  let voiceSince: number | null = null;
+  let hits = 0;
+  let lastHit: number | null = null;
   let quietSince: number | null = null;
   const detector = (level: number, now: number): boolean => {
     floor = floor === null || level < floor ? level : floor + (level - floor) * 0.01;
     if (level > Math.max(minLevel, floor * ratio)) {
-      voiceSince ??= now;
-      if (now - voiceSince >= SPEECH_MIN_MS) heard = true;
+      hits = lastHit !== null && now - lastHit > SPEECH_GAP_MS ? 1 : hits + 1;
+      lastHit = now;
+      if (hits >= SPEECH_MIN_HITS) heard = true;
       quietSince = null;
       return false;
     }
-    voiceSince = null;
     if (!heard) return false;
     quietSince ??= now;
     return now - quietSince >= silenceMs;
