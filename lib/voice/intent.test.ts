@@ -70,7 +70,12 @@ describe("interpretAnswer", () => {
 
   it("turns a proposal button named by the model into accept or decline", async () => {
     expect(intentFromModel(JSON.stringify({ intent: "option", option_ids: "accept", confidence: "medium" }), { transcript: "x", question: proposal })).toEqual({ kind: "accept", confidence: 0.6 });
-    expect(intentFromModel(JSON.stringify({ intent: "option", option_ids: "decline", confidence: "low" }), { transcript: "x", question: proposal })).toEqual({ kind: "decline", confidence: 0.3 });
+    expect(intentFromModel(JSON.stringify({ intent: "option", option_ids: "decline", confidence: "medium" }), { transcript: "x", question: proposal })).toEqual({ kind: "decline", confidence: 0.6 });
+  });
+
+  it("never acts on a hesitant guess of the model", () => {
+    expect(intentFromModel(JSON.stringify({ intent: "accept", option_ids: "", confidence: "low" }), { transcript: "mouais", question: proposal })).toEqual({ kind: "free", text: "mouais", confidence: 0.3 });
+    expect(intentFromModel(JSON.stringify({ intent: "option", option_ids: "2", confidence: "low" }), { transcript: "x", question: flights })).toEqual({ kind: "free", text: "x", confidence: 0.3 });
   });
 
   it("takes the compromise option when two exclusive criteria are named", async () => {

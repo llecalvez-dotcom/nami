@@ -130,7 +130,8 @@ export function intentFromModel(raw: string, { transcript, question }: Pick<Inte
     return free(transcript);
   }
   const confidence = CONFIDENCE[parsed.confidence];
-  if (parsed.intent === "free") return free(transcript, confidence);
+  // A hesitant guess never taps a button: the transcript goes on as free text, Nami asks again if needed.
+  if (parsed.intent === "free" || parsed.confidence === "low") return free(transcript, confidence);
 
   if (parsed.intent === "accept" || parsed.intent === "decline") {
     if (question.kind === "proposal") return { kind: parsed.intent, confidence };
