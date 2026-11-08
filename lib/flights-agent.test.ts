@@ -56,6 +56,15 @@ describe("agent task and instructions", () => {
     expect(task).not.toMatch(/passport|e-mail/i);
   });
 
+  it("sends the agent straight to the tab Nami opened, and keeps the URL only when no tab could be opened", () => {
+    const task = buildFlightsTask(FlightsStartSchema.parse(START), "TAB123");
+    expect(task).toContain("the tab whose id is TAB123");
+    expect(task).toContain("switch_tab_web with exactly this tab_id");
+    expect(task).toContain("never visit any other tab");
+    expect(task).not.toContain(googleFlightsUrl(START));
+    expect(buildFlightsTask(FlightsStartSchema.parse(START))).toContain(googleFlightsUrl(START));
+  });
+
   it("instructions keep the agent on Google, off booking, sign-in and personal data, with the untrusted content rule", () => {
     const text = buildFlightsInstructions();
     expect(text).toContain("www.google.com");

@@ -34,10 +34,10 @@ async function start(request: Request): Promise<Response> {
     try {
       if (await getAvailableSessionSlots() <= 0) return fail(H_SLOTS_BUSY, 429);
     } catch {}
-    await openSearchTab(googleHotelsUrl(input.data));
+    const tabId = await openSearchTab(googleHotelsUrl(input.data));
     await freshBridgeBeforeSession();
     const session = await createSession({
-      task: buildHotelsTask(input.data),
+      task: buildHotelsTask(input.data, tabId),
       instructions: buildHotelsInstructions(),
       tools: HOTELS_TOOLS,
       localBrowserSessionId: input.data.local_session_id,

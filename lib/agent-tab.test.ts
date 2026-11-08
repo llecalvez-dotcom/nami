@@ -6,6 +6,7 @@ const URL_FLIGHTS = "https://www.google.com/travel/flights?q=Flights%20from%20Pa
 function chrome(targetInfos: { targetId: string; type: string; url: string }[]) {
   const send = vi.fn(async (method: string) => {
     if (method === "Target.getTargets") return { targetInfos };
+    if (method === "Target.createTarget") return { targetId: "new-tab" };
     return method === "Target.attachToTarget" ? { sessionId: "tab-session" } : {};
   });
   const close = vi.fn();
@@ -15,7 +16,7 @@ function chrome(targetInfos: { targetId: string; type: string; url: string }[]) 
 describe("a search opens in its own tab", () => {
   it("opens the page in a new tab and leaves the visa tab alone", async () => {
     const { connect, send, close } = chrome([{ targetId: "visa", type: "page", url: "https://evisa.imigrasi.go.id/step_1" }]);
-    await openSearchTab(URL_FLIGHTS, connect, 9333);
+    await expect(openSearchTab(URL_FLIGHTS, connect, 9333)).resolves.toBe("new-tab");
     expect(send).toHaveBeenCalledWith("Target.createTarget", { url: URL_FLIGHTS });
     expect(send.mock.calls.some(([method]) => method === "Page.navigate")).toBe(false);
     expect(close).toHaveBeenCalled();
@@ -26,7 +27,7 @@ describe("a search opens in its own tab", () => {
       { targetId: "visa", type: "page", url: "https://evisa.imigrasi.go.id/step_1" },
       { targetId: "blank", type: "page", url: "about:blank" },
     ]);
-    await openSearchTab(URL_FLIGHTS, connect, 9333);
+    await expect(openSearchTab(URL_FLIGHTS, connect, 9333)).resolves.toBe("blank");
     expect(send).toHaveBeenCalledWith("Target.activateTarget", { targetId: "blank" });
     expect(send).toHaveBeenCalledWith("Page.navigate", { url: URL_FLIGHTS }, "tab-session");
     expect(send).not.toHaveBeenCalledWith("Target.createTarget", expect.anything());
@@ -50,9 +51,9 @@ describe("a search opens in its own tab", () => {
   });
 
   it("never stops the search when Chrome does not answer", async () => {
-    await expect(openSearchTab(URL_FLIGHTS, vi.fn(async () => { throw new Error("no chrome"); }), 9333)).resolves.toBeUndefined();
+    await expect(openSearchTab(URL_FLIGHTS, vi.fn(async () => { throw new Error("no chrome"); }), 9333)).resolves.toBeNull();
     const connect = vi.fn();
-    await openSearchTab(URL_FLIGHTS, connect, null);
+    await expect(openSearchTab(URL_FLIGHTS, connect, null)).resolves.toBeNull();
     expect(connect).not.toHaveBeenCalled();
   });
 });

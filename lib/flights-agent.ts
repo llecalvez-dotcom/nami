@@ -126,12 +126,16 @@ export function buildFlightsInstructions(): string {
   ].join("\n");
 }
 
-export function buildFlightsTask(input: FlightsStart): string {
+export function buildFlightsTask(input: FlightsStart, tabId: string | null = null): string {
   const adults = input.travellers === 1 ? "1 adult" : `${input.travellers} adults`;
   return [
-    // Nami has opened the page in its own tab (lib/agent-tab.ts), but the bridge may start on another tab.
-    "Google Flights is normally already open with this search in the active tab: do not open it again. Work only in that tab: the other tabs hold the traveller's forms, so never navigate or close them.",
-    `If the current tab is not Google Flights, first call switch_tab_web to go to the Google Flights tab, or to the about:blank tab if there is none. If that tab is about:blank, open exactly this URL: ${googleFlightsUrl(input)}`,
+    // Nami has opened the page in its own tab (lib/agent-tab.ts), but the bridge may start on any tab.
+    ...(tabId
+      ? [`Google Flights is already open with this search in the tab whose id is ${tabId}. If it is not the current tab, first call switch_tab_web with exactly this tab_id. Do not open the page again and never visit any other tab: they hold the traveller's forms.`]
+      : [
+          "Google Flights is normally already open with this search in the active tab: do not open it again. Work only in that tab: the other tabs hold the traveller's forms, so never navigate or close them.",
+          `If the current tab is not Google Flights, first call switch_tab_web to go to the Google Flights tab, or to the about:blank tab if there is none. If that tab is about:blank, open exactly this URL: ${googleFlightsUrl(input)}`,
+        ]),
     `It should show round trips from ${input.origin} to ${input.destination}, leaving ${input.departure_date} and returning ${input.return_date}, ${adults}, economy, prices in EUR.`,
     "If the cookie consent page appears first, click \"Tout refuser\" or \"Reject all\".",
     "Do not read the flights and do not scroll: Nami reads the page herself. As soon as the list of flights is displayed with prices, call report_flights with no flights. If the page still says the results are loading, call wait_web for 2 seconds first. Only if the top of the page shows another city, another date, or no search at all, fix the form on the page and search, then call report_flights with no flights.",

@@ -48,11 +48,11 @@ async function start(request: Request): Promise<Response> {
     try {
       if (await getAvailableSessionSlots() <= 0) return fail(H_SLOTS_BUSY, 429);
     } catch {}
-    await openSearchTab(googleFlightsUrl(input.data));
+    const tabId = await openSearchTab(googleFlightsUrl(input.data));
     // Bench: a bridge that already served a session holds a dead chromedriver; it is restarted first (lib/local-bridge.ts).
     await freshBridgeBeforeSession();
     const session = await createSession({
-      task: buildFlightsTask(input.data),
+      task: buildFlightsTask(input.data, tabId),
       instructions: buildFlightsInstructions(),
       tools: FLIGHTS_TOOLS,
       localBrowserSessionId: input.data.local_session_id,

@@ -70,10 +70,14 @@ const PAGE_ACTIONS: Record<HotelCriterion, string> = {
   best: 'As soon as the list of hotels is displayed with prices, click the "4+ rating" filter above the list.',
 };
 
-export function buildHotelsTask(input: HotelsStart): string {
+export function buildHotelsTask(input: HotelsStart, tabId: string | null = null): string {
   return [
-    "Google Hotels is normally already open with this search in the active tab: do not open it again. Work only in that tab: the other tabs hold the traveller's forms and flight, so never navigate or close them.",
-    `If the current tab is not Google Hotels, first call switch_tab_web to go to the Google Hotels tab, or to the about:blank tab if there is none. If that tab is about:blank, open exactly this URL: ${googleHotelsUrl(input)}`,
+    ...(tabId
+      ? [`Google Hotels is already open with this search in the tab whose id is ${tabId}. If it is not the current tab, first call switch_tab_web with exactly this tab_id. Do not open the page again and never visit any other tab: they hold the traveller's forms and flight.`]
+      : [
+          "Google Hotels is normally already open with this search in the active tab: do not open it again. Work only in that tab: the other tabs hold the traveller's forms and flight, so never navigate or close them.",
+          `If the current tab is not Google Hotels, first call switch_tab_web to go to the Google Hotels tab, or to the about:blank tab if there is none. If that tab is about:blank, open exactly this URL: ${googleHotelsUrl(input)}`,
+        ]),
     "If the cookie consent page appears first, click \"Tout refuser\" or \"Reject all\".",
     PAGE_ACTIONS[input.criterion ?? "best"],
     "Then call wait_web for 2 seconds, scroll down the list of hotels once so the traveller sees it, and call report_hotels. Do not read the hotels: Nami reads them herself.",
