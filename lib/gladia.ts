@@ -17,6 +17,8 @@ type Options = {
   languages?: string[];
   // Words Gladia should favour. Empty: none. Default: TRAVEL_VOCABULARY unless GLADIA_VOCABULARY=off.
   vocabulary?: string[];
+  // Gladia's model. Empty: Gladia's default (solaria-1). Default: GLADIA_MODEL, else solaria-3.
+  model?: string;
   timeoutMs?: number;
   pollIntervalMs?: number;
   fetch?: typeof fetch;
@@ -55,6 +57,8 @@ export const TRAVEL_VOCABULARY = [
   "Air France",
 ] as const;
 
+const SOLARIA_3 = "solaria-3";
+
 // GLADIA_LANGUAGES=fr,en restricts detection (short answers like "oui" or "ok" are then never read as German);
 // unset or empty keeps the detection among all languages, so Nami answers in the traveller's own language.
 export function languagesFromEnv(value: string | undefined = process.env.GLADIA_LANGUAGES): string[] {
@@ -68,10 +72,19 @@ export function vocabularyFromEnv(value: string | undefined = process.env.GLADIA
   return value?.trim().toLowerCase() === "off" ? [] : [...TRAVEL_VOCABULARY];
 }
 
-export function preRecordedBody(audioUrl: string, languages: string[], vocabulary: string[]): Record<string, unknown> {
+// solaria-3 (English, French, German, Spanish, Italian; same price): measured on 8 Nov 2026 on 12 short French answers in
+// webm/opus with silence around them, with and without room noise: 12 right. solaria-1, Gladia's default, read a noisy
+// « oui » as Japanese and « d'accord » as « okay ». GLADIA_MODEL=solaria-1 goes back to it, for the other languages.
+export function modelFromEnv(value: string | undefined = process.env.GLADIA_MODEL): string {
+  return value?.trim() || SOLARIA_3;
+}
+
+export function preRecordedBody(audioUrl: string, languages: string[], vocabulary: string[], model = ""): Record<string, unknown> {
   return {
     audio_url: audioUrl,
-    ...(languages.length > 0 ? { language_config: { languages, code_switching: languages.length > 1 } } : {}),
+    ...(model ? { model } : {}),
+    // solaria-3 has no code switching (docs.gladia.io, models).
+    ...(languages.length > 0 ? { language_config: { languages, code_switching: languages.length > 1 && model !== SOLARIA_3 } } : {}),
     ...(vocabulary.length > 0
       ? { custom_vocabulary: true, custom_vocabulary_config: { vocabulary, default_intensity: 0.5 } }
       : {}),
@@ -92,6 +105,7 @@ export async function transcribeWithLanguage(audio: Blob, options: Options): Pro
     fetch: fetchImpl = fetch,
     languages = languagesFromEnv(),
     vocabulary = vocabularyFromEnv(),
+    model = modelFromEnv(),
   } = options;
   const deadline = Date.now() + timeoutMs;
   const signal = AbortSignal.timeout(timeoutMs);
@@ -124,7 +138,7 @@ export async function transcribeWithLanguage(audio: Blob, options: Options): Pro
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-  const tuned = preRecordedBody(audio_url, languages, vocabulary);
+  const tuned = preRecordedBody(audio_url, languages, vocabulary, model);
   let created: { id: string };
   try {
     created = await createJob(tuned);

@@ -78,6 +78,8 @@ fi
   || die "Session id must be a UUID, got: $SESSION_ID"
 # The Nami started below reads it: /api/papers/start uses it when the side panel sends no session.
 export NAMI_LOCAL_SESSION_ID="$SESSION_ID"
+export NAMI_BRIDGE_CHANNEL_FILE="$STATE_DIR/bridge-channel"
+rm -f "$NAMI_BRIDGE_CHANNEL_FILE"
 
 load_node() {
   if ! command -v node > /dev/null 2>&1 && [ -s "${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then
@@ -182,7 +184,10 @@ BRIDGE_LOG="$LOG_DIR/holo-local-browser.log"
   quick=0
   while true; do
     started=$(date +%s)
-    "$HOLO" local browser --session-id "$SESSION_ID" --debug-port "$PORT" >> "$BRIDGE_LOG" 2>&1 && code=0 || code=$?
+    # Nami writes a new channel here before each H session (lib/local-bridge.ts).
+    CHANNEL="$(tr -d '[:space:]' < "$NAMI_BRIDGE_CHANNEL_FILE" 2> /dev/null || true)"
+    [[ "$CHANNEL" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] || CHANNEL="$SESSION_ID"
+    "$HOLO" local browser --session-id "$CHANNEL" --debug-port "$PORT" >> "$BRIDGE_LOG" 2>&1 && code=0 || code=$?
     if [ $(($(date +%s) - started)) -lt 5 ]; then quick=$((quick + 1)); else quick=0; fi
     if [ "$quick" -ge 3 ]; then
       say "The H bridge keeps failing (code $code), giving up. Last lines of $BRIDGE_LOG:" >&2

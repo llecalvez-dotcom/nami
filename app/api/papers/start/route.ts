@@ -3,7 +3,8 @@ import { createSession, getAvailableSessionSlots } from "@/lib/h-agent";
 import { documentFilePaths } from "@/lib/documents";
 import { bindSessionDocument } from "@/lib/agent-passport-upload";
 import { AgentPreflightError, preflightBrowser } from "@/lib/agent-preflight";
-import { freshBridgeBeforeSession, rememberBridgeForSession } from "@/lib/local-bridge";
+import { openSearchTab } from "@/lib/agent-tab";
+import { channelForSession, currentChannel, rememberBridgeForSession } from "@/lib/local-bridge";
 import {
   buildPilotTask,
   buildPilotInstructions,
@@ -76,14 +77,20 @@ async function start(request: Request): Promise<Response> {
         if (await getAvailableSessionSlots() <= 0) return fail(H_SLOTS_BUSY, 429);
       } catch {}
     }
-    // Bench: a bridge that already served a session holds a dead chromedriver; it is restarted first (lib/local-bridge.ts).
+    // Bench: each session gets a new channel and a bridge started now (lib/local-bridge.ts).
     // Not on a resumed retry: H returns the session already running, which still drives that bridge.
-    if (!(input.data.resume && input.data.idempotency_key)) await freshBridgeBeforeSession();
+    let channel = await currentChannel(input.data.local_session_id);
+    if (!(input.data.resume && input.data.idempotency_key)) {
+      // Nami opens the official page herself: the traveller sees it at once, and the agent's first screenshot is not
+      // Chrome's new tab page, after which H often never answered (8 Nov 2026, 12:12 and 12:35).
+      await openSearchTab(getBaliPaper(input.data.paper_id).official_url);
+      channel = await channelForSession(input.data.local_session_id);
+    }
     const session = await createSession({
       task: buildPilotTask(input.data, getBaliPaper(input.data.paper_id)),
       instructions: buildPilotInstructions(getBaliPaper(input.data.paper_id)),
       tools: PAPER_TOOLS,
-      localBrowserSessionId: input.data.local_session_id,
+      localBrowserSessionId: channel,
       maxTimeS: PAPER_MAX_TIME_S,
       maxSteps: PAPER_MAX_STEPS,
       idempotencyKey: input.data.idempotency_key,

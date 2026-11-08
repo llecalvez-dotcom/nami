@@ -27,20 +27,20 @@ describe("stalled H sessions (2026-11-08: the model never answered the first scr
     expect(trackProgress("s", null, STALL_MS * 3)).toBe(false);
   });
 
-  it("gives up when the first screenshot gets no answer in FIRST_STALL_MS (45 s: a slow H starts in 30 s)", () => {
-    expect(FIRST_STALL_MS).toBe(45_000);
+  it("gives up when the first screenshot gets no answer in FIRST_STALL_MS (30 s: the slowest working start took 22 s)", () => {
+    expect(FIRST_STALL_MS).toBe(30_000);
     expect(trackProgress("s", changes(["message_event", "observation_event"]), 0)).toBe(false);
     expect(trackProgress("s", null, FIRST_STALL_MS - 1)).toBe(false);
     expect(trackProgress("s", null, FIRST_STALL_MS)).toBe(true);
   });
 
-  it("is not a stall when the first action comes after 44 s", () => {
+  it("is not a stall when the first action comes after 29 s", () => {
     trackProgress("s", changes(["observation_event"]), 0);
-    expect(trackProgress("s", null, 44_000)).toBe(false);
-    expect(trackProgress("s", changes(["policy_event", "tool_result"]), 44_000)).toBe(false);
+    expect(trackProgress("s", null, 29_000)).toBe(false);
+    expect(trackProgress("s", changes(["policy_event", "tool_result"]), 29_000)).toBe(false);
     expect(hasActed("s")).toBe(true);
-    expect(trackProgress("s", null, 44_000 + STALL_MS - 1)).toBe(false);
-    expect(trackProgress("s", null, 44_000 + STALL_MS)).toBe(true);
+    expect(trackProgress("s", null, 29_000 + STALL_MS - 1)).toBe(false);
+    expect(trackProgress("s", null, 29_000 + STALL_MS)).toBe(true);
   });
 
   it("waits STALL_MS once the agent has acted", () => {
