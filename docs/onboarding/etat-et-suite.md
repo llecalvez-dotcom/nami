@@ -38,6 +38,10 @@ Parcours complet **à la voix, dans le panneau, sur le Mac de Clément** dans la
 - Stop ou abandon libère le navigateur localement sans attendre H : plus de 409.
 - Tous les appels H bornés (création 30 s, autres 20 s, long-poll 35 s) ; « Busy » (concurrence) distingué du quota, réessai automatique ; quotas de test relevés.
 
+### Ticket 0 : banc de test sur la machine de Devin, et mesure (PR vers `v2`)
+- Branche `v2` : la nouvelle version (session unique, orchestrateur, formulaires rejoués, validateur) y arrive par PR, chacune mesurée contre `main` avec le banc. `.github/workflows/ci.yml` lance test, lint, tsc et build sur chaque PR vers `main` ou `v2` (ubuntu et windows).
+- Maquettes des sites officiels (`fixtures/sites`, servies par `scripts/bench/mock-sites.mjs`, `NAMI_MOCK_SITES=on`) : les pièges connus de l'e-VOA et de la carte d'arrivée, un clic sur Next / Submit enregistré comme échec. `scripts/bench/setup.sh` monte le banc (Chrome, pont, maquettes, Nami), `scripts/bench/run.mjs <label> <n>` joue un voyage tapé complet, `docs/tests/00-baseline.md` reçoit la base de référence.
+
 ### Qualité
 - 1018 tests vitest, lint et build verts sur `main` ; tests de routes, de flux, de panneau et d'extension.
 

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Arrival Card Submission: Personal Information | All Indonesia (mock)</title>
+<link rel="stylesheet" href="/__mock/mock.css">
+</head>
+<body>
+<header class="gov">All Indonesia <small>Arrival card (local mock for the Nami test bench, nothing is sent anywhere)</small></header>
+<main>
+  <div class="steps"><span class="active">1. Personal Information</span><span>2. Travel Details</span><span>3. Health Declaration</span><span>4. Review &amp; Submit</span></div>
+  <h1>Personal Information</h1>
+  <p class="note">Fill in the arrival card within 3 days before your arrival in Indonesia. Fields marked * are required.</p>
+  <div class="alert alert-danger hidden" id="mock-forbidden"></div>
+  <form id="personal_information" autocomplete="off">
+    <div class="row">
+      <div class="form-group"><label for="full_name">Full Name (as in passport) <span class="req">*</span></label><input type="text" id="full_name" name="full_name"></div>
+      <div class="form-group"><label for="gender">Gender <span class="req">*</span></label><select id="gender" name="gender"><option value="">Select</option><option>Male</option><option>Female</option></select></div>
+    </div>
+    <div class="row">
+      <div class="form-group"><label for="date_of_birth">Date of Birth <span class="req">*</span></label><input type="date" id="date_of_birth" name="date_of_birth"></div>
+      <div class="form-group"><label for="nationality">Nationality <span class="req">*</span></label><select id="nationality" name="nationality"><option value="">Select</option></select></div>
+    </div>
+    <div class="row">
+      <div class="form-group"><label for="passport_number">Passport Number <span class="req">*</span></label><input type="text" id="passport_number" name="passport_number"></div>
+      <div class="form-group"><label for="passport_expiry">Passport Expiry Date <span class="req">*</span></label><input type="date" id="passport_expiry" name="passport_expiry"></div>
+    </div>
+    <div class="row">
+      <div class="form-group"><label for="country_of_residence">Country of Residence <span class="req">*</span></label><select id="country_of_residence" name="country_of_residence"><option value="">Select</option></select></div>
+      <div class="form-group"><label for="email">Email <span class="req">*</span></label><input type="email" id="email" name="email"></div>
+    </div>
+    <div class="row">
+      <div class="form-group"><label for="phone">Mobile Phone Number <span class="req">*</span></label><input type="tel" id="phone" name="phone"></div>
+      <div class="form-group"><label for="purpose">Purpose of Visit <span class="req">*</span></label><select id="purpose" name="purpose"><option value="">Select</option><option>Holiday / Leisure</option><option>Business</option><option>Family Visit</option><option>Transit</option></select></div>
+    </div>
+    <div class="row">
+      <div class="form-group"><label for="arrival_date">Date of Arrival <span class="req">*</span></label><input type="date" id="arrival_date" name="arrival_date"></div>
+      <div class="form-group"><label for="flight_number">Flight / Vessel Number <span class="req">*</span></label><input type="text" id="flight_number" name="flight_number"></div>
+    </div>
+    <div class="row">
+      <div class="form-group"><label for="port_of_entry">Port of Entry <span class="req">*</span></label><select id="port_of_entry" name="port_of_entry"><option value="">Select</option><option>NGURAH RAI AIRPORT (DPS)</option><option>SOEKARNO HATTA AIRPORT (CGK)</option><option>JUANDA AIRPORT (SUB)</option></select></div>
+      <div class="form-group"><label for="address_in_indonesia">Address in Indonesia <span class="req">*</span></label><input type="text" id="address_in_indonesia" name="address_in_indonesia"></div>
+    </div>
+  </form>
+  <div class="actions">
+    <button type="button" class="btn-primary" data-forbidden="true" id="next">Next</button>
+    <button type="button" class="btn-success" data-forbidden="true" id="submit">Submit</button>
+  </div>
+</main>
+<script src="/__mock/mock.js" data-step="personal-information"></script>
+<script>
+(function () {
+  var COUNTRIES = ["AUSTRALIA", "BELGIUM", "CANADA", "CHAD", "CHINA", "FRANCE", "GERMANY", "INDIA", "ITALY", "JAPAN", "NETHERLANDS", "SPAIN", "SWITZERLAND", "UNITED KINGDOM", "UNITED STATES"];
+  ["nationality", "country_of_residence"].forEach(function (id) {
+    var select = document.getElementById(id);
+    COUNTRIES.forEach(function (c) { var o = document.createElement("option"); o.value = c; o.textContent = c; select.appendChild(o); });
+  });
+})();
+</script>
+</body>
+</html>

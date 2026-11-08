@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Application, step 2: Personal data | e-Visa Indonesia (mock)</title>
+<link rel="stylesheet" href="/__mock/mock.css">
+</head>
+<body>
+<header class="gov">e-Visa Indonesia <small>Directorate General of Immigration (local mock for the Nami test bench)</small></header>
+<main>
+  <div class="steps"><span>1. Attachments</span><span class="active">2. Personal data</span><span>3. Summary</span><span>4. Payment</span></div>
+  <h1>Step 2: Personal data</h1>
+  <p class="note">The demo stops at step 1; this page exists so that the record of the real site is complete (docs/tests/f1-evoa.md).</p>
+  <div class="alert alert-danger hidden" id="mock-forbidden"></div>
+  <form id="personal" autocomplete="off">
+    <h2>Personal data</h2>
+    <div class="row">
+      <div class="form-group"><label for="first_name">First Name <span class="req">*</span></label><input type="text" id="first_name" name="first_name" value="SPECIMEN JEAN PIERRE"></div>
+      <div class="form-group"><label for="last_name">Last Name</label><input type="text" id="last_name" name="last_name" value=""></div>
+    </div>
+    <div class="row">
+      <div class="form-group"><label for="gender">Gender <span class="req">*</span></label><select id="gender" name="gender"><option value="">Select</option><option>MALE</option><option>FEMALE</option></select></div>
+      <div class="form-group"><label for="birth_date">Date of Birth <span class="req">*</span></label><input type="date" id="birth_date" name="birth_date"></div>
+    </div>
+    <div class="row">
+      <div class="form-group"><label for="passport_number">Passport Number <span class="req">*</span></label><input type="text" id="passport_number" name="passport_number"></div>
+      <div class="form-group"><label for="passport_expiry">Date of Expiry <span class="req">*</span></label><input type="date" id="passport_expiry" name="passport_expiry"></div>
+    </div>
+    <div class="row">
+      <div class="form-group"><label for="passport_country">Passport/Country/Region <span class="req">*</span></label><input type="text" id="passport_country" name="passport_country" readonly value="PRANCIS"></div>
+      <div class="form-group"><label for="issuing_country">Issuing Country <span class="req">*</span></label><input type="text" id="issuing_country" name="issuing_country" readonly value="PRANCIS"></div>
+    </div>
+    <div class="form-group"><label for="birth_place">Place of Birth <span class="req">*</span></label><input type="text" id="birth_place" name="birth_place"></div>
+
+    <h2>Address in Indonesia</h2>
+    <div class="row">
+      <div class="form-group"><label for="residence_type">Residence Type <span class="req">*</span></label><select id="residence_type" name="residence_type"><option value="">Select</option><option>HOTEL</option><option>APARTMENT</option><option>HOUSE</option></select></div>
+      <div class="form-group"><label for="postal_code">Postal Code <span class="req">*</span></label><input type="text" id="postal_code" name="postal_code"></div>
+    </div>
+    <div class="form-group"><label for="address">Address <span class="req">*</span></label><input type="text" id="address" name="address"></div>
+    <div class="row">
+      <div class="form-group"><label for="province">Province</label><input type="text" id="province" name="province" readonly></div>
+      <div class="form-group"><label for="city">City</label><input type="text" id="city" name="city" readonly></div>
+    </div>
+    <div class="row">
+      <div class="form-group"><label for="district">District</label><input type="text" id="district" name="district" readonly></div>
+      <div class="form-group"><label for="village">Village</label><input type="text" id="village" name="village" readonly></div>
+    </div>
+    <div class="form-group"><label for="immigration_office">Immigration Office</label><input type="text" id="immigration_office" name="immigration_office" readonly></div>
+
+    <h2>Arrival Information</h2>
+    <div class="row">
+      <div class="form-group"><label for="port_mode">Port of Entry Mode <span class="req">*</span></label><select id="port_mode" name="port_mode"><option value="">Select</option><option>Airport</option><option>Seaport</option><option>Landport</option></select></div>
+      <div class="form-group"><label for="airport_id">Port of Entry <span class="req">*</span></label><select id="airport_id" name="airport_id" disabled><option value="">Select the mode first</option></select></div>
+    </div>
+
+    <h2>Return Ticket</h2>
+    <div class="form-group">
+      <label for="attachment-return_ticket">Return Ticket (PDF only) <span class="req">*</span></label>
+      <input type="file" id="attachment-return_ticket" name="attachment[return_ticket]" accept="application/pdf">
+      <div class="alert alert-danger hidden" id="ticket_error">Return Ticket is empty</div>
+    </div>
+
+    <h2>Applicant Contact Confirmation</h2>
+    <div class="row">
+      <div class="form-group"><label for="email">Email <span class="req">*</span></label><input type="email" id="email" name="email"></div>
+      <div class="form-group"><label for="email_confirmation">Email Confirmation <span class="req">*</span></label><input type="email" id="email_confirmation" name="email_confirmation"></div>
+    </div>
+  </form>
+  <div class="actions">
+    <button type="button" class="btn-secondary" id="back">Back</button>
+    <button type="button" class="btn-primary" data-forbidden="true" id="next">Next</button>
+    <button type="button" class="btn-success" data-forbidden="true" id="submit">Submit</button>
+  </div>
+</main>
+<script src="/__mock/mock.js" data-step="step-2"></script>
+<script>
+(function () {
+  // The postal code fills the area, as on the site, but only on keyup (fill_field fires it).
+  var AREAS = { "80361": ["BALI", "KABUPATEN BADUNG", "KUTA", "KUTA", "KANTOR IMIGRASI KELAS I KHUSUS TPI NGURAH RAI"], "80571": ["BALI", "KABUPATEN GIANYAR", "UBUD", "UBUD", "KANTOR IMIGRASI KELAS I TPI DENPASAR"], "10110": ["DKI JAKARTA", "JAKARTA PUSAT", "GAMBIR", "GAMBIR", "KANTOR IMIGRASI KELAS I KHUSUS TPI JAKARTA PUSAT"] };
+  document.getElementById("postal_code").addEventListener("keyup", function (e) {
+    var area = AREAS[e.target.value.trim()];
+    ["province", "city", "district", "village", "immigration_office"].forEach(function (id, i) { document.getElementById(id).value = area ? area[i] : ""; });
+  });
+  var AIRPORTS = ["ADISUTJIPTO AIRPORT", "HANG NADIM AIRPORT", "JUANDA AIRPORT", "KUALANAMU AIRPORT", "NGURAH RAI AIRPORT", "SOEKARNO HATTA AIRPORT", "SULTAN HASANUDDIN AIRPORT", "YOGYAKARTA INTERNATIONAL AIRPORT"];
+  var SEAPORTS = ["BENOA SEAPORT", "TANJUNG PRIOK SEAPORT"];
+  var mode = document.getElementById("port_mode"), port = document.getElementById("airport_id");
+  // The real list only loads on Select2's select2:select; a native change works here too (pick_option fires both).
+  function loadPorts() {
+    var list = mode.value === "Airport" ? AIRPORTS : mode.value === "Seaport" ? SEAPORTS : mode.value === "Landport" ? ["ENTIKONG LANDPORT"] : [];
+    port.innerHTML = '<option value="">Select</option>';
+    list.forEach(function (name) { var o = document.createElement("option"); o.value = name; o.textContent = name; port.appendChild(o); });
+    port.disabled = list.length === 0;
+  }
+  mode.addEventListener("change", loadPorts);
+  document.getElementById("attachment-return_ticket").addEventListener("change", function (e) {
+    var f = e.target.files && e.target.files[0];
+    document.getElementById("ticket_error").classList.toggle("hidden", !!(f && f.type === "application/pdf"));
+    if (f && f.type !== "application/pdf") { document.getElementById("ticket_error").textContent = "Only PDF files are accepted for the return ticket."; e.target.value = ""; }
+  });
+  document.getElementById("back").addEventListener("click", function () { location.href = "/web/application/step-1"; });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Visa selection | e-Visa Indonesia (mock)</title>
+<link rel="stylesheet" href="/__mock/mock.css">
+</head>
+<body>
+<header class="gov">e-Visa Indonesia <small>Directorate General of Immigration (local mock for the Nami test bench, no data leaves this computer)</small></header>
+<main>
+  <h1>Visa selection</h1>
+  <p class="note">Choose the passport country and the purpose of your visit to see the visas you can apply for.</p>
+  <div class="alert alert-danger hidden" id="mock-forbidden"></div>
+  <form id="selection" autocomplete="off">
+    <div class="form-group">
+      <label for="passport_country">Country of passport <span class="req">*</span></label>
+      <select id="passport_country" name="passport_country"><option value="">Select a country</option></select>
+    </div>
+    <div class="form-group">
+      <label for="visa_group">What is the purpose of your visit? <span class="req">*</span></label>
+      <select id="visa_group" name="visa_group" disabled><option value="">Select</option></select>
+    </div>
+    <div class="form-group">
+      <label for="visa_purpose">Purpose <span class="req">*</span></label>
+      <select id="visa_purpose" name="visa_purpose" disabled><option value="">Select</option></select>
+    </div>
+    <div class="form-group">
+      <label for="visa_type">Visa <span class="req">*</span></label>
+      <select id="visa_type" name="visa_type" disabled><option value="">Select</option></select>
+    </div>
+    <div class="form-group">
+      <label for="length_of_stay">Length of stay</label>
+      <input type="text" id="length_of_stay" name="length_of_stay" readonly value="">
+    </div>
+  </form>
+  <!-- The real page puts the visa card and its button far below the fold: scrolling is needed. -->
+  <div class="spacer"></div>
+  <section id="visa_card" class="hidden">
+    <h2>B1 - Tourist (Visa On Arrival)</h2>
+    <p>Single entry, 30 days, extendable once. IDR 500,000.</p>
+    <div class="actions"><button type="button" class="btn-primary" id="detail_apply">Detail &amp; Apply</button></div>
+  </section>
+</main>
+<div id="conditions" class="modal-backdrop hidden">
+  <div class="modal">
+    <h3>Terms and conditions</h3>
+    <p>By applying you confirm that the information you provide is true and that you hold a passport valid for at least 6 months. The visa fee is paid at the end of the application.</p>
+    <div class="actions"><button type="button" class="btn-outline" id="conditions_close">Close</button><button type="button" class="btn-success" id="conditions_apply">Apply</button></div>
+  </div>
+</div>
+<script src="/__mock/mock.js" data-step="visa-selection"></script>
+<script>
+(function () {
+  var COUNTRIES = ["AFGHANISTAN", "ALGERIA", "ARGENTINA", "AUSTRALIA", "AUSTRIA", "BELGIUM", "BRAZIL", "CANADA", "CHAD", "CHILE", "CHINA", "DENMARK", "EGYPT", "FINLAND", "FRANCE", "GERMANY", "GREECE", "INDIA", "IRELAND", "ITALY", "JAPAN", "MEXICO", "NETHERLANDS", "NORWAY", "POLAND", "PORTUGAL", "SPAIN", "SWEDEN", "SWITZERLAND", "UNITED KINGDOM", "UNITED STATES"];
+  var country = document.getElementById("passport_country"), group = document.getElementById("visa_group"), purpose = document.getElementById("visa_purpose"), type = document.getElementById("visa_type");
+  COUNTRIES.forEach(function (c) { var o = document.createElement("option"); o.value = c; o.textContent = c; country.appendChild(o); });
+  function fill(select, options) {
+    select.innerHTML = '<option value="">Select</option>';
+    options.forEach(function (text) { var o = document.createElement("option"); o.value = text; o.textContent = text; select.appendChild(o); });
+    select.disabled = false;
+  }
+  function reset(selects) { selects.forEach(function (s) { s.innerHTML = '<option value="">Select</option>'; s.disabled = true; }); document.getElementById("visa_card").classList.add("hidden"); document.getElementById("length_of_stay").value = ""; }
+  country.addEventListener("change", function () { reset([group, purpose, type]); if (country.value) fill(group, ["General", "Family", "Social"]); });
+  group.addEventListener("change", function () { reset([purpose, type]); if (group.value) fill(purpose, ["Tourism", "Family Visit", "Transit"]); });
+  purpose.addEventListener("change", function () { reset([type]); if (purpose.value) fill(type, ["B1 - Tourist (Visa On Arrival)", "C1 - Tourist (Single Entry Visa)"]); });
+  type.addEventListener("change", function () {
+    if (!type.value) return;
+    document.getElementById("length_of_stay").value = /B1/.test(type.value) ? "30 days" : "60 days";
+    document.getElementById("visa_card").classList.remove("hidden");
+  });
+  document.getElementById("detail_apply").addEventListener("click", function () { document.getElementById("conditions").classList.remove("hidden"); });
+  document.getElementById("conditions_close").addEventListener("click", function () { document.getElementById("conditions").classList.add("hidden"); });
+  document.getElementById("conditions_apply").addEventListener("click", function () {
+    sessionStorage.setItem("evoa.selection", JSON.stringify({ country: country.value, group: group.value, purpose: purpose.value, type: type.value }));
+    location.href = "/web/application/step-1";
+  });
+})();
+</script>
+</body>
+</html>

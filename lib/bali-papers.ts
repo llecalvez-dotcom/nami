@@ -1,3 +1,4 @@
+import { mockSitesEnabled, mockSiteUrl, type MockSiteId } from "@/lib/mock-sites";
 import { OBSERVED_ON } from "@/lib/official-sites";
 
 export type BaliPaperId = "evoa" | "arrival_card" | "bali_levy";
@@ -26,7 +27,7 @@ export type BaliPaper = {
   source_urls: string[];
 };
 
-export const BALI_PAPERS: readonly BaliPaper[] = [
+const REAL_BALI_PAPERS: readonly BaliPaper[] = [
   {
     id: "evoa",
     name: "e-VOA: B1 Tourist Visa On Arrival",
@@ -99,6 +100,21 @@ export const BALI_PAPERS: readonly BaliPaper[] = [
     source_urls: ["https://lovebali.baliprov.go.id", "https://lovebali.baliprov.go.id/faq"],
   },
 ];
+
+// Ticket 0: on the test bench (NAMI_MOCK_SITES=on, never in production) the e-VOA and the arrival card are the local
+// copies of fixtures/sites, with the same rules, forbidden buttons and stop conditions as the real sites.
+const MOCK_PATHS: Record<MockSiteId, string> = { evoa: "/web/visa-selection", arrival_card: "/arrival-card-submission/personal-information" };
+
+export function baliPapers(env: Record<string, string | undefined> = process.env): readonly BaliPaper[] {
+  if (!mockSitesEnabled(env)) return REAL_BALI_PAPERS;
+  return REAL_BALI_PAPERS.map((paper) => {
+    if (paper.id !== "evoa" && paper.id !== "arrival_card") return paper;
+    const url = mockSiteUrl(paper.id, MOCK_PATHS[paper.id], env);
+    return { ...paper, official_url: url, domain: new URL(url).hostname };
+  });
+}
+
+export const BALI_PAPERS: readonly BaliPaper[] = baliPapers();
 
 export const BALI_TIME_ZONE = "Asia/Makassar";
 

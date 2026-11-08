@@ -24,3 +24,6 @@ yarn-error.log*
 .pnpm-debug.log*
 *.tsbuildinfo
 next-env.d.ts
+
+# Ticket 0: bench results (JSON per run, mock site results), never committed; the report goes to docs/tests.
+/bench/
