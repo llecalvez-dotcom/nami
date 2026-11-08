@@ -170,10 +170,13 @@ function addDays(isoDate: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
+// Answers the combined question "French passport, leaving from France?": one yes settles both fields.
+export const FRENCH_FROM_FRANCE_OPTION = { label: "Yes, French passport, from France", value: "FR" } as const;
+
 function questionOptions(field: QuestionField, request: TripRequestDraft): { label: string; value: string }[] {
   switch (field) {
     case "nationality":
-      return [{ label: "Yes, French passport", value: "FR" }];
+      return request.origin_country === null ? [FRENCH_FROM_FRANCE_OPTION] : [{ label: "Yes, French passport", value: "FR" }];
     case "origin_country":
       return [{ label: "Yes, from France", value: "FR" }];
     case "arrival_at": {
@@ -325,7 +328,11 @@ export function answerQuestion(trip: Trip, itemId: string, value: string, label:
 
   if (item.field !== "email") {
     const fieldValue = item.field === "travellers" ? Number(value) : value;
-    return advance({ ...answered, request: { ...answered.request, [item.field]: fieldValue } });
+    const bothFrench = item.field === "nationality" && label === FRENCH_FROM_FRANCE_OPTION.label && answered.request.origin_country === null;
+    return advance({
+      ...answered,
+      request: { ...answered.request, [item.field]: fieldValue, ...(bothFrench ? { origin_country: "FR" } : {}) },
+    });
   }
 
   if (!answered.agent_run || !isAgentActive(answered.agent_run)) return answered;

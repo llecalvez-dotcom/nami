@@ -5,6 +5,7 @@ import {
   defaultBaliArrival,
   formalityWindows,
   isWindowOpen,
+  missingFields,
   nextQuestion,
   ONE_FILE_AT_A_TIME,
   suggestModules,
@@ -71,6 +72,22 @@ describe("nextQuestion", () => {
     ]);
   });
 
+  it("asks passport and departure country in one question when both are unknown", () => {
+    expect(nextQuestion(draft({ destination: "Bali", country_iso2: "ID" }))).toEqual({
+      field: "nationality",
+      question: "Do you travel with a French passport, leaving from France?",
+    });
+    expect(nextQuestion(draft({ destination: "Bali", country_iso2: "ID", origin_country: "BE" }))?.question).toBe("Do you travel with a French passport?");
+  });
+
+  it("does not ask for the landing time outside Bali, and the request is complete without it", () => {
+    const london = { ...complete, destination: "London", country_iso2: "GB", arrival_at: null };
+    expect(missingFields(london)).toEqual([]);
+    expect(nextQuestion(london)).toBeNull();
+    expect(TripRequestSchema.safeParse(london).success).toBe(true);
+    expect(missingFields({ ...complete, arrival_at: null })).toEqual(["arrival_at"]);
+  });
+
   it("follows the full order on an empty draft", () => {
     expect(nextQuestion(draft({}))?.field).toBe("destination");
     expect(nextQuestion(draft({ destination: "Bali" }))?.field).toBe("nationality");
@@ -121,18 +138,18 @@ describe("formalityWindows", () => {
   const arrivalCard = BALI_PAPERS.find((p) => p.id === "arrival_card")!;
 
   it("opens the arrival card 72 h before landing, in Bali time", () => {
-    const [evoa, card, levy] = formalityWindows(complete, BALI_PAPERS);
+    const [evoa, card, levy] = formalityWindows({ arrival_at: complete.arrival_at! }, BALI_PAPERS);
     expect(card).toEqual({ id: "arrival_card", opens_at: "2026-11-07T14:30+08:00", closes_at: "2026-11-10T14:30+08:00" });
     expect(evoa).toEqual({ id: "evoa", opens_at: null, closes_at: null });
     expect(levy).toEqual({ id: "bali_levy", opens_at: null, closes_at: null });
   });
 
   it("is closed one hour before opening, open at opening", () => {
-    const [window] = formalityWindows(complete, [arrivalCard]);
+    const [window] = formalityWindows({ arrival_at: complete.arrival_at! }, [arrivalCard]);
     const opensMs = Date.parse(window.opens_at!);
     expect(isWindowOpen(window, new Date(opensMs - HOUR_MS))).toBe(false);
     expect(isWindowOpen(window, new Date(opensMs))).toBe(true);
-    expect(isWindowOpen(window, new Date(Date.parse(complete.arrival_at) + HOUR_MS))).toBe(false);
+    expect(isWindowOpen(window, new Date(Date.parse(complete.arrival_at!) + HOUR_MS))).toBe(false);
   });
 
   it("handles the day change between Paris and Bali", () => {

@@ -32,6 +32,8 @@ export const TripRequestSchema = z.object({
   // Not asked by the agent, so it may stay unknown. The "passport valid 6 months" rule uses
   // return_date when known, otherwise arrival_at + 30 days (length of the e-VOA stay).
   return_date: tripFields.return_date.nullable().default(null),
+  // Asked only where a paper opens relative to the landing (Bali's arrival card); unknown elsewhere.
+  arrival_at: tripFields.arrival_at.nullable().default(null),
   status: tripFields.status
     .nullish()
     .transform((status) => status ?? DEFAULT_TRIP_STATUS),
