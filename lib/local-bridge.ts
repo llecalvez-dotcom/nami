@@ -60,7 +60,8 @@ export function bridgeManaged(env: Record<string, string | undefined> = process.
 export function defaultBridgeDeps(env: Record<string, string | undefined> = process.env): BridgeDeps {
   const port = env.NAMI_AGENT_CHROME_PORT?.trim() || "9333";
   return {
-    pgrep: findBridgePid,
+    // Under vitest the route tests must never find, let alone kill, the real bridge of the bench.
+    pgrep: env.NODE_ENV === "test" ? async () => null : findBridgePid,
     kill: async (pid) => {
       process.kill(pid, "SIGTERM");
     },
@@ -194,8 +195,10 @@ export async function freshBridgeBeforeSession(deps: BridgeDeps = defaultBridgeD
   if (!bridgeManaged()) return;
   try {
     await waitForChannelRest(deps);
-    if (await bridgeIsUsed(deps)) return void (await refreshBridge(deps));
     await awaitRestartingBridge(deps);
+    // Always a bridge started now: it attaches to a tab when it starts and keeps it, so a tab closed since then fails every
+    // command ("no such window", 8 Nov 2026 at 12:11: the demo starts by closing the old tabs and opening a new one).
+    await refreshBridge(deps);
   } catch {
     // The session is created as before.
   }
