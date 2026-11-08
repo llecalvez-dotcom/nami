@@ -18,20 +18,25 @@ type Options = { silenceMs?: number; minLevel?: number; ratio?: number };
 // up to 0.085. The quietest level ever heard would not do: one instant of digital silence made the whole room a "voice".
 const ROOM_WINDOW = 60;
 const DIGITAL_SILENCE = 0.001;
+const VOICE_SHARE = 0.25;
 export function createSilenceDetector({ silenceMs = SILENCE_MS, minLevel = 0.006, ratio = 3 }: Options = {}) {
   const recent: number[] = [];
   let heard = false;
   let hits = 0;
   let lastHit: number | null = null;
   let quietSince: number | null = null;
+  let voicePeak = 0;
   const detector = (level: number, now: number): boolean => {
     if (level >= DIGITAL_SILENCE) recent.push(level);
     if (recent.length > ROOM_WINDOW) recent.shift();
     const room = [...recent].sort((a, b) => a - b)[Math.floor(recent.length * 0.1)] ?? level;
-    if (level > Math.max(minLevel, room * ratio)) {
+    // Once a voice is heard, what stays far under it is the room (8 Nov 2026: in the noisy hall 3 answers out of 5 ran to the
+    // 10 s limit, the noise staying above the threshold of the quiet moments, the voice peaking at 0.25 to 0.4).
+    if (level > Math.max(minLevel, room * ratio, voicePeak * VOICE_SHARE)) {
       hits = lastHit !== null && now - lastHit > SPEECH_GAP_MS ? 1 : hits + 1;
       lastHit = now;
       if (hits >= SPEECH_MIN_HITS) heard = true;
+      if (heard) voicePeak = Math.max(voicePeak, level);
       quietSince = null;
       return false;
     }

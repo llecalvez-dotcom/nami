@@ -75,6 +75,14 @@ describe("silence detector", () => {
     });
   });
 
+  it("ends the sentence in a noisy room whose noise stays above the quiet moments, and keeps a softer end of sentence", () => {
+    const times = (level: number, count: number, from: number): [number, number][] => Array.from({ length: count }, (_, i) => [level, from + i * 100]);
+    const noisy = feed([...times(0.02, 10, 0), ...times(0.4, 10, 1000), ...times(0.08, 16, 2000)]);
+    expect(noisy.at(-1)).toBe(true);
+    const soft = feed([...times(0.02, 10, 0), ...times(0.4, 10, 1000), ...times(0.12, 16, 2000)]);
+    expect(soft.at(-1)).toBe(false);
+  });
+
   it("does not add up noises far apart", () => {
     const silent = createSilenceDetector();
     silent(0.003, 0);
