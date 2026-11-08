@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { HotelOption } from "@/lib/contracts";
-import { googleHotelsUrl, HotelsStartSchema } from "@/lib/hotels-agent";
+import { buildHotelsTask, googleHotelsUrl, HotelsStartSchema } from "@/lib/hotels-agent";
 import { answeredHotelCriterion, answerHotelQuestion, answerHotelQuestionWithText, hotelsAnswered, hotelsResult, hotelsStartBody, isHotelReadyMessage, matchHotel, matchHotelCriterion, offerHotels, pendingHotelChoice, reportHotelsReady, startHotelsFlow, startHotelsSession } from "@/lib/hotels/flow";
 import { decideProposal, needsPassportReconfirm, pushProposal, type Trip } from "@/lib/trip-state";
 
@@ -39,6 +39,17 @@ describe("the Google Hotels address", () => {
     expect(url.searchParams.get("q")).toBe("hotels in Bali from November 23 2026 to December 3 2026");
     expect(url.searchParams.get("curr")).toBe("EUR");
     expect(url.searchParams.get("hl")).toBe("en");
+  });
+});
+
+describe("the agent's task", () => {
+  const task = (criterion: "cheapest" | "best_rated" | "best") => buildHotelsTask(HotelsStartSchema.parse({ destination: "Bali", checkin: "2026-11-23", checkout: "2026-12-03", criterion, local_session_id: "6e5f6051-e697-43ce-8763-4e9233e336bf" }));
+
+  it("sorts the page by what the traveller asked, so the page answers it", () => {
+    expect(task("cheapest")).toContain('"Lowest price"');
+    expect(task("best_rated")).toContain('"Highest rating"');
+    expect(task("best")).toContain('"Most reviewed"');
+    expect(task("cheapest")).toContain("call report_hotels");
   });
 });
 

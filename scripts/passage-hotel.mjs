@@ -1,8 +1,9 @@
 // Drives one real hotel search through Nami's routes, as the side panel does. No passport, no name: the session only
 // knows the destination and the dates. Prerequisite: `npm run demo` running.
 //
-// Usage: node scripts/passage-hotel.mjs <label> [choice]
-//   choice  which of the hotels read to open, 1 to 3 (default 1)
+// Usage: node scripts/passage-hotel.mjs <label> [choice] [criterion]
+//   choice     which of the hotels read to open, 1 to 3 (default 1)
+//   criterion  cheapest | best_rated | best (default best)
 // Env (optional): NAMI_URL, NAMI_AGENT_CHROME_PORT, NAMI_RUNS_DIR, NAMI_HOTEL_DESTINATION, NAMI_HOTEL_CHECKIN, NAMI_HOTEL_CHECKOUT.
 //
 // Safety: the session is cancelled at report_ready, and as soon as no tab is left on google.com/travel while one was.
@@ -14,6 +15,7 @@ const BASE = process.env.NAMI_URL ?? "http://localhost:3000";
 const DIR = process.env.NAMI_RUNS_DIR ?? `${homedir()}/nami-runs`;
 const label = process.argv[2] ?? "hotel";
 const choice = Number(process.argv[3] ?? 1);
+const criterion = process.argv[4] ?? "best";
 const t0 = Date.now();
 const since = () => Math.round((Date.now() - t0) / 1000);
 const log = (...a) => console.log(`[${since()}s]`, ...a);
@@ -31,6 +33,7 @@ const started = await call("POST", "/api/hotels/start", {
   destination: process.env.NAMI_HOTEL_DESTINATION ?? "Bali",
   checkin: process.env.NAMI_HOTEL_CHECKIN ?? "2026-11-23",
   checkout: process.env.NAMI_HOTEL_CHECKOUT ?? "2026-12-03",
+  criterion,
   local_session_id: readFileSync(`${homedir()}/.config/nami/local-browser-session-id`, "utf8").trim(),
   idempotency_key: randomUUID(),
 });
