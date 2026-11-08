@@ -1,6 +1,6 @@
 const officialHosts = new Set(["evisa.imigrasi.go.id", "allindonesia.imigrasi.go.id", "lovebali.baliprov.go.id"]);
 // Shared hosts hold unrelated tabs too: only this section of the site is the agent's.
-const sharedSections = { "www.google.com": "/travel/" };
+const sharedSections = { "www.google.com": "/travel/flights" };
 
 export function isAgentPage(url) {
   if (url.protocol !== "https:") return false;

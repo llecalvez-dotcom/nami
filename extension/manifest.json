@@ -13,7 +13,7 @@
   "options_page": "options.html",
   "permissions": ["sidePanel", "storage", "tabs"],
   "content_scripts": [{
-    "matches": ["https://evisa.imigrasi.go.id/*", "https://allindonesia.imigrasi.go.id/*", "https://lovebali.baliprov.go.id/*", "https://www.google.com/travel/*"],
+    "matches": ["https://evisa.imigrasi.go.id/*", "https://allindonesia.imigrasi.go.id/*", "https://lovebali.baliprov.go.id/*", "https://www.google.com/travel/flights*"],
     "js": ["agent-overlay.js"],
     "run_at": "document_idle",
     "all_frames": false
