@@ -6,6 +6,7 @@ import {
   formalityWindows,
   isWindowOpen,
   missingFields,
+  assumedArrival,
   nextQuestion,
   ONE_FILE_AT_A_TIME,
   suggestModules,
@@ -53,7 +54,6 @@ describe("nextQuestion", () => {
     const asked: string[] = [];
     const answers: Partial<TripRequestDraft> = {
       nationality: "FR",
-      arrival_at: "2026-11-10T14:30+08:00",
       purpose: "tourism",
     };
     for (let q = nextQuestion(request); q !== null; q = nextQuestion(request)) {
@@ -62,9 +62,9 @@ describe("nextQuestion", () => {
     }
     expect(asked).toEqual([
       "Do you travel with a French passport?",
-      "You leave on Monday 9 November: from France you land in Bali the next day, Tuesday 10 November, around 6 pm. Is that right? If you know your landing time, just tell me.",
       "What is the purpose of your trip?",
     ]);
+    expect(request.arrival_at).toBeNull();
     expect(suggestModules(TripRequestSchema.parse(request))).toEqual([
       expect.objectContaining({ module: "papers", state: "suggested" }),
       expect.objectContaining({ module: "flights", state: "suggested" }),
@@ -80,12 +80,23 @@ describe("nextQuestion", () => {
     expect(nextQuestion(draft({ destination: "Bali", country_iso2: "ID", origin_country: "BE" }))?.question).toBe("Do you travel with a French passport?");
   });
 
-  it("does not ask for the landing time outside Bali, and the request is complete without it", () => {
+  it("never asks for the landing time, in Bali or elsewhere: the request is complete without it", () => {
     const london = { ...complete, destination: "London", country_iso2: "GB", arrival_at: null };
     expect(missingFields(london)).toEqual([]);
     expect(nextQuestion(london)).toBeNull();
     expect(TripRequestSchema.safeParse(london).success).toBe(true);
-    expect(missingFields({ ...complete, arrival_at: null })).toEqual(["arrival_at"]);
+    expect(missingFields({ ...complete, arrival_at: null })).toEqual([]);
+    expect(nextQuestion({ ...complete, arrival_at: null })).toBeNull();
+    expect(nextQuestion({ ...complete, arrival_at: null, departure_date: null })?.field).toBe("departure_date");
+  });
+
+  it("assumes a Bali landing the day after the departure, at 00:00 Bali time, when the time is unknown", () => {
+    expect(assumedArrival({ ...complete, arrival_at: null })).toBe("2026-11-10T00:00+08:00");
+    expect(assumedArrival(complete)).toBe("2026-11-10T14:30+08:00");
+    expect(assumedArrival({ ...complete, arrival_at: null, departure_date: null })).toBeNull();
+    expect(assumedArrival({ ...complete, arrival_at: null, destination: "London", country_iso2: "GB" })).toBeNull();
+    const [, card] = formalityWindows({ arrival_at: assumedArrival({ ...complete, arrival_at: null })! }, BALI_PAPERS);
+    expect(card.closes_at).toBe("2026-11-10T00:00+08:00");
   });
 
   it("follows the full order on an empty draft", () => {

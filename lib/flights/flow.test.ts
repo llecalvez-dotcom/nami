@@ -11,6 +11,7 @@ import {
   isChoiceQuestion,
   isCriterionQuestion,
   isFlightReadyMessage,
+  landingFromFlight,
   longDate,
   matchCriterion,
   matchFlight,
@@ -33,7 +34,7 @@ const REQUEST = {
   destination: "Bali",
   country_iso2: "ID",
   departure_date: "2026-11-23",
-  arrival_at: "2026-11-24T18:00+08:00",
+  arrival_at: "2026-11-24T18:00+08:00" as string | null,
   return_date: "2026-12-03" as string | null,
   purpose: "tourism",
   travellers: 2,
@@ -246,6 +247,21 @@ describe("the flights session", () => {
 
   it("a flights run needs no passport reconfirmation after a reload", () => {
     expect(needsPassportReconfirm(searching().agent_run, false)).toBe(false);
+  });
+
+  it("a chosen flight gives the landing time for Bali when the request has none, never elsewhere", () => {
+    const request = { ...REQUEST, arrival_at: null };
+    expect(landingFromFlight(request, FLIGHTS[0])).toBe("2026-11-24T14:55+08:00");
+    expect(landingFromFlight(request, { ...FLIGHTS[0], arrive_at: "23:10" })).toBe("2026-11-23T23:10+08:00");
+    expect(landingFromFlight(request, { ...FLIGHTS[0], arrive_at: "2:10 pm" })).toBeNull();
+    expect(landingFromFlight({ ...request, destination: "Lisbonne", country_iso2: "PT" }, FLIGHTS[0])).toBeNull();
+    let trip = offerFlights(searching(request), REPORT, FLIGHTS);
+    const item = last(trip) as Extract<Trip["conversation"][number], { kind: "question" }>;
+    trip = answerQuestion(trip, item.id, "1", item.options[1].label);
+    expect(trip.request.arrival_at).toBe("2026-11-24T14:55+08:00");
+    let kept = offerFlights(searching(), REPORT, FLIGHTS);
+    kept = answerQuestion(kept, (last(kept) as { id: string }).id, "1", item.options[1].label);
+    expect(kept.request.arrival_at).toBe(REQUEST.arrival_at);
   });
 
   it("report_ready ends the run on the booking page with the final message, no proposal", () => {

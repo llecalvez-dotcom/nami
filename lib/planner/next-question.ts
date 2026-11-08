@@ -14,7 +14,6 @@ export const QUESTION_ORDER: readonly QuestionField[] = [
   "nationality",
   "origin_country",
   "departure_date",
-  "arrival_at",
   "purpose",
   "travellers",
 ];
@@ -23,12 +22,8 @@ export type PlannerQuestion = { field: QuestionField; question: string };
 
 export const FRENCH_FROM_FRANCE_QUESTION = "Do you travel with a French passport, leaving from France?";
 
-// The landing time only matters where a paper opens relative to it (the Bali arrival card): for another known
-// destination Nami does not ask for it. While the destination is unknown, it still counts as missing.
-export function landingTimeNeeded(draft: Pick<TripRequestDraft, "destination" | "country_iso2">): boolean {
-  if (draft.destination === null && draft.country_iso2 === null) return true;
-  return /bali/i.test(draft.destination ?? "") || draft.country_iso2 === "ID";
-}
+// The landing time is never asked (Clément, 2026-11-07, real test: the traveller does not know it, Nami will find the
+// flight): "arrival_at" stays in the type for the sample trip, and the papers assume the day after the departure (assumedArrival).
 
 function questionText(field: QuestionField, draft: TripRequestDraft): string {
   switch (field) {
@@ -42,7 +37,7 @@ function questionText(field: QuestionField, draft: TripRequestDraft): string {
     case "departure_date":
       return "When do you leave?";
     case "arrival_at":
-      return arrivalProposal(draft) ?? `When do you land in ${draft.destination ?? "your destination"}?`;
+      return `When do you land in ${draft.destination ?? "your destination"}?`;
     case "purpose":
       return "What is the purpose of your trip?";
     case "travellers":
@@ -50,23 +45,14 @@ function questionText(field: QuestionField, draft: TripRequestDraft): string {
   }
 }
 
-const longDate = (isoDate: string) =>
-  new Date(`${isoDate}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
-
 export function nextDay(isoDate: string): string {
   const date = new Date(`${isoDate}T12:00:00Z`);
   date.setUTCDate(date.getUTCDate() + 1);
   return date.toISOString().slice(0, 10);
 }
 
-// Nami proposes rather than asks (Nathan, 2026-11-07): from France, the flight to Bali lands the next day in the evening.
-export function arrivalProposal(draft: TripRequestDraft): string | null {
-  if (!draft.departure_date || draft.destination === null || !landingTimeNeeded(draft)) return null;
-  return `You leave on ${longDate(draft.departure_date)}: from France you land in Bali the next day, ${longDate(nextDay(draft.departure_date))}, around 6 pm. Is that right? If you know your landing time, just tell me.`;
-}
-
 export function missingFields(draft: TripRequestDraft): QuestionField[] {
-  return QUESTION_ORDER.filter((field) => draft[field] === null && (field !== "arrival_at" || landingTimeNeeded(draft)));
+  return QUESTION_ORDER.filter((field) => draft[field] === null);
 }
 
 export function nextQuestion(draft: TripRequestDraft): PlannerQuestion | null {

@@ -29,7 +29,7 @@ export function visaSteps(trip: Trip): ProgressStep[] {
   const allConfirmed = none || (trip.formalities.length > 0 && trip.formalities.every((f) => f.status === "confirmed"));
 
   const raw: { id: string; label: string; detail: string; done: boolean; active?: boolean }[] = [
-    { id: "details", label: "Trip details", detail: "Dates, passport, landing time", done: detailsDone },
+    { id: "details", label: "Trip details", detail: "Dates, passport, purpose", done: detailsDone },
     {
       id: "papers",
       label: "Entry papers found",

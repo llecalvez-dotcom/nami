@@ -21,8 +21,9 @@ describe("trip progress", () => {
   it("a fresh sample trip is planned, waiting on its details", () => {
     const trip = createSampleTrip(now);
     expect(tripStatus(trip)).toBe("planned");
-    expect(visaSteps(trip).map((s) => s.state)).toEqual(["current", "todo", "todo", "todo", "todo"]);
-    expect(progressRatio(trip)).toBe(0);
+    // The landing time is no longer asked: the details are complete as soon as the request is.
+    expect(visaSteps(trip).map((s) => s.state)).toEqual(["done", "current", "todo", "todo", "todo"]);
+    expect(progressRatio(trip)).toBe(0.2);
   });
 
   it("accepted papers put the visa in progress, the agent step comes next", () => {
