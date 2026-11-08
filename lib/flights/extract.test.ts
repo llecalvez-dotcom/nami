@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractFlights, parseResultLabel, resultsStillLoading } from "@/lib/flights/extract";
+import { extractFlights, layoverCity, parseResultLabel, resultsStillLoading } from "@/lib/flights/extract";
 
 // Real aria-labels of Google Flights result rows, read on 8 November 2026 through the DevTools port (Paris to Bali,
 // 23 November to 3 December, 1 adult, EUR). Only the public listing: no traveller data.
@@ -94,5 +94,19 @@ describe("resultsStillLoading", () => {
     expect(resultsStillLoading(BODY_EN)).toBe(false);
     expect(resultsStillLoading("Chargement des résultats…\n3 résultats.")).toBe(false);
     expect(resultsStillLoading("Oops, something went wrong.")).toBe(false);
+  });
+});
+
+describe("layoverCity", () => {
+  const KUALA_LUMPUR =
+    "From 834 euros round trip total. 1 stop flight with Malaysia Airlines. Leaves Aéroport de Paris-Charles de Gaulle at 11:10 AM on Monday, November 23 and arrives at I Gusti Ngurah Rai International Airport at 12:05 PM on Tuesday, November 24. Total duration 17 hr 55 min.  Layover (1 of 1) is a 2 hr 10 min layover at Kuala Lumpur International Airport in Federal Territory of Kuala Lumpur. Select flight";
+
+  it("keeps the city alone, without Google's administrative wrapper (Clément, 2026-11-08: « territoire fédéral de Kuala Lumpur »)", () => {
+    expect(layoverCity("Federal Territory of Kuala Lumpur")).toBe("Kuala Lumpur");
+    expect(layoverCity("Special Capital Region of Jakarta")).toBe("Jakarta");
+    expect(layoverCity("Emirate of Dubai")).toBe("Dubai");
+    expect(layoverCity("Abu Dhabi")).toBe("Abu Dhabi");
+    expect(layoverCity("Hong Kong")).toBe("Hong Kong");
+    expect(parseResultLabel(KUALA_LUMPUR, 1)).toMatchObject({ airline: "Malaysia Airlines", price: 834, duration_min: 1075, layovers: [{ airport: "Kuala Lumpur", duration_min: 130 }] });
   });
 });

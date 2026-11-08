@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FlightOption } from "@/lib/contracts";
-import { describeFlight, formatDuration, hasDirectFlight, introduceFlights, rankFlights } from "@/lib/flights/rank";
+import { describeFlight, flightLabel, formatDuration, hasDirectFlight, introduceFlights, rankFlights } from "@/lib/flights/rank";
 
 const flight = (index: number, over: Partial<FlightOption>): FlightOption => ({
   airline: `Airline ${index}`,
@@ -71,10 +71,20 @@ describe("rankFlights", () => {
 });
 
 describe("describeFlight", () => {
-  it("names the airline, the price, the stops and the duration in one sentence", () => {
-    expect(describeFlight(FLIGHTS[0])).toBe("Scoot, 646 €, 1 stop in Singapore, 22 h 05, leaves at 10:00");
-    expect(describeFlight(FLIGHTS[3])).toBe("KLM, Garuda, 1030 €, 2 stops in Amsterdam and Jakarta, 18 h 30, leaves at 10:00");
-    expect(describeFlight(flight(9, { airline: "Air France", price: 1299.5, currency: "USD", stops: 0, duration_min: 720 }))).toBe("Air France, 1299.50 USD, direct, 12 h, leaves at 10:00");
+  it("says the airline, the price, the stops and the duration, short, without the layover city", () => {
+    expect(describeFlight(FLIGHTS[0])).toBe("Scoot at 646 euros, one stop, 22 h 05");
+    expect(describeFlight(FLIGHTS[3])).toBe("KLM, Garuda at 1030 euros, 2 stops, 18 h 30");
+    expect(describeFlight(flight(9, { airline: "Air France", price: 1299.5, currency: "USD", stops: 0, duration_min: 720 }))).toBe("Air France at 1299.50 USD, direct, 12 h");
+  });
+
+  it("flightLabel: the button, one short line per flight with the layover city and the departure time", () => {
+    expect(flightLabel(FLIGHTS[0])).toBe("Scoot · 646 € · 1 stop Singapore · 22 h 05 · leaves 10:00");
+    expect(flightLabel(FLIGHTS[3])).toBe("KLM, Garuda · 1030 € · 2 stops Amsterdam, Jakarta · 18 h 30 · leaves 10:00");
+    expect(flightLabel(flight(9, { airline: "Air France", price: 1299.5, currency: "USD", stops: 0, duration_min: 720 }))).toBe("Air France · 1299.50 USD · direct · 12 h · leaves 10:00");
+    expect(flightLabel(flight(8, { airline: "Malaysia Airlines", price: 834, stops: 1, duration_min: 1075, depart_at: "11:10", layovers: [{ airport: "Kuala Lumpur" }] }))).toBe(
+      "Malaysia Airlines · 834 € · 1 stop Kuala Lumpur · 17 h 55 · leaves 11:10",
+    );
+    for (const f of FLIGHTS) expect(flightLabel(f).length).toBeLessThanOrEqual(80);
   });
 
   it("keeps the price and the airline in the first sentence (no full stop inside)", () => {

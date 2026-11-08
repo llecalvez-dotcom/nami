@@ -7,6 +7,7 @@ import {
   FLIGHT_READY_PREFIX,
   FLIGHTS_SEARCHING_MESSAGE,
   flightCriterion,
+  flightsAnswered,
   flightsResult,
   flightsStartBody,
   isChoiceQuestion,
@@ -16,6 +17,7 @@ import {
   longDate,
   matchCriterion,
   matchFlight,
+  namesSeveralCriteria,
   openFlightQuestion,
   offerFlights,
   pendingFlightChoice,
@@ -251,6 +253,10 @@ describe("yes to the flights", () => {
     expect(matchCriterion("le moins cher et le plus rapide")).toBe("best");
     expect(matchCriterion("cheap and direct")).toBe("best");
     expect(matchCriterion("the cheapest price")).toBe("cheapest");
+    // The panel checks the words before trusting the H model, which once kept "cheapest" alone (real run 2026-11-08).
+    expect(namesSeveralCriteria("le moins cher et le plus rapide")).toBe(true);
+    expect(namesSeveralCriteria("the cheapest one")).toBe(false);
+    expect(namesSeveralCriteria("euh")).toBe(false);
     const combined = answerQuestionWithText(unclear, again.id, "le moins cher et le plus rapide", REQUEST);
     expect(flightCriterion(combined)).toBe("best");
     expect(agentTexts(combined)).toContain(BALANCED_CRITERIA_MESSAGE);
@@ -260,6 +266,83 @@ describe("yes to the flights", () => {
 
   it("longDate is deterministic and in English", () => {
     expect(longDate("2026-11-23")).toBe("Monday 23 November");
+  });
+});
+
+describe("search again after a failure", () => {
+  const changes = (status: "failed" | "timed_out", error_code: string | null = null) => ({
+    no_change: false, status, next_index: 9, steps: [], pending_tool_calls: [], answer: null, outcome: null, error_code, metrics: null,
+  });
+  const flightQuestions = (trip: Trip) => trip.conversation.filter((i) => i.kind === "question" && ["origin", "return_date", "flight_criterion"].includes(i.field));
+
+  it("the answers are not in place until the criterion is chosen: the first yes asks the city, the dates, then the criterion", () => {
+    let trip = proposed({ ...REQUEST, origin: null });
+    expect(flightsAnswered(trip)).toBe(false);
+    trip = decideProposal(trip, last(trip).id, true, NOW);
+    const origin = last(trip) as Question;
+    expect(origin.field).toBe("origin");
+    trip = answerQuestion(trip, origin.id, "Paris", "Paris");
+    expect(flightsAnswered(trip)).toBe(false);
+    const dates = last(trip) as Question;
+    expect(dates.field).toBe("return_date");
+    trip = answerQuestion(trip, dates.id, dates.options[0].value, dates.options[0].label);
+    expect(flightsAnswered(trip)).toBe(false);
+    const criterion = last(trip) as Question;
+    expect(criterion.field).toBe("flight_criterion");
+    trip = answerQuestion(trip, criterion.id, "fastest", "The fastest");
+    expect(flightsAnswered(trip)).toBe(true);
+    expect(flightQuestions(trip)).toHaveLength(3);
+  });
+
+  it("a failed session, then yes to Search again: no question again, the search is announced with the same origin, dates and criterion", () => {
+    const before = searching({ ...REQUEST, origin: "Lyon" });
+    const failed = applyAgentChanges(before, changes("failed", "browser_lost"), []).trip;
+    const proposal = last(failed);
+    expect(proposal).toMatchObject({ kind: "proposal", action: "flights", accept_label: "Search again", decision: null });
+    expect(flightsAnswered(failed)).toBe(true);
+    const again = decideProposal(failed, proposal.id, true, NOW);
+    expect(last(again)).toMatchObject({ kind: "agent", text: FLIGHTS_SEARCHING_MESSAGE });
+    expect(flightQuestions(again)).toEqual(flightQuestions(before));
+    expect(openFlightQuestion(again, "origin")).toBe(false);
+    expect(openFlightQuestion(again, "return_date")).toBe(false);
+    expect(openFlightQuestion(again, "flight_criterion")).toBe(false);
+    expect(flightsStartBody(again)).toEqual({ origin: "Lyon", destination: "Bali", departure_date: "2026-11-23", return_date: "2026-12-03", travellers: 2, criterion: "cheapest" });
+    const restarted = startFlightsSession(again, "s-flights-2", "https://www.google.com/travel/flights?q=y", NOW);
+    expect(restarted.agent_run).toMatchObject({ kind: "flights", session_id: "s-flights-2", state: "pending" });
+    expect(flightsResult(restarted.agent_run)?.criterion).toBe("cheapest");
+  });
+
+  it("a timeout while the traveller chooses: the choice closed by the agent's end is not an answer, the retry still asks nothing", () => {
+    const offered = offerFlights(searching(), REPORT, FLIGHTS);
+    const timedOut = applyAgentChanges(offered, changes("timed_out"), []).trip;
+    expect(timedOut.conversation.find((i) => i.kind === "question" && i.field === "flight_choice")).toMatchObject({ answer: "Agent stopped" });
+    const again = decideProposal(timedOut, last(timedOut).id, true, NOW);
+    expect(last(again)).toMatchObject({ kind: "agent", text: FLIGHTS_SEARCHING_MESSAGE });
+    expect(flightQuestions(again)).toHaveLength(2);
+    expect(flightCriterion(again)).toBe("cheapest");
+  });
+
+  it("a failed start (no session) proposes the retry too; yes restarts without a question", () => {
+    let trip = decideProposal(proposed(), last(proposed()).id, true, NOW);
+    const dates = last(trip) as Question;
+    trip = answerQuestion(trip, dates.id, dates.options[0].value, dates.options[0].label);
+    const criterion = last(trip) as Question;
+    trip = answerQuestion(trip, criterion.id, "best", "Best compromise");
+    trip = pushProposal(trip, "flights", "Shall I search your flights again?", "Search again", "Not now");
+    const again = decideProposal(trip, last(trip).id, true, NOW);
+    expect(agentTexts(again).filter((t) => t === FLIGHTS_SEARCHING_MESSAGE)).toHaveLength(2);
+    expect(flightQuestions(again)).toHaveLength(2);
+    expect(flightsStartBody(again)?.criterion).toBe("best");
+  });
+
+  it("the first flights proposal accepted with the answers of an earlier attempt asks nothing either", () => {
+    const failed = applyAgentChanges(searching(), changes("failed", "stalled"), []).trip;
+    // The proposal of the arrival card's end, worded like the first one, comes after the failure.
+    const declinedRetry = decideProposal(failed, last(failed).id, false, NOW);
+    const first = pushProposal(declinedRetry, "flights", "Do you also want me to help you find your flights?", "Find my flight", "Not now");
+    const again = decideProposal(first, last(first).id, true, NOW);
+    expect(last(again)).toMatchObject({ kind: "agent", text: FLIGHTS_SEARCHING_MESSAGE });
+    expect(flightQuestions(again)).toHaveLength(2);
   });
 });
 
@@ -279,12 +362,19 @@ describe("the flights session", () => {
     if (item.kind !== "question") throw new Error("no choice question");
     expect(isChoiceQuestion(item)).toBe(true);
     expect(item.question).toBe(
-      "The cheapest first: Scoot, 646 €, 1 stop in Doha, 22 h 05, leaves at 13:50; then Qatar Airways, 912 €, 1 stop in Doha, 18 h 30, leaves at 13:50; then Emirates, 980 €, 1 stop in Doha, 19 h 40, leaves at 13:50: which one shall I open?",
+      "The cheapest first: Scoot at 646 euros, one stop, 22 h 05; then Qatar Airways at 912 euros, one stop, 18 h 30; then Emirates at 980 euros, one stop, 19 h 40: which one shall I open?",
     );
     expect(spokenShort(item.question)).toBe(item.question);
     expect(item.options.map((o) => o.value)).toEqual(["2", "1", "3"]);
-    expect(item.options[0].label).toBe("The first: Scoot, 646 €, 1 stop in Doha, 22 h 05, leaves at 13:50");
-    expect(matchOption("the second", item.options)?.value).toBe("1");
+    // Short labels, no ordinal (the buttons sit one under the other), the layover city on the button only.
+    expect(item.options.map((o) => o.label)).toEqual([
+      "Scoot · 646 € · 1 stop Doha · 22 h 05 · leaves 13:50",
+      "Qatar Airways · 912 € · 1 stop Doha · 18 h 30 · leaves 13:50",
+      "Emirates · 980 € · 1 stop Doha · 19 h 40 · leaves 13:50",
+    ]);
+    // No ordinal on the buttons any more: "the second" goes through matchFlight (text path), the airline still matches a label.
+    expect(matchOption("the second", item.options)).toBeNull();
+    expect(matchFlight("the second", flightsResult(trip.agent_run)!.options, "cheapest")?.index).toBe(1);
     expect(matchOption("Qatar", item.options)?.value).toBe("1");
     expect(matchOption("Emirates", item.options)?.value).toBe("3");
     expect(trip.agent_steps).toContain("Read 4 flights");
@@ -298,7 +388,7 @@ describe("the flights session", () => {
     const item = last(trip) as Extract<Trip["conversation"][number], { kind: "question" }>;
     expect(pendingFlightChoice(trip)).toBeNull();
     trip = answerQuestion(trip, item.id, "1", item.options[1].label);
-    expect(last(trip)).toMatchObject({ kind: "agent", text: "I'm opening Qatar Airways, 912 €, 1 stop in Doha, 18 h 30, leaves at 13:50, watch the tab on the left." });
+    expect(last(trip)).toMatchObject({ kind: "agent", text: "I'm opening Qatar Airways at 912 euros, one stop, 18 h 30, watch the tab on the left." });
     expect(trip.agent_steps).toContain("You chose Qatar Airways, 912 €");
     expect(pendingFlightChoice(trip)).toEqual({ tool_req: REPORT, flight: FLIGHTS[0] });
   });
@@ -375,8 +465,8 @@ describe("the flights session", () => {
     trip = reportReady(trip, { tool_name: "report_ready", args: { summary: "Scoot 646 €", filled_fields: [] }, id: "call_2" }, []);
     expect(trip.agent_run).toMatchObject({ state: "interrupted", drained: true });
     const texts = agentTexts(trip);
-    expect(texts.at(-1)).toBe(`${FLIGHT_READY_PREFIX}Scoot, 646 €, 1 stop in Doha, 22 h 05, leaves at 13:50, book it when you want, Nami never pays. Hotels are coming soon.`);
-    expect(spokenShort(texts.at(-1)!)).toBe("Your flight is found: Scoot, 646 €, 1 stop in Doha, 22 h 05, leaves at 13:50, book it when you want, Nami never pays.");
+    expect(texts.at(-1)).toBe(`${FLIGHT_READY_PREFIX}Scoot at 646 euros, one stop, 22 h 05, book it when you want, Nami never pays. Hotels are coming soon.`);
+    expect(spokenShort(texts.at(-1)!)).toBe("Your flight is found: Scoot at 646 euros, one stop, 22 h 05, book it when you want, Nami never pays.");
     expect(isFlightReadyMessage(texts.at(-1)!)).toBe(true);
     expect(readyPaper(trip.conversation, last(trip))).toBe("flights");
     expect(trip.agent_steps.at(-1)).toBe("Stopped on the booking page, nothing clicked");
@@ -457,5 +547,25 @@ describe("H never opened Google Flights: one automatic restart with the same sea
     expect(trip.agent_run?.auto_restart).toBeUndefined();
     expect(agentTexts(trip).at(-1)).toBe(H_NOT_ANSWERING_MESSAGE);
     expect(openRetries(trip)).toHaveLength(1);
+  });
+
+  it("the automatic restart starts the session with everything answered, no question in between", () => {
+    const due = applyFlightsChanges(searching(), stalled(true), []).trip;
+    expect(flightsAnswered(due)).toBe(true);
+    const restarted = startFlightsSession(markAutoRestart(due, "taken"), "s-flights-2", "https://www.google.com/travel/flights?q=x", NOW);
+    expect(questions(restarted)).toEqual([]);
+    expect(restarted.conversation.filter((i) => i.kind === "question")).toEqual(due.conversation.filter((i) => i.kind === "question"));
+    expect(flightsStartBody(restarted)).toEqual(flightsStartBody(due));
+  });
+
+  it("yes to Shall I search again after H is not answering: no question again, the search is announced with the same parameters", () => {
+    const second = applyFlightsChanges(searching(), stalled(false), []).trip;
+    expect(agentTexts(second).at(-1)).toBe(H_NOT_ANSWERING_MESSAGE);
+    const again = decideProposal(second, openRetries(second)[0].id, true, NOW);
+    expect(last(again)).toMatchObject({ kind: "agent", text: FLIGHTS_SEARCHING_MESSAGE });
+    expect(questions(again)).toEqual([]);
+    expect(again.conversation.filter((i) => i.kind === "question")).toEqual(second.conversation.filter((i) => i.kind === "question"));
+    expect(flightsStartBody(again)).toEqual({ origin: "Paris", destination: "Bali", departure_date: "2026-11-23", return_date: "2026-12-03", travellers: 2, criterion: "cheapest" });
+    expect(openRetries(again)).toEqual([]);
   });
 });

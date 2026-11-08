@@ -67,17 +67,36 @@ export function formatPrice(option: Pick<FlightOption, "price" | "currency">): s
   return option.currency === "EUR" ? `${amount} €` : `${amount} ${option.currency}`;
 }
 
-function describeStops(option: FlightOption): string {
+// "1 stop Doha", "2 stops Amsterdam, Jakarta": the layover cities as lib/flights/extract.ts cleaned them, never Google's
+// long description ("Federal Territory of Kuala Lumpur").
+function shortStops(option: FlightOption): string {
   if (option.stops === 0) return "direct";
   const where = option.layovers.map((l) => l.airport).filter(Boolean);
   const count = option.stops === 1 ? "1 stop" : `${option.stops} stops`;
-  return where.length ? `${count} in ${where.join(" and ")}` : count;
+  return where.length ? `${count} ${where.join(", ")}` : count;
 }
 
-// One sentence, no full stop inside, so spokenShort keeps the airline and the price when Nami says it aloud.
-// Translated like every other text by requestTranslations.
+function spokenStops(option: FlightOption): string {
+  if (option.stops === 0) return "direct";
+  return option.stops === 1 ? "one stop" : `${option.stops} stops`;
+}
+
+// "834 euros" said aloud; another currency keeps its code, as on the page.
+function spokenPrice(option: Pick<FlightOption, "price" | "currency">): string {
+  const amount = Number.isInteger(option.price) ? String(option.price) : option.price.toFixed(2);
+  return option.currency === "EUR" ? `${amount} euros` : `${amount} ${option.currency}`;
+}
+
+// What Nami says about one flight: short, no full stop inside (spokenShort keeps the first sentence only), the layover
+// city left out (the button shows it). Translated like every other text by requestTranslations.
 export function describeFlight(option: FlightOption): string {
-  return `${option.airline}, ${formatPrice(option)}, ${describeStops(option)}, ${formatDuration(option.duration_min)}, leaves at ${option.depart_at}`;
+  return `${option.airline} at ${spokenPrice(option)}, ${spokenStops(option)}, ${formatDuration(option.duration_min)}`;
+}
+
+// The button of one flight: two lines at most in the panel (about 380 px), separated by middle dots so the translation
+// stays as short. "Malaysia Airlines · 834 € · 1 stop Kuala Lumpur · 17 h 55 · leaves 11:10".
+export function flightLabel(option: FlightOption): string {
+  return [option.airline, formatPrice(option), shortStops(option), formatDuration(option.duration_min), `leaves ${option.depart_at}`].join(" · ");
 }
 
 // What Nami says before the list: the criterion, and a word when no flight is direct.
