@@ -24,7 +24,8 @@ const shared = globalThis as typeof globalThis & {
 };
 const WAITING_ON_H = new Set(["observation_event", "tool_result", "state:running"]);
 const progress = () => shared.namiAgentProgress ??= new Map();
-const abandoned = () => shared.namiAbandonedSessions ??= new Map();
+// instanceof and not ??=: a dev server kept running across the change from Set to Map held the old Set (bench 2026-11-08).
+const abandoned = () => shared.namiAbandonedSessions instanceof Map ? shared.namiAbandonedSessions : (shared.namiAbandonedSessions = new Map());
 const released = () => shared.namiReleasedSessions ??= new Set();
 
 function lastKind(changes: HChanges): string | null {
