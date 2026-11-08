@@ -2,8 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { POST } from "@/app/api/agent/[id]/flights/route";
 import { readFlightsPageText } from "@/lib/flights/page";
 import { PAGE_UNREADABLE, REREAD_FLIGHTS, RESULTS_LOADING } from "@/lib/flights/read";
+import { showOutboundFlight, showReturnFlight } from "@/lib/flights/show-row";
 
 vi.mock("@/lib/flights/page", () => ({ readFlightsPageText: vi.fn(), FLIGHT_DOMAINS: ["www.google.com", "consent.google.com"] }));
+vi.mock("@/lib/flights/show-row", () => ({ showOutboundFlight: vi.fn(), showReturnFlight: vi.fn() }));
 
 const SCOOT = { index: 1, airline: "Scoot", price: 646, currency: "EUR", stops: 1, duration_min: 1325, depart_at: "13:50", arrive_at: "14:55+1", layovers: [{ airport: "Singapour" }] };
 const QATAR = { index: 2, airline: "Qatar Airways", price: 912, currency: "EUR", stops: 1, duration_min: 1110, depart_at: "21:35", arrive_at: "22:05+1", layovers: [{ airport: "Doha" }] };
@@ -25,6 +27,8 @@ beforeEach(() => {
   fetch = vi.fn(async () => new Response(null, { status: 204 }));
   vi.stubGlobal("fetch", fetch);
   vi.mocked(readFlightsPageText).mockReset().mockResolvedValue(PAGE);
+  vi.mocked(showOutboundFlight).mockReset().mockResolvedValue("visible");
+  vi.mocked(showReturnFlight).mockReset().mockResolvedValue("no_match");
 });
 
 afterEach(() => {
@@ -82,6 +86,23 @@ describe("POST /api/agent/[id]/flights", () => {
     const body = JSON.stringify(sentResult());
     expect(body).toContain("flight number 2 in the list: Qatar Airways, 912 €");
     expect(body).toContain("tool-1");
+  });
+
+  it("brings the chosen flight on screen before answering H, and tells it to look again when the page moved", async () => {
+    vi.mocked(showOutboundFlight).mockResolvedValue("scrolled");
+    await post({ tool_req: TOOL_REQ, choice: { flight: QATAR } });
+    expect(vi.mocked(showOutboundFlight)).toHaveBeenCalledWith(QATAR);
+    expect(JSON.stringify(sentResult())).toContain("call wait_web for 1 second");
+  });
+
+  it("finds the return flight at the price chosen and names it to H", async () => {
+    vi.mocked(showReturnFlight).mockResolvedValue({ flight: { ...QATAR, depart_at: "8:35 AM" }, position: 2 });
+    const response = await post({ tool_req: { tool_name: "show_return_flight", args: {}, id: "tool-2" }, return_for: QATAR });
+    expect(response.status).toBe(202);
+    expect(vi.mocked(showReturnFlight)).toHaveBeenCalledWith(912);
+    const body = JSON.stringify(sentResult());
+    expect(body).toContain("row 2 of the return list");
+    expect(body).toContain("tool-2");
   });
 
   it("refuses other tools, malformed bodies and bad session ids", async () => {

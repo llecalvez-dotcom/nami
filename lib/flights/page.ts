@@ -31,6 +31,11 @@ async function listTabs(urls: string[]): Promise<CdpTab[]> {
 
 // null when no Google Flights tab is open or Chrome does not answer: the caller treats the page as unreadable.
 export async function readFlightsPageText(urls = cdpUrls(), timeoutMs = 6000, section = "/travel/flights"): Promise<string | null> {
+  return evaluateInSearchTab(pageTextExpression(), section, urls, timeoutMs);
+}
+
+// Runs an expression returning a string in the Google tab of that section; null when it cannot.
+export async function evaluateInSearchTab(expression: string, section = "/travel/flights", urls = cdpUrls(), timeoutMs = 6000): Promise<string | null> {
   let tabs: CdpTab[];
   try {
     tabs = await listTabs(urls);
@@ -53,7 +58,7 @@ export async function readFlightsPageText(urls = cdpUrls(), timeoutMs = 6000, se
       ws.send(JSON.stringify({
         id: 1,
         method: "Runtime.evaluate",
-        params: { expression: guardedExpression(pageTextExpression(), [...FLIGHT_DOMAINS]), returnByValue: true, awaitPromise: true },
+        params: { expression: guardedExpression(expression, [...FLIGHT_DOMAINS]), returnByValue: true, awaitPromise: true },
       }));
     ws.onmessage = (event) => {
       const reply = JSON.parse(String(event.data)) as { id?: number; result?: { result?: { value?: unknown } } };

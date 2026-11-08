@@ -4,6 +4,7 @@ import { fail, hErrorResponse, SESSION_ID } from "@/lib/paper-agent";
 import { HOTELS_PAGE_SECTION, HOTELS_PAGE_UNREADABLE, HOTELS_RETRY, HotelChoiceSchema, hotelChoiceResult } from "@/lib/hotels-agent";
 import { extractHotels } from "@/lib/hotels/extract";
 import { readFlightsPageText } from "@/lib/flights/page";
+import { showHotel } from "@/lib/flights/show-row";
 
 const ToolReqSchema = z.object({
   tool_name: z.literal("report_hotels"),
@@ -22,7 +23,8 @@ export async function POST(request: Request, ctx: RouteContext<"/api/agent/[id]/
   if (!input.success) return fail("Invalid hotels report.", 400);
   try {
     if (input.data.choice) {
-      await sendToolResult(id, input.data.tool_req, hotelChoiceResult(input.data.choice.hotel));
+      const shown = await showHotel(input.data.choice.hotel.name);
+      await sendToolResult(id, input.data.tool_req, hotelChoiceResult(input.data.choice.hotel, shown));
       return Response.json({ ok: true }, { status: 202 });
     }
     const pageText = await readFlightsPageText(undefined, undefined, HOTELS_PAGE_SECTION);

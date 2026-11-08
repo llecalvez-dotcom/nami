@@ -136,6 +136,9 @@ while (!done) {
         while (!existsSync(answerFile)) await sleep(1000);
         await call("POST", `/api/agent/${sid}/answer`, { tool_req: c, result: readFileSync(answerFile, "utf8").trim() });
         log("answered ask", asks);
+      } else if (c.tool_name === "show_return_flight") {
+        log("SHOW_RETURN_FLIGHT");
+        await call("POST", `/api/agent/${sid}/flights`, { tool_req: c, return_for: chosen });
       } else log("unknown tool, ignored:", c.tool_name);
       handled.add(key(c));
     } catch (e) { log(`${c.tool_name} failed:`, e.message); await sleep(2000); }

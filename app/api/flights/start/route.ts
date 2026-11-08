@@ -1,7 +1,7 @@
 import { API_LIMITS, guard, readJsonLimited } from "@/lib/api-guard";
 import { createSession, getAvailableSessionSlots } from "@/lib/h-agent";
 import { AgentPreflightError, preflightBrowser } from "@/lib/agent-preflight";
-import { ensureBlankAgentTab } from "@/lib/agent-tab";
+import { openSearchTab } from "@/lib/agent-tab";
 import { freshBridgeBeforeSession, rememberBridgeForSession } from "@/lib/local-bridge";
 import { fail, H_SLOTS_BUSY, hErrorResponse } from "@/lib/paper-agent";
 import {
@@ -12,6 +12,7 @@ import {
   FLIGHTS_MAX_TIME_S,
   FLIGHTS_TOOLS,
   FlightsStartSchema,
+  googleFlightsUrl,
 } from "@/lib/flights-agent";
 
 // Module Vol: starts the Google Flights session in the traveller's Chrome. Same machinery and same H budget as the papers.
@@ -47,11 +48,11 @@ async function start(request: Request): Promise<Response> {
     try {
       if (await getAvailableSessionSlots() <= 0) return fail(H_SLOTS_BUSY, 429);
     } catch {}
-    await ensureBlankAgentTab();
+    const tabId = await openSearchTab(googleFlightsUrl(input.data));
     // Bench: a bridge that already served a session holds a dead chromedriver; it is restarted first (lib/local-bridge.ts).
     await freshBridgeBeforeSession();
     const session = await createSession({
-      task: buildFlightsTask(input.data),
+      task: buildFlightsTask(input.data, tabId),
       instructions: buildFlightsInstructions(),
       tools: FLIGHTS_TOOLS,
       localBrowserSessionId: input.data.local_session_id,

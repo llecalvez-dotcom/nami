@@ -7,6 +7,7 @@ import {
   FLIGHTS_TOOLS,
   FlightsStartSchema,
   flightChoiceResult,
+  returnFlightResult,
   googleFlightsUrl,
   isFlightsSession,
   REPORT_FLIGHTS_TOOL,
@@ -48,10 +49,20 @@ describe("agent task and instructions", () => {
     expect(task).toContain("call report_flights with no flights");
     expect(task).toContain("Do not read the flights and do not scroll");
     expect(task).toContain("wait_web for 2 seconds");
-    expect(task).toContain("same total price");
+    expect(task).toContain("already open with this search");
+    expect(task).toContain("call show_return_flight");
     expect(task).toContain("booking options page");
     expect(task).toContain('"Réserver", "Book", "Continuer", "Continue"');
     expect(task).not.toMatch(/passport|e-mail/i);
+  });
+
+  it("sends the agent straight to the tab Nami opened, and keeps the URL only when no tab could be opened", () => {
+    const task = buildFlightsTask(FlightsStartSchema.parse(START), "TAB123");
+    expect(task).toContain("the tab whose id is TAB123");
+    expect(task).toContain("switch_tab_web with exactly this tab_id");
+    expect(task).toContain("never visit any other tab");
+    expect(task).not.toContain(googleFlightsUrl(START));
+    expect(buildFlightsTask(FlightsStartSchema.parse(START))).toContain(googleFlightsUrl(START));
   });
 
   it("instructions keep the agent on Google, off booking, sign-in and personal data, with the untrusted content rule", () => {
@@ -69,8 +80,8 @@ describe("agent task and instructions", () => {
     expect(FLIGHT_DOMAINS).toEqual(["www.google.com", "consent.google.com"]);
   });
 
-  it("gives the agent ask_user, report_ready and report_flights only", () => {
-    expect(FLIGHTS_TOOLS.map((t) => t.name)).toEqual(["ask_user", "report_ready", "report_flights"]);
+  it("gives the agent ask_user, report_ready, report_flights and show_return_flight only", () => {
+    expect(FLIGHTS_TOOLS.map((t) => t.name)).toEqual(["ask_user", "report_ready", "report_flights", "show_return_flight"]);
     const schema = REPORT_FLIGHTS_TOOL.input_schema as { required: string[]; properties: { flights: { items: { required: string[] } } } };
     expect(schema.required).toEqual([]);
     expect(schema.properties.flights.items.required).toEqual(expect.arrayContaining(["index", "airline", "price", "currency", "stops", "duration_min", "depart_at", "arrive_at"]));
@@ -81,8 +92,24 @@ describe("agent task and instructions", () => {
     const text = flightChoiceResult({ index: 2, airline: "Qatar Airways", price: 912, currency: "EUR", stops: 1, duration_min: 1110, depart_at: "21:35", arrive_at: "22:05+1", layovers: [{ airport: "Doha" }] });
     expect(text).toContain("flight number 2 in the list: Qatar Airways, 912 €, 1 stop, leaving at 21:35");
     expect(text).toContain("row showing Qatar Airways, 912 € and 21:35 (row 2 from the top of the results)");
-    expect(text).toContain("first flight at 912 €");
+    expect(text).toContain("call show_return_flight");
     expect(text).toContain("Do not book");
+    expect(text).not.toContain("wait_web");
+  });
+
+  it("makes the agent look again before clicking a row Nami has moved", () => {
+    const text = flightChoiceResult({ index: 7, airline: "Etihad", price: 642, currency: "EUR", stops: 1, duration_min: 1120, depart_at: "9:15 PM", arrive_at: "11:35 AM+1", layovers: [] }, "scrolled");
+    expect(text).toContain("brought the outbound row showing Etihad, 642 € and 9:15 PM to the middle of the screen: call wait_web for 1 second");
+    expect(text).not.toContain("row 7 from the top");
+  });
+
+  it("names the return flight, and never lets the agent make up a price", () => {
+    const flight = { index: 2, airline: "China Southern", price: 642, currency: "EUR", stops: 1, duration_min: 1070, depart_at: "8:35 AM", arrive_at: "12:25 PM", layovers: [] };
+    const text = returnFlightResult({ flight, position: 2 });
+    expect(text).toContain("China Southern, leaving at 8:35 AM, 642 €: row 2 of the return list");
+    expect(text).toContain("wait_web for 1 second");
+    expect(returnFlightResult("not_displayed")).toContain("call show_return_flight again");
+    expect(returnFlightResult("no_match")).toContain("ask_user");
   });
 
   it("remembers which sessions are flight sessions", () => {

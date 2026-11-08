@@ -5,6 +5,7 @@ import type { ToolSpec } from "@/lib/h-agent";
 import { ASK_USER_TOOL, LOCAL_SESSION_ID, REPORT_READY_TOOL } from "@/lib/paper-agent";
 import { MAX_REPORTED_FLIGHTS } from "@/lib/flights/read";
 import { formatPrice } from "@/lib/flights/rank";
+import type { ReturnFlight, Shown } from "@/lib/flights/show-row";
 
 export { FLIGHT_DOMAINS } from "@/lib/flights/page";
 
@@ -102,7 +103,14 @@ export const REPORT_FLIGHTS_TOOL: ToolSpec = {
   },
 };
 
-export const FLIGHTS_TOOLS: ToolSpec[] = [ASK_USER_TOOL, REPORT_READY_TOOL, REPORT_FLIGHTS_TOOL];
+export const SHOW_RETURN_FLIGHT_TOOL: ToolSpec = {
+  name: "show_return_flight",
+  description:
+    "Call it as soon as the return list is displayed, after clicking the outbound flight: Nami finds the return flight at the total price the traveller chose, brings it on screen and tells you which row to click. Do not look for it yourself.",
+  input_schema: { type: "object", properties: {}, required: [] },
+};
+
+export const FLIGHTS_TOOLS: ToolSpec[] = [ASK_USER_TOOL, REPORT_READY_TOOL, REPORT_FLIGHTS_TOOL, SHOW_RETURN_FLIGHT_TOOL];
 
 export function buildFlightsInstructions(): string {
   return [
@@ -118,16 +126,20 @@ export function buildFlightsInstructions(): string {
   ].join("\n");
 }
 
-export function buildFlightsTask(input: FlightsStart): string {
+export function buildFlightsTask(input: FlightsStart, tabId: string | null = null): string {
   const adults = input.travellers === 1 ? "1 adult" : `${input.travellers} adults`;
   return [
-    // Nami has prepared a blank tab (lib/agent-tab.ts), but the bridge starts on the tab that was already open.
-    "Work in the blank tab, never in another one: the other tabs hold the traveller's forms, so never navigate or close them. If the current tab is not about:blank, first call switch_tab_web to go to the about:blank tab.",
-    `Then, in that tab, open exactly this URL: ${googleFlightsUrl(input)}`,
+    // Nami has opened the page in its own tab (lib/agent-tab.ts), but the bridge may start on any tab.
+    ...(tabId
+      ? [`Google Flights is already open with this search in the tab whose id is ${tabId}. If it is not the current tab, first call switch_tab_web with exactly this tab_id. Do not open the page again and never visit any other tab: they hold the traveller's forms.`]
+      : [
+          "Google Flights is normally already open with this search in the active tab: do not open it again. Work only in that tab: the other tabs hold the traveller's forms, so never navigate or close them.",
+          `If the current tab is not Google Flights, first call switch_tab_web to go to the Google Flights tab, or to the about:blank tab if there is none. If that tab is about:blank, open exactly this URL: ${googleFlightsUrl(input)}`,
+        ]),
     `It should show round trips from ${input.origin} to ${input.destination}, leaving ${input.departure_date} and returning ${input.return_date}, ${adults}, economy, prices in EUR.`,
     "If the cookie consent page appears first, click \"Tout refuser\" or \"Reject all\".",
     "Do not read the flights and do not scroll: Nami reads the page herself. As soon as the list of flights is displayed with prices, call report_flights with no flights. If the page still says the results are loading, call wait_web for 2 seconds first. Only if the top of the page shows another city, another date, or no search at all, fix the form on the page and search, then call report_flights with no flights.",
-    "report_flights answers with the flight the traveller chose (airline, total price, departure time) or tells you what to do next. Click that outbound flight: the row showing this airline, price and departure time. Then, on the return list (\"Choose return\" / \"Sélectionner un vol de retour\"), click the first flight showing the same total price. Google Flights then shows the booking options page for this trip.",
+    "report_flights answers with the flight the traveller chose (airline, total price, departure time) or tells you what to do next. Click that outbound flight: the row showing this airline, price and departure time. Then, as soon as the return list is displayed (\"Returning flights\"), call show_return_flight and click the row it names. Never scroll to look for it. Google Flights then shows the booking options page for this trip.",
     `Stop on that booking options page and call report_ready with a short summary (airline, price, stops). Do not click ${FLIGHTS_FORBIDDEN_BUTTONS.slice(0, 4).map((b) => `"${b}"`).join(", ")} or anything that leaves Google.`,
   ].join("\n");
 }
@@ -135,7 +147,18 @@ export function buildFlightsTask(input: FlightsStart): string {
 export const FlightChoiceSchema = z.object({ flight: FlightOptionSchema });
 
 // The tool result sent to H once the traveller has chosen: it tells which line to click, nothing personal.
-export function flightChoiceResult(flight: FlightOption): string {
+// After a tool result the agent gets no new screenshot: when Nami has moved the page, it must look again before clicking.
+export function flightChoiceResult(flight: FlightOption, shown: Shown = "missing"): string {
   const stops = flight.stops === 0 ? "direct" : `${flight.stops} stop${flight.stops > 1 ? "s" : ""}`;
-  return `The traveller chose flight number ${flight.index} in the list: ${flight.airline}, ${formatPrice(flight)}, ${stops}, leaving at ${flight.depart_at}. Click the outbound row showing ${flight.airline}, ${formatPrice(flight)} and ${flight.depart_at} (row ${flight.index} from the top of the results). Then, on the return list, click the first flight at ${formatPrice(flight)}. When the Google Flights booking options page is shown, call report_ready. Do not book.`;
+  const row = `the outbound row showing ${flight.airline}, ${formatPrice(flight)} and ${flight.depart_at}`;
+  const click = shown === "scrolled"
+    ? `Nami has just brought ${row} to the middle of the screen: call wait_web for 1 second to see it, then click it.`
+    : `Click ${row} (row ${flight.index} from the top of the results).`;
+  return `The traveller chose flight number ${flight.index} in the list: ${flight.airline}, ${formatPrice(flight)}, ${stops}, leaving at ${flight.depart_at}. ${click} Then, as soon as the return list is displayed, call show_return_flight. When the Google Flights booking options page is shown, call report_ready. Do not book.`;
+}
+
+export function returnFlightResult(found: ReturnFlight): string {
+  if (found === "not_displayed") return "The return list is not displayed yet. If you have not clicked the outbound flight, click it first. Then call show_return_flight again.";
+  if (found === "no_match") return "Nami found no return flight at the total price the traveller chose. Call wait_web for 1 second and look at the return list. If a flight shows that price, click it. Otherwise call ask_user and tell the traveller the price has changed.";
+  return `The return flight to click is ${found.flight.airline}, leaving at ${found.flight.depart_at}, ${formatPrice(found.flight)}: row ${found.position} of the return list. Nami has brought it on screen: call wait_web for 1 second to see it, then click that row. When the Google Flights booking options page is shown, call report_ready. Do not book.`;
 }
