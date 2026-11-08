@@ -53,33 +53,17 @@
   let agentActive = false;
   // The agent's clicks and a real mouse send the same trusted events (CDP sets the same screen coordinates, measured
   // 2026-11-07). The cursor therefore follows presses only: hovering with the real mouse never moves it, and it glides
-  // from one click of the agent to the next. It stays visible while the agent works.
-  let lastPoint = 0;
+  // from one click of the agent to the next. It stays visible where the agent last clicked (Nathan, 2026-11-08: a cursor
+  // moving at random looked like clicks everywhere).
+  let point = null;
   const place = (x, y, glide) => {
     cursor.style.setProperty("--glide", glide);
     cursor.style.transform = `translate(${x}px, ${y}px)`;
     cursor.style.opacity = agentActive ? "1" : "0";
   };
   const move = (event) => {
-    lastPoint = Date.now();
-    place(event.clientX, event.clientY, "450ms");
-  };
-  // For the demo (Nathan, 2026-11-08): while the agent works the cursor is always there and always moving, between the
-  // things one could click on the page, even on a page where the agent has not clicked yet. Purely visual: it never
-  // clicks, and a real click of the agent takes over at once.
-  // On the Google Hotels list it goes from hotel to hotel; elsewhere on the page it stays put.
-  const clickable = () => location.pathname.startsWith("/travel/search") ? 'a[aria-label^="Prices starting from"]' : 'a[href], button, select, input:not([type=hidden]), [role="button"], [role="link"], [role="option"], li';
-  let wanderTimer;
-  const spot = () => {
-    const rects = [...document.querySelectorAll(clickable())].slice(0, 200).map((element) => element.getBoundingClientRect())
-      .filter((r) => r.width > 8 && r.height > 8 && r.top > 40 && r.left >= 0 && r.bottom < innerHeight - 20 && r.right <= innerWidth);
-    const r = rects[Math.floor(Math.random() * rects.length)];
-    return r ? [r.left + r.width / 2, r.top + r.height / 2] : [innerWidth / 2, innerHeight / 2];
-  };
-  const wander = () => {
-    if (!agentActive) return;
-    if (document.visibilityState === "visible" && Date.now() - lastPoint > 1200) place(...spot(), "1000ms");
-    wanderTimer = setTimeout(wander, 1300 + Math.random() * 700);
+    point = [event.clientX, event.clientY];
+    place(...point, "450ms");
   };
   const ripple = (x, y) => {
     const ring = layer("ripple");
@@ -119,8 +103,7 @@
     const started = message.active && !agentActive;
     agentActive = message.active;
     if (!agentActive) cursor.style.opacity = "0";
-    clearTimeout(wanderTimer);
-    if (agentActive) wanderTimer = setTimeout(wander, started ? 150 : 600);
+    if (started) place(...(point ?? [innerWidth / 2, innerHeight / 2]), "0ms");
     frame.hidden = label.hidden = !message.active;
     bubble.textContent = message.step.slice(0, 320).replace(/[–—]/g, ", ");
     bubble.hidden = !message.active || !message.step.trim();
