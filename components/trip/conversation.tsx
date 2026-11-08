@@ -5,11 +5,11 @@ import { Check, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MicButton, VoiceStatusLine } from "@/components/voice/mic-button";
 import { useConversationSpeech } from "@/components/voice/speech";
+import { useIntent } from "@/components/voice/use-intent";
 import { useVoiceInput, type VoiceInput } from "@/components/voice/use-voice-input";
 import { VoiceAnswer } from "@/components/voice/voice-answer";
 import { cn } from "@/lib/utils";
 import type { ConversationItem } from "@/lib/trip-state";
-import { matchOption, shortAnswer } from "@/lib/voice/short-answers";
 
 type Handlers = {
   onAnswer: (itemId: string, value: string, label: string) => void;
@@ -158,13 +158,17 @@ function OpenQuestion({
 }: { item: Extract<ConversationItem, { kind: "question" }> } & Pick<Handlers, "onAnswer" | "onAnswerText">) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const intent = useIntent();
   const voice = useCardVoice(async (text) => {
-    // A spoken "yes" in any language picks the only option of a proposed answer ("Yes, that's right").
-    const option = matchOption(text, item.options)
-      ?? (item.options.length === 1 && shortAnswer("proposal", text) === "accept" ? item.options[0] : null);
-    if (option) return onAnswer(item.id, option.value, option.label);
+    // The word lists, then the H model (components/voice/use-intent.ts): the answer is dispatched like a click.
     setBusy(true);
     setError(null);
+    const meaning = await intent.interpret(item, text);
+    const option = meaning.kind === "option" ? item.options.find((o) => o.value === meaning.option_ids[0]) : undefined;
+    if (option) {
+      setBusy(false);
+      return onAnswer(item.id, option.value, option.label);
+    }
     try {
       await onAnswerText(item.id, text);
     } catch (err) {
@@ -231,9 +235,11 @@ function ProposalCard({ item, onDecide }: { item: Extract<ConversationItem, { ki
 
 function ProposalChoice({ item, onDecide }: { item: Extract<ConversationItem, { kind: "proposal" }> } & Pick<Handlers, "onDecide">) {
   const [unclear, setUnclear] = useState<string | null>(null);
-  const voice = useCardVoice((text) => {
-    const answer = shortAnswer("proposal", text);
-    if (answer) return onDecide(item.id, answer === "accept");
+  const intent = useIntent();
+  const voice = useCardVoice(async (text) => {
+    setUnclear(null);
+    const meaning = await intent.interpret(item, text);
+    if (meaning.kind === "accept" || meaning.kind === "decline") return onDecide(item.id, meaning.kind === "accept");
     setUnclear(text);
   });
   return (

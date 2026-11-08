@@ -4,12 +4,12 @@ import { useState, type ReactNode } from "react";
 import { Check, Keyboard, Loader2, Mic, Square } from "lucide-react";
 import { Painting } from "@/components/panel/backdrop";
 import { useSpeaking } from "@/components/voice/speech";
+import { useIntent } from "@/components/voice/use-intent";
 import { useVoiceInput, type VoiceInput } from "@/components/voice/use-voice-input";
 import { VoiceAnswer } from "@/components/voice/voice-answer";
 import type { WaveState } from "@/components/panel/wave";
 import { sentenceSize, type Checklist, type Paper, type Scene } from "@/lib/panel-focus";
 import type { ConversationItem } from "@/lib/trip-state";
-import { matchOption, shortAnswer } from "@/lib/voice/short-answers";
 import { cn } from "@/lib/utils";
 
 export type Translate = (text: string) => string;
@@ -303,16 +303,17 @@ function Answering(props: Props & { item: ConversationItem }) {
   const speaking = useSpeaking();
   const [unclear, setUnclear] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const intent = useIntent();
   const voice = useVoiceInput(async (text) => {
     setUnclear(null);
+    if (item.kind !== "proposal" && item.kind !== "question") return;
+    // The word lists, then the H model (components/voice/use-intent.ts): the answer is dispatched like a tap.
+    const meaning = await intent.interpret(item, text);
     if (item.kind === "proposal") {
-      const answer = shortAnswer("proposal", text);
-      return answer ? handlers.onDecide(item.id, answer === "accept") : setUnclear(text);
+      if (meaning.kind === "accept" || meaning.kind === "decline") return handlers.onDecide(item.id, meaning.kind === "accept");
+      return setUnclear(text);
     }
-    if (item.kind !== "question") return;
-    // A spoken "yes" in any language picks the only option of a proposed answer ("Yes, that's right").
-    const option =
-      matchOption(text, item.options) ?? (item.options.length === 1 && shortAnswer("proposal", text) === "accept" ? item.options[0] : null);
+    const option = meaning.kind === "option" ? item.options.find((o) => o.value === meaning.option_ids[0]) : undefined;
     if (option) return handlers.onAnswer(item.id, option.value, option.label);
     setBusy(true);
     try {
@@ -323,7 +324,7 @@ function Answering(props: Props & { item: ConversationItem }) {
     }
   });
   const typed = item.kind === "agent_question" || (item.kind === "question" && item.input === "email");
-  const working = props.agent !== null || props.busy !== null || busy;
+  const working = props.agent !== null || props.busy !== null || busy || intent.thinking;
 
   return (
     <>
