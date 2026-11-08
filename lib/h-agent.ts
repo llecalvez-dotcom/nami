@@ -163,6 +163,8 @@ export type CreateSessionInput = {
   maxTimeS: number;
   maxSteps: number;
   idempotencyKey?: string;
+  // Ticket 20: kept open after each answer for the next task (H's multi-turn sessions). Absent: ends with the answer.
+  idleTimeoutS?: number;
 };
 
 export function createSessionBody(input: CreateSessionInput) {
@@ -183,7 +185,13 @@ export function createSessionBody(input: CreateSessionInput) {
     queue: false,
     max_time_s: input.maxTimeS,
     max_steps: input.maxSteps,
+    ...(input.idleTimeoutS ? { idle_timeout_s: input.idleTimeoutS } : {}),
   };
+}
+
+// A new task for an open (idle) session: the agent takes it as its next step, with its browser and context kept.
+export async function sendSessionMessage(id: string, message: string, options: HClientOptions = {}): Promise<void> {
+  await call(`${sessionPath(id)}/messages`, { method: "POST", body: JSON.stringify({ type: "user_message", message }) }, options);
 }
 
 export async function createSession(input: CreateSessionInput, options: HClientOptions = {}): Promise<{ id: string; status: string | null }> {

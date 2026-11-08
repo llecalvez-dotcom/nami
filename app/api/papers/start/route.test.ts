@@ -10,6 +10,7 @@ import { uploadSessionDocument } from "@/lib/agent-passport-upload";
 import { connectChrome } from "@/lib/chrome-cdp";
 import { resetBrowserPreflight } from "@/lib/agent-preflight";
 import { freshBridgeBeforeSession } from "@/lib/local-bridge";
+import { resetTripSessions, SINGLE_MAX_STEPS, SINGLE_MAX_TIME_S } from "@/lib/trip-session";
 
 vi.mock("@/lib/local-bridge", () => ({ freshBridgeBeforeSession: vi.fn(async () => {}), rememberBridgeForSession: vi.fn(async () => {}) }));
 
@@ -55,6 +56,7 @@ let fetch: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   resetGuards();
   resetBrowserPreflight();
+  resetTripSessions();
   vi.stubEnv("NODE_ENV", "test");
   vi.stubEnv("NAMI_AGENT_CHROME_PORT", "9333");
   vi.mocked(connectChrome).mockReset().mockResolvedValue({
@@ -301,7 +303,7 @@ describe("passport document handoff", () => {
     vi.stubEnv("NAMI_DOCUMENTS_DIR", "");
     const response = await start(BODY);
     expect(response.status).toBe(201);
-    expect(await response.json()).toEqual({ session_id: "s-1", status: "pending" });
+    expect(await response.json()).toEqual({ session_id: "s-1", status: "pending", from_index: 0, continued: false });
     for (const path of BODY.file_paths) expect(JSON.stringify(sentBody())).not.toContain(path);
     expect(sentBody().messages[0].message).not.toContain(root);
   });
@@ -322,16 +324,19 @@ describe("POST /api/papers/start (route 5)", () => {
   it("creates the H session on the local browser and returns its id", async () => {
     const response = await start(BODY);
     expect(response.status).toBe(201);
-    expect(await response.json()).toEqual({ session_id: "s-1", status: "pending" });
+    expect(await response.json()).toEqual({ session_id: "s-1", status: "pending", from_index: 0, continued: false });
     const body = sentBody();
     expect(body.queue).toBe(false);
-    expect(body.max_time_s).toBe(900);
-    expect(body.max_steps).toBe(80);
+    // Ticket 20: the visa opens the trip's session, whose budget covers every task and which waits for the next one.
+    expect(body.max_time_s).toBe(SINGLE_MAX_TIME_S);
+    expect(body.max_steps).toBe(SINGLE_MAX_STEPS);
+    expect(body.idle_timeout_s).toBe(600);
     expect(body.agent).toMatchObject({ model: "holo4-27b", reasoning_effort: "medium", instructions: expect.any(String) });
     expect(body.agent.environments).toEqual([
       { id: "browser", kind: "web", host: "user_device", session_id: "local-42", settle_s: 0.5, mode: { type: "visual", markdown: true } },
     ]);
-    expect(body.agent.tools.map((t: { name: string }) => t.name)).toEqual(["ask_user", "report_ready", "pick_option", "fill_field", "upload_file"]);
+    // The paper's tools first, then those of the flights and hotels tasks the same session will get (SINGLE_TOOLS).
+    expect(body.agent.tools.map((t: { name: string }) => t.name)).toEqual(["ask_user", "report_ready", "pick_option", "fill_field", "upload_file", "report_flights", "show_return_flight", "report_hotels"]);
     expect(body.agent.tools[3].input_schema.required).toEqual(["field", "value"]);
     expect(body.agent.tools[4].input_schema.properties.purpose.enum).toEqual(["passport", "photo", "return_ticket"]);
     expect(body.agent.tools[0].input_schema.required).toEqual(["question", "field"]);

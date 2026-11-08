@@ -9,7 +9,7 @@ import { googleHotelsUrl } from "@/lib/hotels-agent";
 import { hotelsAnswered, hotelsStartBody, HOTELS_RETRY_PROPOSAL, isHotelChoiceQuestion, isHotelCriterionQuestion, openHotelQuestion, pendingHotelChoice, startHotelsSession } from "@/lib/hotels/flow";
 import type { PassportFields } from "@/lib/contracts";
 import { H_NOT_ANSWERING_MESSAGE } from "@/lib/agent-changes";
-import { createVisaStartAttempt } from "@/lib/paper-start-client";
+import { createStartAttempt, type StartedSession } from "@/lib/paper-start-client";
 import { missingPassportMessage } from "@/lib/passport-reminder";
 import { requestTripParse } from "@/lib/trip-parse-client";
 import {
@@ -40,9 +40,9 @@ async function startVisaSession(
   paperId: "evoa" | "arrival_card" = "evoa",
   returnTicketDocumentId: string | null = null,
   onBusy?: (message: string) => void,
-): Promise<string> {
+): Promise<StartedSession> {
   const settings = readAgentSettings();
-  const attempt = createVisaStartAttempt({
+  const attempt = createStartAttempt({
     request: trip.request,
     passport,
     paper_id: paperId,
@@ -57,27 +57,27 @@ async function startVisaSession(
 }
 
 // Module Vol: the Google Flights session, from the request only (no passport, no name, no e-mail).
-async function startFlightsSessionRequest(trip: Trip, onBusy?: (message: string) => void): Promise<{ sessionId: string; url: string }> {
+async function startFlightsSessionRequest(trip: Trip, onBusy?: (message: string) => void): Promise<StartedSession & { url: string }> {
   const body = flightsStartBody(trip);
   if (!body) throw new Error("I need your departure and return dates to search flights.");
   const settings = readAgentSettings();
   // Same attempt logic as a paper: after an answer that came too late, a new click reuses the key, so H cannot open a second session.
-  const attempt = createVisaStartAttempt(
+  const attempt = createStartAttempt(
     { ...body, local_session_id: settings.local_session_id.trim() },
     { scope: `${trip.id}:flights`, onBusy, url: "/api/flights/start" },
   );
-  return { sessionId: await attempt(), url: googleFlightsUrl(body) };
+  return { ...(await attempt()), url: googleFlightsUrl(body) };
 }
 
 // Module Hôtel: the Google Hotels session, from the request only.
-async function startHotelsSessionRequest(trip: Trip, onBusy?: (message: string) => void): Promise<{ sessionId: string; url: string }> {
+async function startHotelsSessionRequest(trip: Trip, onBusy?: (message: string) => void): Promise<StartedSession & { url: string }> {
   const body = hotelsStartBody(trip);
   if (!body) throw new Error("I need your dates to search hotels.");
-  const attempt = createVisaStartAttempt(
+  const attempt = createStartAttempt(
     { ...body, local_session_id: readAgentSettings().local_session_id.trim() },
     { scope: `${trip.id}:hotels`, onBusy, url: "/api/hotels/start" },
   );
-  return { sessionId: await attempt(), url: googleHotelsUrl(body) };
+  return { ...(await attempt()), url: googleHotelsUrl(body) };
 }
 
 async function discover(url: string, pick: (json: Record<string, unknown>) => boolean): Promise<boolean> {
@@ -145,10 +145,10 @@ export function useTripActions({
     }
     setStarting(true);
     try {
-      const sessionId = await startVisaSession(
+      const { sessionId, fromIndex } = await startVisaSession(
         current, fields, passportDocument, confirmed?.photoDocumentId ?? photoDocumentId, paperId, confirmed?.returnTicketDocumentId ?? returnTicketDocumentId, tellBusy,
       );
-      const run = startVisaRun(latest() ?? current, itemId, sessionId, new Date(), passportDocument !== null, automatic);
+      const run = startVisaRun(latest() ?? current, itemId, sessionId, new Date(), passportDocument !== null, automatic, fromIndex);
       const started = automatic ? markAutoRestart(run, "done") : run;
       update(started);
       onStarted?.(started);
@@ -167,8 +167,8 @@ export function useTripActions({
     if (!current || starting || current.sample || isAgentActive(current.agent_run)) return;
     setStarting(true);
     try {
-      const { sessionId, url } = await startFlightsSessionRequest(current, tellBusy);
-      const run = startFlightsSession(latest() ?? current, sessionId, url, new Date());
+      const { sessionId, fromIndex, url } = await startFlightsSessionRequest(current, tellBusy);
+      const run = startFlightsSession(latest() ?? current, sessionId, url, new Date(), fromIndex);
       const started = automatic ? markAutoRestart(run, "done") : run;
       update(started);
       onStarted?.(started);
@@ -186,8 +186,8 @@ export function useTripActions({
     if (!current || starting || current.sample || isAgentActive(current.agent_run)) return;
     setStarting(true);
     try {
-      const { sessionId, url } = await startHotelsSessionRequest(current, tellBusy);
-      const run = startHotelsSession(latest() ?? current, sessionId, url, new Date());
+      const { sessionId, fromIndex, url } = await startHotelsSessionRequest(current, tellBusy);
+      const run = startHotelsSession(latest() ?? current, sessionId, url, new Date(), fromIndex);
       const started = automatic ? markAutoRestart(run, "done") : run;
       update(started);
       onStarted?.(started);

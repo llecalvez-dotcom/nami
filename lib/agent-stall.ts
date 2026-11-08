@@ -91,6 +91,13 @@ export function isReleased(sessionId: string): boolean {
   return released().has(sessionId);
 }
 
+// A new task on the same H session (ticket 20): its stall clock, its stop and its release start from nothing.
+export function forgetSession(sessionId: string): void {
+  progress().delete(sessionId);
+  abandoned().delete(sessionId);
+  released().delete(sessionId);
+}
+
 export function resetAgentStall(): void {
   delete shared.namiAgentProgress;
   delete shared.namiAbandonedSessions;

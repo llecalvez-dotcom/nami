@@ -535,7 +535,8 @@ export function pushAgentMessage(trip: Trip, text: string): Trip {
 }
 
 // quiet: the automatic restart after a slow H, already announced; the "agent is filling in" line is not said twice.
-export function startVisaRun(trip: Trip, itemId: string, sessionId: string, now: Date, passportFileReady = false, quiet = false): Trip {
+// fromIndex: where the panel polls from, after the previous task when the trip's session is continued (ticket 20).
+export function startVisaRun(trip: Trip, itemId: string, sessionId: string, now: Date, passportFileReady = false, quiet = false, fromIndex = 0): Trip {
   const item = trip.conversation.find((i) => i.id === itemId);
   // Already "accepted" when the side panel went looking for the passport first; never a second run.
   if (!item || item.kind !== "proposal" || (item.action !== "create_visa" && item.action !== "create_arrival_card")
@@ -550,7 +551,7 @@ export function startVisaRun(trip: Trip, itemId: string, sessionId: string, now:
         paper_id: paperId,
         started_at: now.toISOString(),
         state: "pending",
-        next_index: 0,
+        next_index: fromIndex,
         handled_tool_ids: [],
         drained: false,
       },

@@ -1,9 +1,9 @@
 import { API_LIMITS, guard, readJsonLimited } from "@/lib/api-guard";
-import { createSession, getAvailableSessionSlots } from "@/lib/h-agent";
+import { getAvailableSessionSlots } from "@/lib/h-agent";
 import { AgentPreflightError, preflightBrowser } from "@/lib/agent-preflight";
 import { openSearchTab } from "@/lib/agent-tab";
-import { freshBridgeBeforeSession, rememberBridgeForSession } from "@/lib/local-bridge";
 import { fail, H_SLOTS_BUSY, hErrorResponse } from "@/lib/paper-agent";
+import { startTask } from "@/lib/trip-session";
 import {
   bindFlightsSession,
   buildFlightsInstructions,
@@ -49,21 +49,15 @@ async function start(request: Request): Promise<Response> {
       if (await getAvailableSessionSlots() <= 0) return fail(H_SLOTS_BUSY, 429);
     } catch {}
     const tabId = await openSearchTab(googleFlightsUrl(input.data));
-    // Bench: a bridge that already served a session holds a dead chromedriver; it is restarted first (lib/local-bridge.ts).
-    await freshBridgeBeforeSession();
-    const session = await createSession({
-      task: buildFlightsTask(input.data, tabId),
-      instructions: buildFlightsInstructions(),
-      tools: FLIGHTS_TOOLS,
-      localBrowserSessionId: input.data.local_session_id,
-      maxTimeS: FLIGHTS_MAX_TIME_S,
-      maxSteps: FLIGHTS_MAX_STEPS,
-      idempotencyKey: input.data.idempotency_key,
-    });
+    // Ticket 20: the trip's open session gets the flights as a new task; else a new session after a fresh bridge
+    // (lib/trip-session.ts). Either way the guards of the previous task are gone before this one is bound.
+    const session = await startTask(
+      { kind: "flights", task: buildFlightsTask(input.data, tabId), instructions: buildFlightsInstructions(), tools: FLIGHTS_TOOLS, maxTimeS: FLIGHTS_MAX_TIME_S, maxSteps: FLIGHTS_MAX_STEPS },
+      { localBrowserSessionId: input.data.local_session_id, idempotencyKey: input.data.idempotency_key },
+    );
     browser.commit(session.id, input.data.idempotency_key);
-    await rememberBridgeForSession();
     bindFlightsSession(session.id);
-    return Response.json({ session_id: session.id, status: session.status }, { status: 201 });
+    return Response.json({ session_id: session.id, status: session.status, from_index: session.fromIndex, continued: session.continued }, { status: 201 });
   } catch (error) {
     if (error instanceof AgentPreflightError) return fail(error.message, error.status);
     return hErrorResponse(error);
