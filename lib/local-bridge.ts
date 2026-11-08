@@ -5,7 +5,8 @@
 // process already served one, Nami kills it: scripts/lancer-demo.sh restarts it in 1 s with the same session id.
 
 import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { readFile, writeFile } from "node:fs/promises";
 
 export const BRIDGE_READY_LINE = "Local web bridge serving session id";
 // Written by the bridge when H ends a session: from then on its chromedriver is dead.
@@ -60,7 +61,8 @@ export function bridgeManaged(env: Record<string, string | undefined> = process.
 export function defaultBridgeDeps(env: Record<string, string | undefined> = process.env): BridgeDeps {
   const port = env.NAMI_AGENT_CHROME_PORT?.trim() || "9333";
   return {
-    pgrep: findBridgePid,
+    // Under vitest the route tests must never find, let alone kill, the real bridge of the bench.
+    pgrep: env.NODE_ENV === "test" ? async () => null : findBridgePid,
     kill: async (pid) => {
       process.kill(pid, "SIGTERM");
     },
@@ -123,7 +125,8 @@ export async function markBridgeUsed(deps: Pick<BridgeDeps, "pgrep" | "now"> = d
 
 // Kills the running bridge (the caller decided it is used), waits for the restarted one (new pid), then for its ready
 // line (or 4 s), then for Chrome. Never throws: on any doubt the session is created as before.
-export async function refreshBridge(deps: BridgeDeps = defaultBridgeDeps()): Promise<"refreshed" | "skipped" | "timeout"> {
+export async function refreshBridge(deps: BridgeDeps = defaultBridgeDeps(), channel?: string): Promise<"refreshed" | "skipped" | "timeout"> {
+  const readyLine = channel ? `${BRIDGE_READY_LINE} ${channel}` : BRIDGE_READY_LINE;
   const oldPid = await deps.pgrep();
   if (oldPid === null) return "skipped";
   const start = deps.now();
@@ -156,7 +159,7 @@ export async function refreshBridge(deps: BridgeDeps = defaultBridgeDeps()): Pro
       ready = true;
       break;
     }
-    if (log.slice(logBefore ?? 0).includes(BRIDGE_READY_LINE)) {
+    if (log.slice(logBefore ?? 0).includes(readyLine)) {
       ready = true;
       break;
     }
@@ -216,6 +219,43 @@ export async function awaitRestartingBridge(deps: Pick<BridgeDeps, "readLog" | "
   }
   deps.log("bridge still restarting after 6 s; creating the session anyway");
   return true;
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// One channel per H session (8 Nov 2026, 5 launches out of 11 failed on a shared channel): the end of an abandoned session
+// arrives late and closes the bridge of the next one, and a new session on a channel just used gets no command for 30 s.
+// Nami writes a new id, restarts the bridge on it (scripts/lancer-demo.sh reads the file), and the session uses that id.
+// A bridge started now is also attached to the tab open now. Without the file (Nami not started by the script): as before.
+export async function channelForSession(
+  current: string,
+  env: Record<string, string | undefined> = process.env,
+  deps: BridgeDeps = defaultBridgeDeps(env),
+  newId: () => string = randomUUID,
+): Promise<string> {
+  if (!bridgeManaged(env)) return current;
+  const file = env.NAMI_BRIDGE_CHANNEL_FILE?.trim();
+  if (!file) {
+    await freshBridgeBeforeSession(deps);
+    return current;
+  }
+  try {
+    const channel = newId();
+    await writeFile(file, `${channel}\n`);
+    await awaitRestartingBridge(deps);
+    await refreshBridge(deps, channel);
+    return channel;
+  } catch {
+    return current;
+  }
+}
+
+// A resumed start: the channel the running session already uses.
+export async function currentChannel(fallback: string, env: Record<string, string | undefined> = process.env): Promise<string> {
+  const file = env.NAMI_BRIDGE_CHANNEL_FILE?.trim();
+  if (!file) return fallback;
+  const channel = await readFile(file, "utf8").then((text) => text.trim(), () => "");
+  return UUID.test(channel) ? channel : fallback;
 }
 
 export async function rememberBridgeForSession(deps: BridgeDeps = defaultBridgeDeps()): Promise<void> {

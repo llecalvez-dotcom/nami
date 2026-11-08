@@ -2,7 +2,7 @@ import { API_LIMITS, guard, readJsonLimited } from "@/lib/api-guard";
 import { createSession, getAvailableSessionSlots } from "@/lib/h-agent";
 import { AgentPreflightError, preflightBrowser } from "@/lib/agent-preflight";
 import { openSearchTab } from "@/lib/agent-tab";
-import { freshBridgeBeforeSession, rememberBridgeForSession } from "@/lib/local-bridge";
+import { channelForSession, rememberBridgeForSession } from "@/lib/local-bridge";
 import { fail, H_SLOTS_BUSY, hErrorResponse } from "@/lib/paper-agent";
 import { bindFlightsSession } from "@/lib/flights-agent";
 import { buildHotelsInstructions, buildHotelsTask, googleHotelsUrl, HOTELS_MAX_STEPS, HOTELS_MAX_TIME_S, HOTELS_TOOLS, HotelsStartSchema } from "@/lib/hotels-agent";
@@ -35,12 +35,12 @@ async function start(request: Request): Promise<Response> {
       if (await getAvailableSessionSlots() <= 0) return fail(H_SLOTS_BUSY, 429);
     } catch {}
     const tabId = await openSearchTab(googleHotelsUrl(input.data));
-    await freshBridgeBeforeSession();
+    const channel = await channelForSession(input.data.local_session_id);
     const session = await createSession({
       task: buildHotelsTask(input.data, tabId),
       instructions: buildHotelsInstructions(),
       tools: HOTELS_TOOLS,
-      localBrowserSessionId: input.data.local_session_id,
+      localBrowserSessionId: channel,
       maxTimeS: HOTELS_MAX_TIME_S,
       maxSteps: HOTELS_MAX_STEPS,
       idempotencyKey: input.data.idempotency_key,

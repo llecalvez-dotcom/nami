@@ -9,12 +9,12 @@ import type { HChanges } from "@/lib/h-agent";
 export const STALL_MS = 40_000;
 // Before its first action the agent has only the first screenshot to answer (about 3 s when it works): the 3 stalls
 // seen on 2026-11-08 were all there. Nothing has been done yet, so starting over is safe, and the panel does it once
-// by itself. 45 s and not 20: a slow H sometimes sends its first action after 30 s (bench, 2026-11-08 at 04:04).
-export const FIRST_STALL_MS = 45_000;
+// by itself. 30 s and not 20: the slowest first action of the working runs came at 22 s (bench, 2026-11-08 at 12:36).
+export const FIRST_STALL_MS = 30_000;
 // H has started but never took its first screenshot (about 1 s when it works): no command ever reached the browser and
 // the tab stayed blank (flights, 2026-11-08 at 10:33; H answered "Error" only after 65 s). Nothing was done either.
-// 35 s and not 20: on the same bench the first screenshot once came at 25.6 s, and the session then worked.
-export const NO_SCREEN_MS = 35_000;
+// 15 s: on a channel of its own the first screenshot comes within 6 s. The 25.6 s once seen were on a shared channel.
+export const NO_SCREEN_MS = 15_000;
 export const STALLED = "stalled";
 
 type Progress = { lastKind: string | null; lastAt: number; acted: boolean };

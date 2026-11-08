@@ -9,9 +9,9 @@ import { findDocuments } from "@/lib/documents";
 import { uploadSessionDocument } from "@/lib/agent-passport-upload";
 import { connectChrome } from "@/lib/chrome-cdp";
 import { resetBrowserPreflight } from "@/lib/agent-preflight";
-import { freshBridgeBeforeSession } from "@/lib/local-bridge";
+import { channelForSession } from "@/lib/local-bridge";
 
-vi.mock("@/lib/local-bridge", () => ({ freshBridgeBeforeSession: vi.fn(async () => {}), rememberBridgeForSession: vi.fn(async () => {}) }));
+vi.mock("@/lib/local-bridge", () => ({ channelForSession: vi.fn(async (id: string) => id), currentChannel: vi.fn(async (id: string) => id), rememberBridgeForSession: vi.fn(async () => {}) }));
 
 vi.mock("@/lib/chrome-cdp", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/lib/chrome-cdp")>(),
@@ -125,12 +125,12 @@ describe("quota and idempotency", () => {
   });
 
   it("refreshes the bridge before a new session, not before a resumed retry whose session still runs on it", async () => {
-    vi.mocked(freshBridgeBeforeSession).mockClear();
+    vi.mocked(channelForSession).mockClear();
     expect((await start({ ...BODY, idempotency_key: key })).status).toBe(201);
-    expect(freshBridgeBeforeSession).toHaveBeenCalledTimes(1);
+    expect(channelForSession).toHaveBeenCalledTimes(1);
     fetch.mockResolvedValueOnce(Response.json({ status: "running" }));
     await start({ ...BODY, idempotency_key: key, resume: true });
-    expect(freshBridgeBeforeSession).toHaveBeenCalledTimes(1);
+    expect(channelForSession).toHaveBeenCalledTimes(1);
   });
 
   it("lets a resumed keyed start reach H even when no slot is free, so H can return the original session", async () => {
