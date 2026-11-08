@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  abandonSession, abandonedBeforeAction, FIRST_STALL_MS, hasActed, isAbandoned, isReleased, releaseSession, resetAgentStall, STALL_MS, trackProgress,
+  abandonSession, abandonedBeforeAction, FIRST_STALL_MS, NO_SCREEN_MS, hasActed, isAbandoned, isReleased, releaseSession, resetAgentStall, STALL_MS, trackProgress,
 } from "@/lib/agent-stall";
 import type { HChanges } from "@/lib/h-agent";
 
@@ -16,6 +16,17 @@ const changes = (kinds: string[], extra: Partial<HChanges> = {}): HChanges => ({
 afterEach(() => resetAgentStall());
 
 describe("stalled H sessions (2026-11-08: the model never answered the first screenshot)", () => {
+  it("gives up quickly when H starts and never takes its first screenshot (seen on the flights, 2026-11-08)", () => {
+    expect(trackProgress("s", changes(["message_event"]), 0)).toBe(false);
+    expect(trackProgress("s", null, NO_SCREEN_MS - 1)).toBe(false);
+    expect(trackProgress("s", null, NO_SCREEN_MS)).toBe(true);
+  });
+
+  it("does not count a message of the agent as silence once it has acted", () => {
+    trackProgress("s", changes(["observation_event", "policy_event", "message_event"]), 0);
+    expect(trackProgress("s", null, STALL_MS * 3)).toBe(false);
+  });
+
   it("gives up when the first screenshot gets no answer in FIRST_STALL_MS (45 s: a slow H starts in 30 s)", () => {
     expect(FIRST_STALL_MS).toBe(45_000);
     expect(trackProgress("s", changes(["message_event", "observation_event"]), 0)).toBe(false);
