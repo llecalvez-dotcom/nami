@@ -77,7 +77,8 @@ async function start(request: Request): Promise<Response> {
       } catch {}
     }
     // Bench: a bridge that already served a session holds a dead chromedriver; it is restarted first (lib/local-bridge.ts).
-    await freshBridgeBeforeSession();
+    // Not on a resumed retry: H returns the session already running, which still drives that bridge.
+    if (!(input.data.resume && input.data.idempotency_key)) await freshBridgeBeforeSession();
     const session = await createSession({
       task: buildPilotTask(input.data, getBaliPaper(input.data.paper_id)),
       instructions: buildPilotInstructions(getBaliPaper(input.data.paper_id)),
