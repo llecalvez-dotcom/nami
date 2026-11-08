@@ -1,5 +1,7 @@
 "use client";
 
+import { assumedArrival } from "@/lib/planner";
+
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, MessagesSquare, Plus, X } from "lucide-react";
 import { FocusStage, PAPER_COLORS, Sentence, STAGE_TEXTS, TypeInstead, VoiceHint, WaveMic, waveState, type AgentView, type StageVisual, type Translate } from "@/components/panel/focus-stage";
@@ -587,7 +589,7 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
             <PassportCard
               demo
               returnDate={trip.request.return_date}
-              arrivalAt={trip.request.arrival_at}
+              arrivalAt={assumedArrival(trip.request)}
               searchRequest={searchRequest}
               onDocumentConfirmed={setDocumentId}
               onConfirm={(fields) => {

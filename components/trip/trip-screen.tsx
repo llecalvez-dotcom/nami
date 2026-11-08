@@ -1,5 +1,7 @@
 "use client";
 
+import { assumedArrival } from "@/lib/planner";
+
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -178,7 +180,7 @@ export function TripScreen({ id }: { id: string }) {
                   <PassportCard
                     demo={demo}
                     returnDate={trip.request.return_date}
-                    arrivalAt={trip.request.arrival_at}
+                    arrivalAt={assumedArrival(trip.request)}
                     onConfirm={setPassport}
                     onDocumentConfirmed={setDocumentId}
                     searchRequest={passportSearchRequest}
