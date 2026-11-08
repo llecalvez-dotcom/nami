@@ -317,7 +317,7 @@ describe("POST /api/papers/start (route 5)", () => {
     expect(body.max_steps).toBe(80);
     expect(body.agent).toMatchObject({ model: "holo4-27b", reasoning_effort: "medium", instructions: expect.any(String) });
     expect(body.agent.environments).toEqual([
-      { id: "browser", kind: "web", host: "user_device", session_id: "local-42", settle_s: 2, mode: { type: "visual", markdown: true } },
+      { id: "browser", kind: "web", host: "user_device", session_id: "local-42", settle_s: 0.5, mode: { type: "visual", markdown: true } },
     ]);
     expect(body.agent.tools.map((t: { name: string }) => t.name)).toEqual(["ask_user", "report_ready", "pick_option", "fill_field", "upload_file"]);
     expect(body.agent.tools[3].input_schema.required).toEqual(["field", "value"]);
@@ -352,7 +352,7 @@ describe("POST /api/papers/start (route 5)", () => {
     const lines = (sentBody().messages[0].message as string).split("\n");
     const evoa = getBaliPaper("evoa");
     expect(evoa.route_hint).toContain("B1 - Tourist (Visa On Arrival)");
-    expect(lines[0]).toContain(`Go to ${evoa.official_url}.`);
+    expect(lines[0]).toContain(`Open ${evoa.official_url} in the current tab with go_to; do not look for or switch to another tab.`);
     expect(lines[1]).toBe(evoa.route_hint);
     expect(lines[1]).toContain("Detail & Apply");
     expect(lines[1]).toContain("do not look for another page or site");

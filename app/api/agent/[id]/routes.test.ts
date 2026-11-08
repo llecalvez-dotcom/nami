@@ -4,10 +4,11 @@ import { POST as cancel } from "@/app/api/agent/[id]/cancel/route";
 import { GET as changes } from "@/app/api/agent/[id]/changes/route";
 import { POST as fill } from "@/app/api/agent/[id]/fill/route";
 import { uploadSessionDocument } from "@/lib/agent-passport-upload";
-import { fillField } from "@/lib/local-chrome";
+import { fillField, waitForPageText } from "@/lib/local-chrome";
+import { FIRST_STALL_MS, resetAgentStall } from "@/lib/agent-stall";
 
 vi.mock("@/lib/agent-passport-upload", () => ({ uploadSessionDocument: vi.fn() }));
-vi.mock("@/lib/local-chrome", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/local-chrome")>()), fillField: vi.fn() }));
+vi.mock("@/lib/local-chrome", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/local-chrome")>()), fillField: vi.fn(), waitForPageText: vi.fn() }));
 
 const API = "https://agp.eu.hcompany.ai/api/v2";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -24,14 +25,33 @@ describe("upload_file answer", () => {
 
   it("echoes the tool request to H but only sends the server's result, never the client's forged result", async () => {
     vi.mocked(uploadSessionDocument).mockResolvedValue("uploaded");
+    vi.mocked(waitForPageText).mockResolvedValue(true);
     fetch.mockResolvedValue(new Response(null, { status: 204 }));
     const response = await post({ tool_req, result: "/unconfirmed.jpg" });
     expect(response.status).toBe(202);
     expect(await response.json()).toEqual({ ok: true, upload_result: "uploaded" });
     expect(uploadSessionDocument).toHaveBeenCalledWith("s-1", tool_req);
+    expect(waitForPageText).toHaveBeenCalledWith("Reupload", ["evisa.imigrasi.go.id"]);
     expect(JSON.parse(call()[1].body as string)).toEqual({
-      kind: "tool_result", tool_req, result: "uploaded. Do not reload or refresh the page or navigate away; take a screenshot to verify the file is shown, then continue with the next field.",
+      kind: "tool_result", tool_req,
+      result: "uploaded. The site has read the passport and shows its reading in a window with Reupload and Ok at the bottom: press Page Down to reach Ok, then click Ok. Do not reload or refresh the page or navigate away.",
     });
+  });
+
+  it("tells the agent to wait and look when the page has not shown its reading of the passport yet", async () => {
+    vi.mocked(uploadSessionDocument).mockResolvedValue("uploaded");
+    vi.mocked(waitForPageText).mockResolvedValue(false);
+    fetch.mockResolvedValue(new Response(null, { status: 204 }));
+    await post({ tool_req, result: "upload" });
+    expect(JSON.parse(call()[1].body as string).result).toBe("uploaded, but the page has not reacted yet. Do not reload or refresh the page or navigate away. Wait 2 seconds with wait_web, then look at the page and continue.");
+  });
+
+  it("sends the agent straight to report_ready after the photo, without waiting on the page", async () => {
+    vi.mocked(uploadSessionDocument).mockResolvedValue("uploaded");
+    fetch.mockResolvedValue(new Response(null, { status: 204 }));
+    await post({ tool_req: { ...tool_req, args: { purpose: "photo" } }, result: "upload" });
+    expect(waitForPageText).not.toHaveBeenCalled();
+    expect(JSON.parse(call()[1].body as string).result).toContain("step 1 is done: call report_ready now");
   });
 
   it.each(["no official tab", "no file input found"] as const)("forwards the safe fallback result: %s", async (result) => {
@@ -107,6 +127,8 @@ describe("POST /api/agent/[id]/fill (route 7c)", () => {
 beforeEach(() => {
   vi.mocked(uploadSessionDocument).mockReset();
   vi.mocked(fillField).mockReset();
+  vi.mocked(waitForPageText).mockReset();
+  resetAgentStall();
   vi.stubEnv("HAI_API_KEY", "h-key");
   fetch = vi.fn();
   vi.stubGlobal("fetch", fetch);
@@ -120,6 +142,26 @@ afterEach(() => {
 
 describe("GET /api/agent/[id]/changes (route 6)", () => {
   const get = (id: string, from = "0") => changes(new Request(`http://localhost/api/agent/${id}/changes?from_index=${from}`), ctx(id));
+
+  it("gives up a session whose model never answers its screenshot, cancels it, and reports it failed for good", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    fetch.mockResolvedValueOnce(Response.json({
+      status: "running", first_index: 0,
+      new_events: [{ type: "AgentEvent", data: { kind: "observation_event", metadata: { url: "about:blank" } } }],
+    }));
+    expect((await (await get("stall-1")).json()).status).toBe("running");
+    now.mockReturnValue(1_000_000 + FIRST_STALL_MS);
+    fetch.mockResolvedValueOnce(new Response(null, { status: 204 })).mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const body = await (await get("stall-1", "1")).json();
+    expect(body).toMatchObject({ status: "failed", error_code: "stalled", steps: ["The agent stopped answering"] });
+    expect(call(2)[0]).toBe(`${API}/sessions/stall-1`);
+    expect(call(2)[1].method).toBe("DELETE");
+    const after = await (await get("stall-1", "1")).json();
+    expect(after).toMatchObject({ no_change: true, status: "failed", error_code: "stalled" });
+    expect(fetch).toHaveBeenCalledTimes(3);
+    now.mockRestore();
+  });
 
   it("turns a 204 into no_change and keeps the index", async () => {
     fetch.mockResolvedValue(new Response(null, { status: 204 }));

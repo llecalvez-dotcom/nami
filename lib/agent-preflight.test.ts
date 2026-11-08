@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { preflightBrowser, resetBrowserPreflight } from "@/lib/agent-preflight";
+import { abandonSession, resetAgentStall } from "@/lib/agent-stall";
 import type { CdpConnection } from "@/lib/chrome-cdp";
 
 const DOMAIN = "evisa.imigrasi.go.id";
@@ -115,6 +116,16 @@ describe("browser preflight", () => {
     await expect(preflightBrowser("bridge-1", connect)).rejects.toMatchObject({ status: 503, message: expect.stringContaining("Could not check") });
     await expect(preflightBrowser("bridge-1", connect)).rejects.toMatchObject({ status: 409 });
     expect(connect).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets a new session take the browser from a stalled session Nami gave up, without asking H (H still says running)", async () => {
+    await started();
+    abandonSession("session-1");
+    const lease = await preflightBrowser("bridge-1", connect);
+    lease.commit("session-2");
+    lease.release();
+    expect(fetch).not.toHaveBeenCalled();
+    resetAgentStall();
   });
 
   it("rejects malformed status rather than assuming the previous session is finished", async () => {
