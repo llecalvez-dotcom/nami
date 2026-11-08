@@ -13,6 +13,16 @@ function deps(log: string | null, now: number) {
 describe("a session started right after another one", () => {
   afterEach(() => vi.unstubAllEnvs());
 
+  it("restarts even a bridge that served no session: its tab may have been closed since it started", async () => {
+    vi.stubEnv("NAMI_LOCAL_SESSION_ID", "6e5f6051-e697-43ce-8763-4e9233e336bf");
+    const pids = [111, 222];
+    let log = "Local web bridge serving session id x";
+    const kill = vi.fn(async () => { log += "\nLocal web bridge serving session id x"; });
+    const { value } = deps(log, END);
+    await freshBridgeBeforeSession({ ...value, kill, readLog: async () => log, pgrep: async () => pids.shift() ?? 222 });
+    expect(kill).toHaveBeenCalledWith(111);
+  });
+
   it("reads when the last session ended", () => {
     expect(lastDestroyAt(`old\n2026-11-08 09:00:00,000 INFO x: command destroy dispatched\n${LINE}\nother`)).toBe(END);
     expect(lastDestroyAt("nothing here")).toBeNull();
