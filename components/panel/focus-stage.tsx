@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { Check, Keyboard, Loader2, Mic, Square } from "lucide-react";
 import { Painting } from "@/components/panel/backdrop";
-import { useListenAfterSpeech, useSpeaking } from "@/components/voice/speech";
+import { useSpeaking } from "@/components/voice/speech";
 import { useVoiceInput, type VoiceInput } from "@/components/voice/use-voice-input";
 import { VoiceAnswer } from "@/components/voice/voice-answer";
 import type { WaveState } from "@/components/panel/wave";
@@ -297,7 +297,7 @@ export function TypeInstead({ onSubmit, t, placeholder }: { onSubmit: (text: str
   );
 }
 
-// The item Nami waits for: its microphone, on the wave, opens by itself once Nami has read it aloud.
+// The item Nami waits for: its microphone sits on the wave and opens on a tap only, never by itself.
 function Answering(props: Props & { item: ConversationItem }) {
   const { item, t, scene, ...handlers } = props;
   const speaking = useSpeaking();
@@ -323,7 +323,6 @@ function Answering(props: Props & { item: ConversationItem }) {
     }
   });
   const typed = item.kind === "agent_question" || (item.kind === "question" && item.input === "email");
-  useListenAfterSpeech(typed ? "" : item.id, voice.start);
   const working = props.agent !== null || props.busy !== null || busy;
 
   return (

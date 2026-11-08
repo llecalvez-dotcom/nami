@@ -19,8 +19,9 @@ const QUOTA_LIMITS = {
   transcribe: 20,
   extract: 5,
   access: 10,
-  // Each call starts a paid H agent session in the traveller's Chrome.
-  papers: 5,
+  // Each call starts a paid H agent session in the traveller's Chrome. 30 per 10 min: a full run (visa, arrival card,
+  // flights) plus retries hit the former 5 on the bench (2026-11-08).
+  papers: 30,
   documents: 100,
   upload: 20,
   screen: 180,

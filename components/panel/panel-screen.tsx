@@ -1,5 +1,7 @@
 "use client";
 
+import { assumedArrival } from "@/lib/planner";
+
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, MessagesSquare, Plus, X } from "lucide-react";
 import { FocusStage, PAPER_COLORS, Sentence, STAGE_TEXTS, TypeInstead, VoiceHint, WaveMic, waveState, type AgentView, type StageVisual, type Translate } from "@/components/panel/focus-stage";
@@ -65,9 +67,6 @@ export function agentSpeech(step: string): string | null {
 
 const AGENT_SPEECH_GAP_MS = 20_000;
 const RECONFIRM_TEXT = "The agent may still be running. Confirm your passport again so I can follow it here; Stop works meanwhile.";
-// When no ID photo is found: said aloud, then the upload zone; the traveller can also go on without it.
-const NO_PHOTO_TEXT = "I could not find your ID photo on this computer. Drop it here, or go on without it.";
-const NO_PHOTO_HINT = "Without it, the official site will ask you for the photo.";
 
 // The fixed texts of the panel, translated like the rest.
 export const PANEL_TEXTS = [
@@ -90,8 +89,6 @@ export const PANEL_TEXTS = [
   "Reading your passport…",
   "Looking for your ID photo…",
   RECONFIRM_TEXT,
-  NO_PHOTO_HINT,
-  "Go on without it",
   ...DROP_TEXTS,
 ];
 
@@ -307,6 +304,8 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
     read: { fields: PassportFields; documentId: string; verified: number } | null;
     photos: Found[];
     photoDocumentId?: string;
+    // The photo picked in the card when none was found by voice.
+    pickedPhotoId?: string;
     tickets: Found[];
   }>({ visaItem: null, passports: [], reader: null, offered: null, read: null, photos: [], tickets: [] });
   const secrets = useMemo(() => [passport?.passport_number, passport?.birth_date], [passport]);
@@ -455,8 +454,13 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
     const photo = photos[0];
     setSeen((previous) => ({ ...previous, photo }));
     if (photo) return ask("use_photo", foundPhotoText(photo), "Yes, use it", "No");
-    say(NO_PHOTO_TEXT);
+    // Same fallback as the passport: the card is shown with its photo search and the upload zone; the proposal resumes the path either way.
+    say("I could not find your ID photo on this computer. Drop it below, pick it from your documents, or go on without it: the official site will ask for it.");
+    // The sheet is hidden once the passport is confirmed (compact): editing shows it again, with the photo card.
+    setEditing(true);
+    setManual(true);
     setDrop("photo");
+    ask("use_photo", "Do you have your ID photo ready?", "Yes, use it", "Go on without it");
   };
 
   // A file dropped in the upload zone resumes the spoken path as if it had been found on this computer.
@@ -469,13 +473,11 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
       flow.current.passports = [document];
       return offerPassport();
     }
+    // The pending "Yes, use it" now has a photo to use.
     flow.current.photos = [document];
+    flow.current.pickedPhotoId = document.id;
+    setPhotoDocumentId(document.id);
     setSeen((previous) => ({ ...previous, photo: document }));
-    ask("use_photo", foundPhotoText(document), "Yes, use it", "No");
-  };
-  const goOnWithoutPhoto = () => {
-    setDrop(null);
-    void lookForReturnTicket();
   };
 
   const decide = (itemId: string, accepted: boolean) => {
@@ -492,7 +494,22 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
       actions.decide(itemId, accepted);
       if (item.action === "read_passport") return void (accepted ? readPassport() : offerPassport());
       if (item.action === "confirm_passport") return accepted ? void confirmPassport() : fallBackToCard("Check the fields below, then confirm them.");
-      if (item.action === "use_photo") return void lookForReturnTicket(accepted ? flow.current.photos[0]?.id : undefined);
+      if (item.action === "use_photo") {
+        const found = flow.current.photos[0]?.id;
+        if (found) return void lookForReturnTicket(accepted ? found : undefined);
+        // Fallback card: "yes" needs a picked photo; "no" drops any photo picked meanwhile, the agent gets none.
+        if (accepted && !flow.current.pickedPhotoId) {
+          say("I have no photo yet. Pick it below, or go on without it.");
+          return ask("use_photo", "Do you have your ID photo ready?", "Yes, use it", "Go on without it");
+        }
+        if (!accepted) {
+          flow.current.pickedPhotoId = undefined;
+          setPhotoDocumentId(null);
+        }
+        setManual(false);
+        setEditing(false);
+        return void lookForReturnTicket(accepted ? flow.current.pickedPhotoId : undefined);
+      }
       return startAgent(accepted ? flow.current.tickets[0]?.id : undefined);
     }
     actions.decide(itemId, accepted);
@@ -597,7 +614,7 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
             <PassportCard
               demo
               returnDate={trip.request.return_date}
-              arrivalAt={trip.request.arrival_at}
+              arrivalAt={assumedArrival(trip.request)}
               searchRequest={searchRequest}
               onDocumentConfirmed={setDocumentId}
               onConfirm={(fields) => {
@@ -613,7 +630,14 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
             />
             {documentId ? (
               <div className="mt-4">
-                <PhotoCard demo onConfirm={setPhotoDocumentId} />
+                {drop === "photo" && !photoDocumentId ? <DocumentDrop kind="photo" t={t} onUploaded={resumeWithUpload} className="mb-4" /> : null}
+                <PhotoCard
+                  demo
+                  onConfirm={(id) => {
+                    flow.current.pickedPhotoId = id ?? undefined;
+                    setPhotoDocumentId(id);
+                  }}
+                />
               </div>
             ) : null}
             {documentId ? (
@@ -623,15 +647,6 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
             ) : null}
           </Sheet>
         </div>
-      ) : null}
-      {drop === "photo" && !showCard ? (
-        <Sheet title={t("Your ID photo")} t={t} onClose={goOnWithoutPhoto}>
-          <p className="mb-4 text-[15px] leading-snug text-[var(--np-ink-soft)]">{t(NO_PHOTO_HINT)}</p>
-          <DocumentDrop kind="photo" t={t} onUploaded={resumeWithUpload} />
-          <button type="button" onClick={goOnWithoutPhoto} className="np-press mt-4 h-10 w-full rounded-full bg-[var(--np-fill)] text-[15px] font-medium">
-            {t("Go on without it")}
-          </button>
-        </Sheet>
       ) : null}
     </div>
   );

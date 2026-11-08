@@ -9,7 +9,8 @@ import { isTerminalStatus, type ToolRequest } from "@/lib/h-agent";
 import { CRITERION_LABELS, describeFlight, formatPrice, introduceFlights, rankFlights } from "@/lib/flights/rank";
 import { normalizeText } from "@/lib/flights/read";
 import { shortAnswer } from "@/lib/voice/short-answers";
-import { isBali, nextDay } from "@/lib/planner";
+import { assumedArrival, formalityWindows, isBali, nextDay } from "@/lib/planner";
+import { BALI_PAPERS } from "@/lib/bali-papers";
 import type { ConversationItem, Trip } from "@/lib/trip-state";
 
 export const FLIGHT_QUESTION_FIELDS = ["return_date", "flight_criterion", "flight_choice"] as const;
@@ -54,6 +55,8 @@ const FlightsRunResultSchema = z.object({
   chosen: FlightOptionSchema.optional(),
   tool_req: z.object({ tool_name: z.string(), args: z.record(z.string(), z.unknown()), id: z.string().nullable() }).optional(),
   ready: z.boolean().optional(),
+  // The landing in request.arrival_at came from the chosen flight: cleared if the run ends without opening it.
+  landing_from_flight: z.boolean().optional(),
 });
 export type FlightsRunResult = z.infer<typeof FlightsRunResultSchema>;
 
@@ -266,12 +269,28 @@ function chooseFlight(trip: Trip, value: string): Trip {
   const result = flightsResult(trip.agent_run);
   const chosen = result?.options.find((f) => String(f.index) === value);
   if (!chosen) return say(trip, "I lost that flight. Look at the tab on the left and choose one yourself.");
-  const next = withResult(trip, { chosen });
-  const request = { ...next.request, arrival_at: next.request.arrival_at ?? landingFromFlight(next.request, chosen) };
+  const landing = trip.request.arrival_at ? null : landingFromFlight(trip.request, chosen);
+  const next = landing ? withLanding(withResult(trip, { chosen, landing_from_flight: true }), landing) : withResult(trip, { chosen });
   return say(
-    { ...next, request, agent_steps: [...next.agent_steps, `You chose ${chosen.airline}, ${formatPrice(chosen)}`] },
+    { ...next, agent_steps: [...next.agent_steps, `You chose ${chosen.airline}, ${formatPrice(chosen)}`] },
     `I'm opening ${describeFlight(chosen)}, watch the tab on the left.`,
   );
+}
+
+// Writes the landing into the request and recomputes the windows of the Bali papers from it (null: back to the
+// assumed landing, the day after the departure).
+export function withLanding(trip: Trip, arrival_at: string | null): Trip {
+  const request = { ...trip.request, arrival_at };
+  const arrival = assumedArrival(request);
+  const windows = arrival ? formalityWindows({ arrival_at: arrival }, BALI_PAPERS) : [];
+  return {
+    ...trip,
+    request,
+    formalities: trip.formalities.map((f) => {
+      const window = windows.find((w) => w.id === f.id);
+      return BALI_PAPERS.some((p) => p.id === f.id) ? { ...f, opens_at: window?.opens_at ?? null, closes_at: window?.closes_at ?? null } : f;
+    }),
+  };
 }
 
 // The landing time, once a flight is chosen: its arrival time on the departure day (+1 when the page says so),
@@ -340,6 +359,12 @@ export function applyFlightsChanges(trip: Trip, changes: AgentChanges, secrets: 
     } else {
       next = retry(say(next, "The flight search was closed. Nothing was booked."));
     }
+  }
+
+  // The run ended without opening the flight (here, or by Stop before this poll): its landing time goes, the papers
+  // get back their assumed windows. Once only: the flag is cleared.
+  if (terminal && flightsResult(run)?.landing_from_flight && !flightsResult(run)?.ready) {
+    next = withLanding(withResult(next, { landing_from_flight: false }), null);
   }
 
   return { trip: next, toolCalls: terminal ? [] : freshToolCalls(changes.pending_tool_calls, run.handled_tool_ids ?? []) };
