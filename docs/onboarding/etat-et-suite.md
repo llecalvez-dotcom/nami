@@ -38,6 +38,10 @@ Parcours complet **à la voix, dans le panneau, sur le Mac de Clément** dans la
 - Stop ou abandon libère le navigateur localement sans attendre H : plus de 409.
 - Tous les appels H bornés (création 30 s, autres 20 s, long-poll 35 s) ; « Busy » (concurrence) distingué du quota, réessai automatique ; quotas de test relevés.
 
+### Ticket 20 : une session H par voyage, et voix, saisie ou clic à chaque étape (PR en relecture)
+- Partie A (`lib/trip-session.ts`, `NAMI_H_SESSION_MODE=single` par défaut) : le visa ouvre la session H avec `idle_timeout_s` ; carte d'arrivée, vol et hôtel sont des messages à cette même session (`POST /sessions/{id}/messages`), donc plus de relance du pont ni d'attente `CHANNEL_REST_MS` (35 s) entre deux tâches. Les règles de chaque tâche sont réarmées à chaque message (`rearmGuards`), la fin d'une tâche (`report_ready`, raison `ready` sur la route cancel) laisse la session en veille et surveille que l'agent ne touche plus au navigateur (`settleTask`). Tout échec (message refusé, session disparue, blocage) referme la session et reprend le chemin d'avant. `per_task` rétablit une session par tâche. Spike `scripts/session-continue.mjs`, mesures à consigner dans `docs/tests/20-session-continue.md`.
+- Partie B : champ « Type instead » sur chaque question et proposition, texte tapé lu comme la voix (listes de mots puis modèle d'intention), interrupteur Voix / Saisie dans l'en-tête (`localStorage`, repli Voix), micro jamais ouvert seul en mode Saisie. La démo ne dépend plus du micro.
+
 ### Qualité
 - 1018 tests vitest, lint et build verts sur `main` ; tests de routes, de flux, de panneau et d'extension.
 
@@ -59,9 +63,10 @@ Parcours complet **à la voix, dans le panneau, sur le Mac de Clément** dans la
 1. **Dès que H est débloqué** : parcours complet à la voix sur `main` (`fe38c45` ou plus récent), avec l'extension rechargée (PR #102 touche `extension/`). Vérifier en particulier : relance automatique d'une session muette, Stop puis nouvelle session sans 409, « Search again » sans question reposée, options de vol lisibles, coche Visa qui ramène l'onglet du formulaire.
 2. **Vidéo de secours** du parcours complet (Cmd+Maj+5), avec les règles de départ de `installation.md` section 9. Jamais faite.
 3. Pitch de 3 minutes (`docs/equipe/cockpit.md`, « Démo en 3 minutes ») et répétitions ; gel du code dimanche 11 h.
-4. Relevé G1 du module Vol (3 passages, `scripts/passage-vol.mjs`, `docs/tests/g1-vols.md`) : jamais consigné, le script existe.
-5. Mettre à jour la section « Current Project State » de `CLAUDE.md` (encore à `f0254c1`, 837 tests) : `main` à la PR #103, 1018 tests, banc de Clément, PR #86 à #103 fusionnées.
-6. Après la démo (S5 de la checklist) : supprimer les sessions H, les documents hors dépôt et les sauvegardes `.env.local.bak-*`.
+4. Ticket 20 sur le banc : `node scripts/session-continue.mjs` (une session, deux tâches, écart mesuré), puis parcours visa, carte d'arrivée, vol en mode `single` avec l'écart entre la fin d'une tâche et le premier pas de la suivante sous 5 s (contre 35 à 55 s) ; et le panneau en voix seule, saisie seule, clics seuls. Tout dans `docs/tests/20-session-continue.md`. Si le pont local ne suit pas la continuation : `NAMI_H_SESSION_MODE=per_task` dans `.env.local`.
+5. Relevé G1 du module Vol (3 passages, `scripts/passage-vol.mjs`, `docs/tests/g1-vols.md`) : jamais consigné, le script existe.
+6. Mettre à jour la section « Current Project State » de `CLAUDE.md` (encore à `f0254c1`, 837 tests) : `main` à la PR #103, 1018 tests, banc de Clément, PR #86 à #103 fusionnées.
+7. Après la démo (S5 de la checklist) : supprimer les sessions H, les documents hors dépôt et les sauvegardes `.env.local.bak-*`.
 
 ### Dette technique connue (petites PR)
 - Remarque de revue sur `lib/h-agent.ts` (PR #101) : la lecture du corps JSON de la réponse de `createSession` n'est pas bornée si H envoie les en-têtes puis se fige ; borner la lecture du corps comme le reste de l'appel.

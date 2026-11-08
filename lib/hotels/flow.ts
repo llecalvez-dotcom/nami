@@ -168,7 +168,7 @@ export function hotelsStartBody(trip: Trip): HotelsStartBody | null {
   return { destination, checkin: departure_date, checkout: return_date, criterion: answeredHotelCriterion(trip) ?? "best" };
 }
 
-export function startHotelsSession(trip: Trip, sessionId: string, url: string, now: Date): Trip {
+export function startHotelsSession(trip: Trip, sessionId: string, url: string, now: Date, fromIndex = 0): Trip {
   return {
     ...trip,
     agent_run: {
@@ -176,7 +176,7 @@ export function startHotelsSession(trip: Trip, sessionId: string, url: string, n
       kind: "hotels",
       started_at: now.toISOString(),
       state: "pending",
-      next_index: 0,
+      next_index: fromIndex,
       handled_tool_ids: [],
       drained: false,
       result: { hotels: { url, criterion: answeredHotelCriterion(trip) ?? "best", options: [] } },

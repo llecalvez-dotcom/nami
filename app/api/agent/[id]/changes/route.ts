@@ -6,6 +6,7 @@ import { cancelSession, getChanges, isTerminalStatus } from "@/lib/h-agent";
 import { fail, hErrorResponse, SESSION_ID, sessionPaper } from "@/lib/paper-agent";
 import { FLIGHTS_DOMAIN, armFlightsGuard, isFlightsGuardArmed, isFlightsSession } from "@/lib/flights-agent";
 import { BALI_PAPERS } from "@/lib/bali-papers";
+import { endTripSession, noteTaskIndex } from "@/lib/trip-session";
 
 // The official sites a flights session may still show before the agent opens Google (the paper filled just before).
 const BALI_DOMAINS = BALI_PAPERS.map((paper) => paper.domain);
@@ -26,10 +27,13 @@ export async function GET(request: Request, ctx: RouteContext<"/api/agent/[id]/c
   try {
     const changes = await getChanges(id, fromIndex);
     captureAgentScreen(id, changes);
-    const summary = toAgentChanges(changes, fromIndex);
+    // Ticket 20: a trip's session goes idle between two tasks; for the panel's run that is the end of its task.
+    const summary = { ...toAgentChanges(changes, fromIndex), ...(changes?.status === "idle" ? { status: "completed" } : {}) };
+    noteTaskIndex(id, summary.next_index);
     if (trackProgress(id, changes)) {
       const beforeAction = !hasActed(id);
       abandonSession(id);
+      endTripSession(id);
       finishAgentScreen(id);
       await cancelSession(id).catch(() => {});
       console.error(`h-agent: session stalled ${beforeAction ? "before its first action" : "after acting"}, given up`);
@@ -60,6 +64,7 @@ export async function GET(request: Request, ctx: RouteContext<"/api/agent/[id]/c
       () => false,
     );
     if (cancelled) {
+      endTripSession(id);
       finishAgentScreen(id);
       return Response.json({ ...summary, left_official_site: left, cancel_failed: false });
     }

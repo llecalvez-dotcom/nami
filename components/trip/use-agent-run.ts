@@ -100,8 +100,12 @@ export async function sendHotelChoice(sessionId: string, toolReq: ToolRequest, h
   await postHotels(sessionId, { tool_req: toolReq, choice: { hotel } });
 }
 
-export async function cancelAgent(sessionId: string): Promise<void> {
-  const response = await fetch(`/api/agent/${encodeURIComponent(sessionId)}/cancel`, { method: "POST" });
+// reason "ready": the task is done (report_ready). With one session per trip (ticket 20) the server keeps the session
+// open for the next task; "stop" (the default) ends it for good.
+export async function cancelAgent(sessionId: string, reason: "ready" | "stop" = "stop", toolReq?: ToolRequest): Promise<void> {
+  const response = await fetch(`/api/agent/${encodeURIComponent(sessionId)}/cancel`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason, ...(toolReq ? { tool_req: toolReq } : {}) }),
+  });
   if (!response.ok) throw new Error(await readError(response));
 }
 
@@ -117,7 +121,7 @@ export async function handleToolCall(tripId: string, sessionId: string, call: To
       if (!current || current.agent_run?.session_id !== sessionId || current.agent_run.drained
         || current.agent_run.handled_tool_ids?.includes(key)) return;
       try {
-        await cancelAgent(sessionId);
+        await cancelAgent(sessionId, "ready", rawToolReq(sessionId, call));
       } catch {
         const latest = getTrip(tripId);
         if (latest?.agent_run?.session_id === sessionId && !failedAcks.has(key)) {

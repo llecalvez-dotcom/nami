@@ -306,7 +306,7 @@ export function flightsStartBody(trip: Trip): FlightsStartBody | null {
   return { origin: origin ?? FLIGHTS_ORIGIN, destination, departure_date, return_date, travellers: travellers ?? 1, criterion: flightCriterion(trip) };
 }
 
-export function startFlightsSession(trip: Trip, sessionId: string, url: string, now: Date): Trip {
+export function startFlightsSession(trip: Trip, sessionId: string, url: string, now: Date, fromIndex = 0): Trip {
   const { departure_date, return_date } = trip.request;
   return {
     ...trip,
@@ -315,7 +315,7 @@ export function startFlightsSession(trip: Trip, sessionId: string, url: string, 
       kind: "flights",
       started_at: now.toISOString(),
       state: "pending",
-      next_index: 0,
+      next_index: fromIndex,
       handled_tool_ids: [],
       drained: false,
       result: { flights: { url, criterion: flightCriterion(trip), options: [] } },

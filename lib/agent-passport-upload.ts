@@ -16,6 +16,11 @@ type SessionDocument = { path: string; photo?: string; returnTicket?: string; ex
 const shared = globalThis as typeof globalThis & { namiAgentDocuments?: Map<string, SessionDocument> };
 const sessions = () => shared.namiAgentDocuments ??= new Map<string, SessionDocument>();
 
+// A new task on the same session (ticket 20) that brings no document must not upload the previous task's passport.
+export function unbindSessionDocument(sessionId: string): void {
+  sessions().delete(sessionId);
+}
+
 export function bindSessionDocument(sessionId: string, path: string, photo?: string, returnTicket?: string): void {
   const store = sessions();
   for (const [id, entry] of store) if (entry.expires <= Date.now()) store.delete(id);

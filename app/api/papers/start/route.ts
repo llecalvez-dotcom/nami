@@ -1,9 +1,9 @@
 import { API_LIMITS, guard, readJsonLimited } from "@/lib/api-guard";
-import { createSession, getAvailableSessionSlots } from "@/lib/h-agent";
+import { getAvailableSessionSlots } from "@/lib/h-agent";
 import { documentFilePaths } from "@/lib/documents";
 import { bindSessionDocument } from "@/lib/agent-passport-upload";
 import { AgentPreflightError, preflightBrowser } from "@/lib/agent-preflight";
-import { freshBridgeBeforeSession, rememberBridgeForSession } from "@/lib/local-bridge";
+import { startTask } from "@/lib/trip-session";
 import {
   buildPilotTask,
   buildPilotInstructions,
@@ -76,23 +76,24 @@ async function start(request: Request): Promise<Response> {
         if (await getAvailableSessionSlots() <= 0) return fail(H_SLOTS_BUSY, 429);
       } catch {}
     }
-    // Bench: a bridge that already served a session holds a dead chromedriver; it is restarted first (lib/local-bridge.ts).
-    // Not on a resumed retry: H returns the session already running, which still drives that bridge.
-    if (!(input.data.resume && input.data.idempotency_key)) await freshBridgeBeforeSession();
-    const session = await createSession({
-      task: buildPilotTask(input.data, getBaliPaper(input.data.paper_id)),
-      instructions: buildPilotInstructions(getBaliPaper(input.data.paper_id)),
-      tools: PAPER_TOOLS,
-      localBrowserSessionId: input.data.local_session_id,
-      maxTimeS: PAPER_MAX_TIME_S,
-      maxSteps: PAPER_MAX_STEPS,
-      idempotencyKey: input.data.idempotency_key,
-    });
+    // Ticket 20: the visa opens the trip's session, the arrival card is a new task on it when it is still open; else a
+    // new session after a fresh bridge, as before (lib/trip-session.ts). Not on a resumed retry: H returns the session
+    // already running, which still drives that bridge.
+    const session = await startTask(
+      {
+        kind: input.data.paper_id === "evoa" ? "visa" : "arrival_card",
+        task: buildPilotTask(input.data, getBaliPaper(input.data.paper_id)),
+        instructions: buildPilotInstructions(getBaliPaper(input.data.paper_id)),
+        tools: PAPER_TOOLS,
+        maxTimeS: PAPER_MAX_TIME_S,
+        maxSteps: PAPER_MAX_STEPS,
+      },
+      { localBrowserSessionId: input.data.local_session_id, idempotencyKey: input.data.idempotency_key, resume: input.data.resume },
+    );
     browser.commit(session.id, input.data.idempotency_key);
-    await rememberBridgeForSession();
     bindSessionPaper(session.id, input.data.paper_id);
     if (input.data.document_id) bindSessionDocument(session.id, documentPaths[0], photoPaths[0], ticketPaths[0]);
-    return Response.json({ session_id: session.id, status: session.status }, { status: 201 });
+    return Response.json({ session_id: session.id, status: session.status, from_index: session.fromIndex, continued: session.continued }, { status: 201 });
   } catch (error) {
     if (error instanceof AgentPreflightError) return fail(error.message, error.status);
     return hErrorResponse(error);

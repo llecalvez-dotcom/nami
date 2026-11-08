@@ -24,6 +24,10 @@ export function bindSessionPaper(sessionId: string, paperId: AgentPaperId) {
   sessionPapers().set(sessionId, paperId);
 }
 
+export function unbindSessionPaper(sessionId: string) {
+  sessionPapers().delete(sessionId);
+}
+
 export function sessionPaper(sessionId: string): AgentPaperId {
   return sessionPapers().get(sessionId) ?? PILOT_PAPER_ID;
 }

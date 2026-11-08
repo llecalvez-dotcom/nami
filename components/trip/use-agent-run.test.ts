@@ -47,7 +47,10 @@ describe("payment stop", () => {
     expect(trip?.agent_run?.drained).toBe(false);
     resolve(Response.json({ ok: true }));
     await stopping;
-    expect(fetch).toHaveBeenCalledWith("/api/agent/s-1/cancel", { method: "POST" });
+    // The task's end tells the server why (ticket 20: the trip's session may stay open) and which call it answers.
+    expect(fetch).toHaveBeenCalledWith("/api/agent/s-1/cancel", expect.objectContaining({ method: "POST" }));
+    const sent = JSON.parse((fetch.mock.calls[0][1] as RequestInit).body as string);
+    expect(sent).toMatchObject({ reason: "ready", tool_req: { tool_name: "report_ready" } });
     expect(ready()).toBe(true);
     expect(trip?.agent_run).toMatchObject({ state: "interrupted", drained: true });
     const saved = trip;

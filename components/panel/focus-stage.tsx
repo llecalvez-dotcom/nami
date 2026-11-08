@@ -3,12 +3,14 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, Keyboard, Loader2, Mic, Square } from "lucide-react";
 import { Painting } from "@/components/panel/backdrop";
+import { dispatchAnswer } from "@/components/panel/answer-dispatch";
+import { useAnswerMode } from "@/components/voice/answer-mode-toggle";
 import { useListenAfterSpeech, useSpeaking } from "@/components/voice/speech";
 import { useIntent } from "@/components/voice/use-intent";
 import { logVoiceMeaning, useVoiceInput, type VoiceInput } from "@/components/voice/use-voice-input";
 import { VoiceAnswer } from "@/components/voice/voice-answer";
 import type { WaveState } from "@/components/panel/wave";
-import { isCriterionQuestion, namesSeveralCriteria } from "@/lib/flights/flow";
+import { listensAutomatically } from "@/lib/voice/answer-mode";
 import { autoListenEnabled } from "@/lib/voice/auto-listen";
 import { sentenceSize, type Checklist, type Paper, type Scene } from "@/lib/panel-focus";
 import type { ConversationItem } from "@/lib/trip-state";
@@ -281,9 +283,19 @@ export const optionButton = (primary: boolean, options: readonly { label: string
   );
 };
 
-export function TypeInstead({ onSubmit, t, placeholder }: { onSubmit: (text: string) => void | Promise<void>; t: Translate; placeholder?: string }) {
+export function TypeInstead({
+  onSubmit,
+  t,
+  placeholder,
+  defaultOpen = false,
+}: {
+  onSubmit: (text: string) => void | Promise<void>;
+  t: Translate;
+  placeholder?: string;
+  defaultOpen?: boolean;
+}) {
   const [value, setValue] = useState("");
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   if (!open) {
     return (
       <button type="button" onClick={() => setOpen(true)} className={cn(secondaryButton, "flex items-center justify-center gap-2 text-[15px] text-[var(--np-ink-soft)]")}>
@@ -296,7 +308,9 @@ export function TypeInstead({ onSubmit, t, placeholder }: { onSubmit: (text: str
       className="mt-1 flex gap-2"
       onSubmit={(event) => {
         event.preventDefault();
-        if (value.trim()) void onSubmit(value.trim());
+        if (!value.trim()) return;
+        void onSubmit(value.trim());
+        setValue("");
       }}
     >
       <input
@@ -314,13 +328,16 @@ export function TypeInstead({ onSubmit, t, placeholder }: { onSubmit: (text: str
   );
 }
 
-// The item Nami waits for: its microphone sits on the wave and opens by itself once Nami has said the sentence.
+// The item Nami waits for: its microphone sits on the wave and opens by itself once Nami has said the sentence (Voice
+// mode). Every question and proposal can also be answered by a tap on a button or by typing (ticket 20).
 function Answering(props: Props & { item: ConversationItem }) {
   const { item, t, scene, ...handlers } = props;
   const speaking = useSpeaking();
   const [unclear, setUnclear] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const intent = useIntent();
+  const mode = useAnswerMode();
+  const typing = !listensAutomatically(mode);
   // Not understood: the sentence stays on the screen and nothing new is said, so the microphone has to reopen itself,
   // or the conversation just stops (Nathan, 2026-11-08: « il ne se passe rien »). Twice at most for one question.
   const listenAgain = useRef<() => void>(() => {});
@@ -331,38 +348,32 @@ function Answering(props: Props & { item: ConversationItem }) {
     relistens.current += 1;
     listenAgain.current();
   };
-  const voice = useVoiceInput(async (text) => {
+  // Spoken or typed, the same path (components/panel/answer-dispatch.ts): the word lists, then the H model, then the
+  // same tap as a button. "ouais carrément" typed in the field is a yes exactly like "ouais carrément" said out loud.
+  const understand = async (text: string) => {
     setUnclear(null);
-    if (item.kind !== "proposal" && item.kind !== "question") return;
-    // The word lists, then the H model (components/voice/use-intent.ts): the answer is dispatched like a tap.
-    const meaning = await intent.interpret(item, text);
-    logVoiceMeaning(meaning.kind);
-    if (item.kind === "proposal") {
-      if (meaning.kind === "accept" || meaning.kind === "decline") return handlers.onDecide(item.id, meaning.kind === "accept");
-      return notUnderstood(text);
-    }
-    // Several criteria at once ("le moins cher et le plus rapide"): never one of them, whatever the H model kept. The
-    // text path gives the compromise and Nami says so (answerFlightQuestionWithText).
-    const combined = isCriterionQuestion(item) && namesSeveralCriteria(text);
-    const option = !combined && meaning.kind === "option" ? item.options.find((o) => o.value === meaning.option_ids[0]) : undefined;
-    if (option) return handlers.onAnswer(item.id, option.value, option.label);
     setBusy(true);
     try {
-      await handlers.onAnswerText(item.id, text);
+      const outcome = await dispatchAnswer(item, text, intent.interpret, handlers, logVoiceMeaning);
+      if (outcome === "unclear") notUnderstood(text);
     } catch {
       notUnderstood(text);
+    } finally {
       setBusy(false);
     }
-  });
+  };
+  const voice = useVoiceInput(understand);
   const typed = item.kind === "agent_question" || (item.kind === "question" && item.input === "email");
-  useListenAfterSpeech(typed ? "" : item.id, voice.start);
+  // Typing mode: the microphone never opens on its own, the field is already there and focused.
+  useListenAfterSpeech(typed || typing ? "" : item.id, voice.start);
   const startVoice = voice.start;
   useEffect(() => {
     listenAgain.current = () => {
-      if (!typed && autoListenEnabled()) void startVoice("auto");
+      if (!typed && !typing && autoListenEnabled()) void startVoice("auto");
     };
-  }, [typed, startVoice]);
+  }, [typed, typing, startVoice]);
   const working = props.agent !== null || props.busy !== null || busy || intent.thinking;
+  const field = <TypeInstead key={mode} t={t} defaultOpen={typing} onSubmit={understand} />;
 
   return (
     <>
@@ -379,25 +390,26 @@ function Answering(props: Props & { item: ConversationItem }) {
         ) : (
           <>
             <VoiceHint voice={voice} t={t} unclear={unclear} />
-            {item.kind === "proposal" ? (
-              <div className="flex flex-col gap-1">
-                <button type="button" className={primaryButton} onClick={() => handlers.onDecide(item.id, true)}>
-                  {item.accept_label}
-                </button>
-                <button type="button" className={secondaryButton} onClick={() => handlers.onDecide(item.id, false)}>
-                  {item.decline_label}
-                </button>
-              </div>
-            ) : item.kind === "question" ? (
-              <div className="flex flex-col gap-1">
-                {item.options.map((option, i) => (
+            <div className="flex flex-col gap-1">
+              {typing ? field : null}
+              {item.kind === "proposal" ? (
+                <>
+                  <button type="button" className={primaryButton} onClick={() => handlers.onDecide(item.id, true)}>
+                    {item.accept_label}
+                  </button>
+                  <button type="button" className={secondaryButton} onClick={() => handlers.onDecide(item.id, false)}>
+                    {item.decline_label}
+                  </button>
+                </>
+              ) : item.kind === "question" ? (
+                item.options.map((option, i) => (
                   <button key={option.value} type="button" className={optionButton(i === 0, item.options)} onClick={() => handlers.onAnswer(item.id, option.value, option.label)}>
                     {option.label}
                   </button>
-                ))}
-                {item.input === "text" ? <TypeInstead t={t} onSubmit={(text) => handlers.onAnswerText(item.id, text)} /> : null}
-              </div>
-            ) : null}
+                ))
+              ) : null}
+              {typing ? null : field}
+            </div>
           </>
         )}
       </div>

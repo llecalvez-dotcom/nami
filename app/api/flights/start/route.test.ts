@@ -3,7 +3,9 @@ import { POST } from "@/app/api/flights/start/route";
 import { resetGuards } from "@/lib/api-guard";
 import { connectChrome } from "@/lib/chrome-cdp";
 import { resetBrowserPreflight } from "@/lib/agent-preflight";
-import { isFlightsSession } from "@/lib/flights-agent";
+import { isFlightsGuardArmed, isFlightsSession, armFlightsGuard } from "@/lib/flights-agent";
+import { bindSessionPaper, sessionPaper } from "@/lib/paper-agent";
+import { noteTaskIndex, resetTripSessions, SINGLE_MAX_STEPS, SINGLE_MAX_TIME_S, SINGLE_TOOLS, startTripSession, taskIdle, tripSession } from "@/lib/trip-session";
 
 vi.mock("@/lib/chrome-cdp", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/lib/chrome-cdp")>(),
@@ -20,6 +22,7 @@ let created = 0;
 beforeEach(() => {
   resetGuards();
   resetBrowserPreflight();
+  resetTripSessions();
   vi.stubEnv("NODE_ENV", "test");
   vi.stubEnv("NAMI_AGENT_CHROME_PORT", "9333");
   vi.stubEnv("NAMI_LOCAL_SESSION_ID", "");
@@ -49,10 +52,65 @@ describe("POST /api/flights/start", () => {
     const body = sentBody();
     expect(body.messages[0].message).toContain("https://www.google.com/travel/flights?q=Flights+from+Paris+to+Bali+on+2026-11-23+through+2026-12-03+for+2+adults+economy&hl=en&curr=EUR");
     expect(body.agent.instructions).toContain("Never sign in");
+    // Ticket 20: with no trip session open, a new one is created for the whole trip (every task's tools, the trip's budget).
+    expect(body.agent.tools.map((t: { name: string }) => t.name)).toEqual(SINGLE_TOOLS.map((t) => t.name));
+    expect(body.agent.tools.map((t: { name: string }) => t.name)).toEqual(expect.arrayContaining(["ask_user", "report_ready", "report_flights", "show_return_flight"]));
+    expect(body.max_steps).toBe(SINGLE_MAX_STEPS);
+    expect(body.max_time_s).toBe(SINGLE_MAX_TIME_S);
+    expect(body.idle_timeout_s).toBe(600);
+    expect(body.agent.environments[0].session_id).toBe("local-42");
+  });
+
+  it("per_task: one session per task with the flights tools and limits, as before", async () => {
+    vi.stubEnv("NAMI_H_SESSION_MODE", "per_task");
+    const response = await start(BODY);
+    expect(response.status).toBe(201);
+    expect(await response.json()).toMatchObject({ status: "pending", from_index: 0, continued: false });
+    const body = sentBody();
     expect(body.agent.tools.map((t: { name: string }) => t.name)).toEqual(["ask_user", "report_ready", "report_flights", "show_return_flight"]);
     expect(body.max_steps).toBe(40);
     expect(body.max_time_s).toBe(600);
-    expect(body.agent.environments[0].session_id).toBe("local-42");
+    expect(body.idle_timeout_s).toBeUndefined();
+    expect(tripSession("local-42")).toBeNull();
+  });
+
+  it("continues the trip's open session instead of creating one, re-armed for the flights", async () => {
+    startTripSession("local-42", "trip-1", "visa");
+    bindSessionPaper("trip-1", "arrival_card");
+    armFlightsGuard("trip-1");
+    noteTaskIndex("trip-1", 33);
+    taskIdle("trip-1");
+    const response = await start(BODY);
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({ session_id: "trip-1", status: "running", from_index: 33, continued: true });
+    const posts = fetch.mock.calls.filter(([, init]) => (init as RequestInit)?.method === "POST") as unknown as [string, RequestInit][];
+    expect(posts.map(([url]) => url)).toEqual(["https://agp.eu.hcompany.ai/api/v2/sessions/trip-1/messages"]);
+    const message = JSON.parse(posts[0][1].body as string);
+    expect(message.type).toBe("user_message");
+    expect(message.message).toMatch(/^New task\./);
+    expect(message.message).toContain("Never sign in");
+    expect(message.message).toContain("https://www.google.com/travel/flights");
+    expect(isFlightsSession("trip-1")).toBe(true);
+    expect(isFlightsGuardArmed("trip-1")).toBe(false);
+    expect(sessionPaper("trip-1")).toBe("evoa");
+    expect(tripSession("local-42")).toMatchObject({ session_id: "trip-1", task: "flights", state: "running" });
+  });
+
+  it("falls back to a new session when the open one refuses the message", async () => {
+    startTripSession("local-42", "trip-1", "visa");
+    taskIdle("trip-1");
+    fetch.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/quota")) return Response.json({ scope: "organization", limit: 3, active: 0, available: 3 });
+      if (url.endsWith("/messages")) return Response.json({ detail: "session not found" }, { status: 404 });
+      if (init?.method === "DELETE") return new Response(null, { status: 204 });
+      return Response.json({ id: "flights-new", status: { status: "pending" } }, { status: 201 });
+    });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const response = await start(BODY);
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({ session_id: "flights-new", status: "pending", from_index: 0, continued: false });
+    expect(fetch.mock.calls.some(([url, init]) => url.endsWith("/sessions/trip-1") && (init as RequestInit).method === "DELETE")).toBe(true);
+    expect(tripSession("local-42")).toMatchObject({ session_id: "flights-new", task: "flights" });
   });
 
   it.each([

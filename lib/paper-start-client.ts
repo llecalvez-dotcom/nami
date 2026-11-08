@@ -47,10 +47,17 @@ export async function startWithBusyRetry(
   return response;
 }
 
-export function createVisaStartAttempt(
-  input: Record<string, unknown>,
-  options: { fetch?: typeof fetch; uuid?: () => string; scope?: string; busyRetryMs?: number; onBusy?: (message: string) => void; busyWaitMs?: number; url?: string } = {},
-): () => Promise<string> {
+export type StartOptions = { fetch?: typeof fetch; uuid?: () => string; scope?: string; busyRetryMs?: number; onBusy?: (message: string) => void; busyWaitMs?: number; url?: string };
+// from_index: where the panel starts polling. 0 for a new session; for a task continued on the trip's open session
+// (ticket 20), the index after the previous task, so its steps are not replayed.
+export type StartedSession = { sessionId: string; fromIndex: number };
+
+export function createVisaStartAttempt(input: Record<string, unknown>, options: StartOptions = {}): () => Promise<string> {
+  const attempt = createStartAttempt(input, options);
+  return async () => (await attempt()).sessionId;
+}
+
+export function createStartAttempt(input: Record<string, unknown>, options: StartOptions = {}): () => Promise<StartedSession> {
   const send = options.fetch ?? fetch;
   const serialized = JSON.stringify(input);
   const previous = options.scope === undefined ? undefined : unsettled.get(options.scope);
@@ -71,12 +78,12 @@ export function createVisaStartAttempt(
       settle(true);
       throw error;
     }
-    const body = await response.json().catch(() => null) as { session_id?: string; error?: string } | null;
+    const body = await response.json().catch(() => null) as { session_id?: string; from_index?: number; error?: string } | null;
     if (!response.ok || !body?.session_id) {
       settle(response.ok || AMBIGUOUS(response.status, body?.error));
       throw new Error(body?.error ?? `The agent could not start (${response.status}).`);
     }
     settle(false);
-    return body.session_id;
+    return { sessionId: body.session_id, fromIndex: Number.isInteger(body.from_index) && (body.from_index as number) > 0 ? (body.from_index as number) : 0 };
   };
 }
