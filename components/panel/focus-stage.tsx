@@ -8,6 +8,7 @@ import { useIntent } from "@/components/voice/use-intent";
 import { useVoiceInput, type VoiceInput } from "@/components/voice/use-voice-input";
 import { VoiceAnswer } from "@/components/voice/voice-answer";
 import type { WaveState } from "@/components/panel/wave";
+import { isCriterionQuestion, namesSeveralCriteria } from "@/lib/flights/flow";
 import { sentenceSize, type Checklist, type Paper, type Scene } from "@/lib/panel-focus";
 import type { ConversationItem } from "@/lib/trip-state";
 import { cn } from "@/lib/utils";
@@ -264,6 +265,21 @@ export const primaryButton =
 export const secondaryButton =
   "np-press h-11 w-full rounded-2xl px-5 text-[16px] font-medium text-[var(--paper)] outline-none hover:bg-[var(--np-fill)] focus-visible:ring-4 focus-visible:ring-[var(--paper-soft)]";
 
+// The options of a question, one under the other: a label too long for one line (a flight) wraps over several, the
+// button grows with it, the text sits on the left and gets a little smaller, so three flights never overlap and
+// Nami's sentence keeps its room above them (Clément, 2026-11-08).
+const LONG_LABEL = 40;
+export const optionButton = (primary: boolean, options: readonly { label: string }[]) => {
+  const long = options.some((o) => o.label.length > LONG_LABEL);
+  return cn(
+    primary ? primaryButton : secondaryButton,
+    "h-auto whitespace-normal break-words leading-snug",
+    primary ? "min-h-[52px] py-3" : "min-h-11 py-2.5",
+    long && "text-left text-[15px]",
+    long && (primary ? "py-2.5" : "py-2"),
+  );
+};
+
 export function TypeInstead({ onSubmit, t, placeholder }: { onSubmit: (text: string) => void | Promise<void>; t: Translate; placeholder?: string }) {
   const [value, setValue] = useState("");
   const [open, setOpen] = useState(false);
@@ -313,7 +329,10 @@ function Answering(props: Props & { item: ConversationItem }) {
       if (meaning.kind === "accept" || meaning.kind === "decline") return handlers.onDecide(item.id, meaning.kind === "accept");
       return setUnclear(text);
     }
-    const option = meaning.kind === "option" ? item.options.find((o) => o.value === meaning.option_ids[0]) : undefined;
+    // Several criteria at once ("le moins cher et le plus rapide"): never one of them, whatever the H model kept. The
+    // text path gives the compromise and Nami says so (answerFlightQuestionWithText).
+    const combined = isCriterionQuestion(item) && namesSeveralCriteria(text);
+    const option = !combined && meaning.kind === "option" ? item.options.find((o) => o.value === meaning.option_ids[0]) : undefined;
     if (option) return handlers.onAnswer(item.id, option.value, option.label);
     setBusy(true);
     try {
@@ -353,7 +372,7 @@ function Answering(props: Props & { item: ConversationItem }) {
             ) : item.kind === "question" ? (
               <div className="flex flex-col gap-1">
                 {item.options.map((option, i) => (
-                  <button key={option.value} type="button" className={i === 0 ? primaryButton : secondaryButton} onClick={() => handlers.onAnswer(item.id, option.value, option.label)}>
+                  <button key={option.value} type="button" className={optionButton(i === 0, item.options)} onClick={() => handlers.onAnswer(item.id, option.value, option.label)}>
                     {option.label}
                   </button>
                 ))}

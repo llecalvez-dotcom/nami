@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { filePaths, readAgentSettings } from "@/components/trip/agent-settings";
 import { cancelAgent, rawToolReq, sendAgentAnswer, sendFlightChoice } from "@/components/trip/use-agent-run";
-import { flightsStartBody, FLIGHTS_RETRY_PROPOSAL, isChoiceQuestion, isCriterionQuestion, openFlightQuestion, pendingFlightChoice, startFlightsSession } from "@/lib/flights/flow";
+import { flightsAnswered, flightsStartBody, FLIGHTS_RETRY_PROPOSAL, isChoiceQuestion, isCriterionQuestion, openFlightQuestion, pendingFlightChoice, startFlightsSession } from "@/lib/flights/flow";
 import { googleFlightsUrl } from "@/lib/flights-agent";
 import type { PassportFields } from "@/lib/contracts";
 import { H_NOT_ANSWERING_MESSAGE } from "@/lib/agent-changes";
@@ -149,17 +149,6 @@ export function useTripActions({
     }
   };
 
-  const decide = (itemId: string, accepted: boolean) => {
-    const current = latest();
-    if (!current) return;
-    const item = current.conversation.find((i) => i.id === itemId);
-    if (accepted && !current.sample && item?.kind === "proposal" && item.action === "create_visa") return void createVisa(itemId);
-    if (accepted && !current.sample && item?.kind === "proposal" && item.action === "create_arrival_card") {
-      return void createVisa(itemId, undefined, "arrival_card");
-    }
-    update(decideProposal(current, itemId, accepted, new Date()));
-  };
-
   // After the criterion, the flight search starts; after the choice, it goes to the agent that waits for it.
   // automatic: the one restart after H never opened Google Flights, with the same dates, origin and criterion.
   const startFlightsRun = async (automatic = false) => {
@@ -202,6 +191,21 @@ export function useTripActions({
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dueRestart, starting]);
+
+  const decide = (itemId: string, accepted: boolean) => {
+    const current = latest();
+    if (!current) return;
+    const item = current.conversation.find((i) => i.id === itemId);
+    if (accepted && !current.sample && item?.kind === "proposal" && item.action === "create_visa") return void createVisa(itemId);
+    if (accepted && !current.sample && item?.kind === "proposal" && item.action === "create_arrival_card") {
+      return void createVisa(itemId, undefined, "arrival_card");
+    }
+    const next = decideProposal(current, itemId, accepted, new Date());
+    update(next);
+    // "Search again" (or yes to the flights) with the city, the dates and the criterion already answered: no question
+    // again, the Google Flights session starts now with the same parameters (lib/flights/flow.ts, startFlightsFlow).
+    if (accepted && item?.kind === "proposal" && item.action === "flights" && flightsAnswered(next)) void startFlightsRun();
+  };
 
   const sendChoice = async () => {
     const current = latest();
