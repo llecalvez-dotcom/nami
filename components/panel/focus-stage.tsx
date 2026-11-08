@@ -356,11 +356,12 @@ function Answering(props: Props & { item: ConversationItem }) {
   });
   const typed = item.kind === "agent_question" || (item.kind === "question" && item.input === "email");
   useListenAfterSpeech(typed ? "" : item.id, voice.start);
+  const startVoice = voice.start;
   useEffect(() => {
     listenAgain.current = () => {
-      if (!typed && autoListenEnabled()) void voice.start("auto");
+      if (!typed && autoListenEnabled()) void startVoice("auto");
     };
-  }, [typed, voice.start]);
+  }, [typed, startVoice]);
   const working = props.agent !== null || props.busy !== null || busy || intent.thinking;
 
   return (
