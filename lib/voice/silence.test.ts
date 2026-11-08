@@ -44,6 +44,37 @@ describe("silence detector", () => {
     expect(silent(0.003, 300 + SILENCE_MS)).toBe(true);
   });
 
+  describe("levels measured on the Mac's own microphone in the hackathon room (2026-11-08)", () => {
+    const noise = (i: number) => [0.03, 0.024, 0.045, 0.028, 0.035][i % 5];
+    const voice = (i: number) => [0.15, 0.06, 0.2, 0.09, 0.12, 0.05][i % 6];
+
+    it("does not take the room for someone speaking", () => {
+      const silent = createSilenceDetector();
+      for (let i = 0; i < 80; i += 1) silent(noise(i), i * 100);
+      expect(silent.heard()).toBe(false);
+    });
+
+    it("hears the sentence and ends 1.5 s after it, although the room stays noisy", () => {
+      const silent = createSilenceDetector();
+      let now = 0;
+      for (let i = 0; i < 10; i += 1, now += 100) silent(noise(i), now);
+      for (let i = 0; i < 40; i += 1, now += 100) expect(silent(voice(i), now)).toBe(false);
+      expect(silent.heard()).toBe(true);
+      const lastLoud = now - 200;
+      let ended = -1;
+      for (let i = 0; i < 40 && ended < 0; i += 1, now += 100) if (silent(noise(i), now)) ended = now;
+      expect(ended - lastLoud).toBeLessThanOrEqual(SILENCE_MS + 400);
+      expect(ended).toBeGreaterThan(0);
+    });
+
+    it("a momentary digital silence does not make the room count as a voice", () => {
+      const silent = createSilenceDetector();
+      silent(0.0005, 0);
+      for (let i = 1; i < 60; i += 1) silent(noise(i), i * 100);
+      expect(silent.heard()).toBe(false);
+    });
+  });
+
   it("does not add up noises far apart", () => {
     const silent = createSilenceDetector();
     silent(0.003, 0);

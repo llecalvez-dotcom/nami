@@ -13,17 +13,22 @@ export function rms(samples: Float32Array): number {
 type Options = { silenceMs?: number; minLevel?: number; ratio?: number };
 
 // Fed with the microphone level every ~100 ms; says when the user has spoken and then stayed quiet for silenceMs.
-// The threshold follows the room: the quietest level heard so far, times ratio, never under minLevel.
-// minLevel 0.006: at 0.015 a voice through wired EarPods stayed under it and was never heard (Nathan, 2026-11-08).
-export function createSilenceDetector({ silenceMs = SILENCE_MS, minLevel = 0.006, ratio = 2.5 }: Options = {}) {
-  let floor: number | null = null;
+// The threshold follows the room: the quiet moments of the last 6 s, times ratio, never under minLevel. Measured in the
+// hackathon room on 2026-11-08: Mac's microphone, quiet 0.024 and voice up to 0.15; wired EarPods, quiet 0.003 and voice
+// up to 0.085. The quietest level ever heard would not do: one instant of digital silence made the whole room a "voice".
+const ROOM_WINDOW = 60;
+const DIGITAL_SILENCE = 0.001;
+export function createSilenceDetector({ silenceMs = SILENCE_MS, minLevel = 0.006, ratio = 3 }: Options = {}) {
+  const recent: number[] = [];
   let heard = false;
   let hits = 0;
   let lastHit: number | null = null;
   let quietSince: number | null = null;
   const detector = (level: number, now: number): boolean => {
-    floor = floor === null || level < floor ? level : floor + (level - floor) * 0.01;
-    if (level > Math.max(minLevel, floor * ratio)) {
+    if (level >= DIGITAL_SILENCE) recent.push(level);
+    if (recent.length > ROOM_WINDOW) recent.shift();
+    const room = [...recent].sort((a, b) => a - b)[Math.floor(recent.length * 0.1)] ?? level;
+    if (level > Math.max(minLevel, room * ratio)) {
       hits = lastHit !== null && now - lastHit > SPEECH_GAP_MS ? 1 : hits + 1;
       lastHit = now;
       if (hits >= SPEECH_MIN_HITS) heard = true;

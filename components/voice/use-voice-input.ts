@@ -8,6 +8,8 @@ import { isPhantomTranscript } from "@/lib/voice/phantom";
 import { createAutoListenWatcher, rms } from "@/lib/voice/silence";
 
 export const MAX_RECORDING_SECONDS = 20;
+// A microphone that opened by itself never keeps the traveller waiting long, even if the room never goes quiet.
+const MAX_AUTO_SECONDS = 10;
 
 export type VoiceStatus = "idle" | "recording" | "transcribing";
 
@@ -26,8 +28,14 @@ class NothingHeard extends Error {}
 // What each recording did, for the bench (read through DevTools): never a word of what was said.
 type VoiceStats = { mode: "auto" | "tap"; peak: number; ended: string; ms?: number; words?: number; failed?: string };
 function logVoice(stats: VoiceStats) {
-  const log = window as unknown as { namiVoiceLog?: VoiceStats[] };
+  const log = window as unknown as { namiVoiceLog?: unknown[] };
   log.namiVoiceLog = [...(log.namiVoiceLog ?? []), { ...stats, peak: Number(stats.peak.toFixed(4)) }].slice(-30);
+}
+
+// What Nami made of the answer: accept, decline, option, free.
+export function logVoiceMeaning(meaning: string) {
+  const log = window as unknown as { namiVoiceLog?: unknown[] };
+  log.namiVoiceLog = [...(log.namiVoiceLog ?? []), { meaning }].slice(-30);
 }
 
 // The language Gladia detected is kept, from a sentence of 3 words or more: Nami answers in it (lib/voice/language.ts).
@@ -168,7 +176,10 @@ export function useVoiceInput(onTranscript: (text: string) => void): VoiceInput 
     timerRef.current = setInterval(() => {
       const elapsed = Math.floor((Date.now() - startedAt) / 1000);
       setSeconds(elapsed);
-      if (elapsed >= MAX_RECORDING_SECONDS) stop();
+      if (elapsed >= (auto ? MAX_AUTO_SECONDS : MAX_RECORDING_SECONDS)) {
+        stats.ended = "time limit";
+        stop();
+      }
     }, 250);
   }, [stop]);
 
