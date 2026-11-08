@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { FileImage } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DocumentDrop } from "@/components/trip/document-drop";
 
 export type DocumentChoice = {
   id: string;
@@ -32,17 +33,17 @@ export function DocumentPreview({ document, demo = false }: { document: Document
 const TEXTS = {
   passport: {
     prompt: "I don't have your passport yet. Shall I look for it in your documents?",
-    empty: "No matching files found. Upload a photo or type the fields below.",
+    empty: "No matching files found. Drop a photo or scan of it here, or type the fields below.",
     failed: "I could not search your documents. Upload a photo or type the fields below.",
   },
   photo: {
     prompt: "The e-VOA also needs your identity photo. Shall I look for it in your documents?",
-    empty: "No photo found. The agent will ask you to upload it on the official site.",
+    empty: "No photo found. Drop one here, or the agent will ask you for it on the official site.",
     failed: "I could not search your documents. The agent will ask you to upload the photo on the official site.",
   },
   return_ticket: {
     prompt: "The e-VOA also needs your return flight ticket as a PDF. Shall I look for it in your documents?",
-    empty: "No PDF ticket found. The agent will ask you to upload it on the official site.",
+    empty: "No PDF ticket found. Drop one here, or the agent will ask you for it on the official site.",
     failed: "I could not search your documents. The agent will ask you to upload the ticket on the official site.",
   },
 } as const;
@@ -102,7 +103,12 @@ export function DocumentFinder({ onConfirm, demo = false, focusOnMount = false, 
         </div>
       ) : (
         <>
-          {documents.length === 0 ? <p className="text-sm">{texts.empty}</p> : null}
+          {documents.length === 0 ? (
+            <>
+              <p className="text-sm">{texts.empty}</p>
+              <DocumentDrop kind={kind} onUploaded={onConfirm} />
+            </>
+          ) : null}
           {documents.map((document) => (
             <div key={document.id} className="flex flex-wrap items-center gap-3 rounded-xl bg-card p-3">
               <DocumentPreview document={document} demo={demo} />

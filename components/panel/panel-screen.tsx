@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, MessagesSquare, Plus, X } from "lucide-react";
 import { FocusStage, PAPER_COLORS, Sentence, STAGE_TEXTS, TypeInstead, VoiceHint, WaveMic, waveState, type AgentView, type StageVisual, type Translate } from "@/components/panel/focus-stage";
 import { Painting } from "@/components/panel/backdrop";
+import { DocumentDrop, DROP_TEXTS } from "@/components/trip/document-drop";
 import { PassportCard } from "@/components/trip/passport-card";
 import { PhotoCard } from "@/components/trip/photo-card";
 import { ReturnTicketCard } from "@/components/trip/return-ticket-card";
@@ -64,6 +65,9 @@ export function agentSpeech(step: string): string | null {
 
 const AGENT_SPEECH_GAP_MS = 20_000;
 const RECONFIRM_TEXT = "The agent may still be running. Confirm your passport again so I can follow it here; Stop works meanwhile.";
+// When no ID photo is found: said aloud, then the upload zone; the traveller can also go on without it.
+const NO_PHOTO_TEXT = "I could not find your ID photo on this computer. Drop it here, or go on without it.";
+const NO_PHOTO_HINT = "Without it, the official site will ask you for the photo.";
 
 // The fixed texts of the panel, translated like the rest.
 export const PANEL_TEXTS = [
@@ -86,6 +90,9 @@ export const PANEL_TEXTS = [
   "Reading your passport…",
   "Looking for your ID photo…",
   RECONFIRM_TEXT,
+  NO_PHOTO_HINT,
+  "Go on without it",
+  ...DROP_TEXTS,
 ];
 
 function useT(language: string): Translate {
@@ -287,6 +294,8 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
   const [editing, setEditing] = useState(false);
   const [history, setHistory] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  // The upload zone, when no passport or no ID photo is found on this computer.
+  const [drop, setDrop] = useState<"passport" | "photo" | null>(null);
   // What the stage shows of the documents being talked about (the flow below keeps the same in a ref, for the handlers).
   const [seen, setSeen] = useState<{ found?: Found; read?: { holder: string; documentId: string; verified: number }; photo?: Found }>({});
   // The spoken passport and photo steps, in memory only (never in the saved trip).
@@ -388,7 +397,8 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
   const offerPassport = () => {
     const next = flow.current.passports.shift();
     if (!next || !flow.current.reader) {
-      fallBackToCard("I could not find your passport on this computer. Send me a photo of it, or type its fields below.");
+      fallBackToCard("I could not find your passport on this computer. Drop a photo or scan of it here, or type its fields below.");
+      setDrop("passport");
       return;
     }
     flow.current.offered = next;
@@ -444,8 +454,28 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
     flow.current.photos = photos;
     const photo = photos[0];
     setSeen((previous) => ({ ...previous, photo }));
-    if (photo) ask("use_photo", foundPhotoText(photo), "Yes, use it", "No");
-    else void lookForReturnTicket();
+    if (photo) return ask("use_photo", foundPhotoText(photo), "Yes, use it", "No");
+    say(NO_PHOTO_TEXT);
+    setDrop("photo");
+  };
+
+  // A file dropped in the upload zone resumes the spoken path as if it had been found on this computer.
+  const resumeWithUpload = (document: Found) => {
+    const kind = drop;
+    setDrop(null);
+    if (kind === "passport") {
+      if (!flow.current.reader) return setDocumentId(document.id);
+      setManual(false);
+      flow.current.passports = [document];
+      return offerPassport();
+    }
+    flow.current.photos = [document];
+    setSeen((previous) => ({ ...previous, photo: document }));
+    ask("use_photo", foundPhotoText(document), "Yes, use it", "No");
+  };
+  const goOnWithoutPhoto = () => {
+    setDrop(null);
+    void lookForReturnTicket();
   };
 
   const decide = (itemId: string, accepted: boolean) => {
@@ -558,10 +588,12 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
                 : () => {
                     setManual(false);
                     setEditing(false);
+                    setDrop(null);
                   }
             }
           >
             {reconfirm ? <p className="mb-4 rounded-2xl bg-[var(--np-fill)] p-4 text-[14px]">{t(RECONFIRM_TEXT)}</p> : null}
+            {drop === "passport" && !documentId ? <DocumentDrop kind="passport" t={t} onUploaded={resumeWithUpload} className="mb-4" /> : null}
             <PassportCard
               demo
               returnDate={trip.request.return_date}
@@ -591,6 +623,15 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
             ) : null}
           </Sheet>
         </div>
+      ) : null}
+      {drop === "photo" && !showCard ? (
+        <Sheet title={t("Your ID photo")} t={t} onClose={goOnWithoutPhoto}>
+          <p className="mb-4 text-[15px] leading-snug text-[var(--np-ink-soft)]">{t(NO_PHOTO_HINT)}</p>
+          <DocumentDrop kind="photo" t={t} onUploaded={resumeWithUpload} />
+          <button type="button" onClick={goOnWithoutPhoto} className="np-press mt-4 h-10 w-full rounded-full bg-[var(--np-fill)] text-[15px] font-medium">
+            {t("Go on without it")}
+          </button>
+        </Sheet>
       ) : null}
     </div>
   );
