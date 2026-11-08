@@ -31,6 +31,15 @@ export function isFlightsSession(sessionId: string): boolean {
   return flightSessions.has(sessionId);
 }
 
+// The off-domain guard of a flights session is armed once the agent has been seen on Google Flights.
+const armedGuards = new Set<string>();
+export function armFlightsGuard(sessionId: string) {
+  armedGuards.add(sessionId);
+}
+export function isFlightsGuardArmed(sessionId: string): boolean {
+  return armedGuards.has(sessionId);
+}
+
 export const FlightsStartSchema = z.object({
   origin: z.string().trim().min(1).max(120).default(FLIGHTS_ORIGIN),
   destination: z.string().trim().min(1).max(120),

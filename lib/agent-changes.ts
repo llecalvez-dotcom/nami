@@ -102,6 +102,21 @@ function offSite(url: unknown, domain: string): string | null {
 }
 
 // Page of the first observation_event (metadata.url) outside the official domain and its subdomains.
+// True once an observation shows a page of the official domain: before that, the agent is still on whatever tab was
+// open (the arrival card for a flights session, 2026-11-08) and must not be cut for "leaving" a site it never reached.
+export function onDomainSeen(events: HEvent[], domain: string): boolean {
+  for (const event of events) {
+    if (event.type !== "AgentEvent" || event.data?.kind !== "observation_event") continue;
+    const url = (event.data.metadata as { url?: unknown } | undefined)?.url;
+    if (typeof url !== "string") continue;
+    try {
+      const host = new URL(url).hostname;
+      if (host === domain || host.endsWith(`.${domain}`)) return true;
+    } catch {}
+  }
+  return false;
+}
+
 export function offDomainHost(events: HEvent[], domain: string): string | null {
   for (const event of events) {
     if (event.type !== "AgentEvent" || event.data?.kind !== "observation_event") continue;
