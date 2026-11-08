@@ -2,8 +2,17 @@
 export const SHORT_ANSWERS = {
   proposal: {
     // The common languages of travellers, Gladia transcribes them all.
-    accept: ["yes", "yeah", "oui", "ok", "okay", "go", "vas-y", "d'accord", "si", "sí", "claro", "ja", "jawohl", "sim", "certo", "ya", "iya", "hai"],
-    decline: ["no", "non", "later", "plus tard", "not now", "pas maintenant", "nein", "nao", "não", "nee", "tidak", "iie", "luego"],
+    // A word belongs to one list only; "ouais carrément" (Clément, real test 2026-11-08) must be a yes.
+    accept: [
+      "yes", "yeah", "yep", "yup", "sure", "of course", "absolutely", "go ahead", "let's go", "please", "ok", "okay", "go",
+      "oui", "ouais", "carrément", "bien sûr", "évidemment", "allez", "c'est parti", "parfait", "exact", "volontiers", "vas-y", "d'accord",
+      "si", "sí", "claro", "vale", "dale", "por supuesto", "ja", "jawohl", "genau", "klar", "gerne", "sim", "certo", "va bene", "ya", "iya", "boleh", "silakan", "hai",
+    ],
+    decline: [
+      "no", "nope", "no thanks", "not now", "not yet", "later", "never", "stop",
+      "non", "non merci", "pas maintenant", "pas encore", "pas la peine", "plus tard", "jamais",
+      "nein", "nein danke", "nicht jetzt", "nao", "não", "nee", "no gracias", "luego", "tidak", "iie",
+    ],
   },
 } as const satisfies Record<string, Record<string, readonly string[]>>;
 

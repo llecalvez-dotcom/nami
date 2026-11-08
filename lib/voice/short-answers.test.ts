@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { matchOption, normalize, shortAnswer, spokenEmail } from "@/lib/voice/short-answers";
+import { matchOption, normalize, SHORT_ANSWERS, shortAnswer, spokenEmail } from "@/lib/voice/short-answers";
 
 const PURPOSE = [
   { label: "Holiday", value: "tourism" },
@@ -41,6 +41,24 @@ describe("shortAnswer for a proposal", () => {
     for (const said of ["non", "No.", "later", "Plus tard", "not now"]) {
       expect(shortAnswer("proposal", said)).toBe("decline");
     }
+  });
+
+  it("accepts the everyday yeses, alone or combined (Clément, real test 2026-11-08)", () => {
+    for (const said of ["ouais carrément", "Ouais, carrément !", "oui bien sûr", "yes sure", "yep", "of course", "let's go", "go ahead please", "c'est parti", "évidemment", "volontiers", "por supuesto", "genau", "va bene", "boleh"]) {
+      expect(shortAnswer("proposal", said), said).toBe("accept");
+    }
+  });
+
+  it("declines the everyday noes, alone or combined", () => {
+    for (const said of ["nope", "non merci", "no thanks", "not yet", "pas encore", "non merci pas maintenant", "pas la peine", "jamais", "never", "stop", "nein danke", "no gracias", "nicht jetzt"]) {
+      expect(shortAnswer("proposal", said), said).toBe("decline");
+    }
+  });
+
+  it("every word sits in one list only", () => {
+    const accept = new Set(SHORT_ANSWERS.proposal.accept.flatMap((w) => normalize(w).split(" ")));
+    const both = SHORT_ANSWERS.proposal.decline.flatMap((w) => normalize(w).split(" ")).filter((w) => accept.has(w));
+    expect(both).toEqual([]);
   });
 
   it("does not take a long sentence or a mix for a yes", () => {
