@@ -28,8 +28,8 @@ import {
   type FlightQuestionField,
 } from "@/lib/flights/flow";
 import {
+  assumedArrival,
   formalityWindows,
-  isBali,
   nextQuestion,
   suggestModules,
   type QuestionField,
@@ -167,12 +167,6 @@ const CREATE_VISA_PROPOSAL: NewConversationItem = {
   decision: null,
 };
 
-function addDays(isoDate: string, days: number): string {
-  const date = new Date(`${isoDate}T00:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
 // Answers the combined question "French passport, leaving from France?": one yes settles both fields.
 export const FRENCH_FROM_FRANCE_OPTION = { label: "Yes, French passport, from France", value: "FR" } as const;
 
@@ -182,13 +176,6 @@ function questionOptions(field: QuestionField, request: TripRequestDraft): { lab
       return request.origin_country === null ? [FRENCH_FROM_FRANCE_OPTION] : [{ label: "Yes, French passport", value: "FR" }];
     case "origin_country":
       return [{ label: "Yes, from France", value: "FR" }];
-    case "arrival_at": {
-      const { destination, country_iso2, departure_date } = request;
-      // From France, the flight to Bali lands the day after departure (17 to 20 h with the 7 h time difference):
-      // Nami proposes the evening of that day, the traveller confirms it or gives the landing time.
-      if (!destination || !country_iso2 || !departure_date || !isBali({ destination, country_iso2 })) return [];
-      return [{ label: "Yes, that's right", value: `${addDays(departure_date, 1)}T18:00+08:00` }];
-    }
     case "purpose":
       return [
         { label: "Holiday", value: "tourism" },
@@ -304,7 +291,8 @@ export function applyLivePapers(trip: Trip, result: FormalitiesResult | null): T
 }
 
 function baliFormalities(request: TripRequestDraft): Formality[] {
-  const windows = request.arrival_at ? formalityWindows({ arrival_at: request.arrival_at }, BALI_PAPERS) : [];
+  const arrival = assumedArrival(request);
+  const windows = arrival ? formalityWindows({ arrival_at: arrival }, BALI_PAPERS) : [];
   return BALI_PAPERS.map((paper) => ({
     id: paper.id,
     name: paper.name,

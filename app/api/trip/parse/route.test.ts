@@ -37,7 +37,7 @@ describe("POST /api/trip/parse", () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.request).toMatchObject({ raw_text: "Je pars à Bali lundi", destination: "Bali", nationality: null });
-    expect(body.missing).toEqual(["nationality", "origin_country", "arrival_at", "purpose"]);
+    expect(body.missing).toEqual(["nationality", "origin_country", "purpose"]);
     expect(body.changed).toEqual(["destination", "country_iso2", "departure_date", "travellers"]);
 
     const prompt = complete.mock.calls[0][0].user;
@@ -89,7 +89,7 @@ describe("POST /api/trip/parse", () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.request.arrival_at).toBeNull();
-    expect(body.missing).toContain("arrival_at");
+    expect(body.missing).not.toContain("arrival_at");
     expect(body.changed).not.toContain("arrival_at");
     expect(body.request).toMatchObject({ departure_date: "2026-11-09", return_date: "2026-11-19" });
     expect(complete.mock.calls[0][0].system).not.toContain("use 00:00");
@@ -107,7 +107,7 @@ describe("POST /api/trip/parse", () => {
       });
       const body = await response.json();
       expect(body.request.arrival_at).toBeNull();
-      expect(body.missing).toContain("arrival_at");
+      expect(body.missing).not.toContain("arrival_at");
       expect(body.changed).not.toContain("arrival_at");
     },
   );
@@ -170,7 +170,7 @@ describe("POST /api/trip/parse", () => {
       current_request: { ...nulls, raw_text: "Bali on Monday, landing at 7pm", arrival_at: "2026-11-09T19:00+08:00" },
     })).json();
     expect(body.request.arrival_at).toBeNull();
-    expect(body.missing).toContain("arrival_at");
+    expect(body.missing).not.toContain("arrival_at");
     expect(body.changed).toContain("arrival_at");
 
     complete.mockResolvedValue(JSON.stringify({ ...nulls, departure_date: "2026-11-11" }));

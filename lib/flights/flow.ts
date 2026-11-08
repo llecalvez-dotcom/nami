@@ -9,6 +9,7 @@ import { isTerminalStatus, type ToolRequest } from "@/lib/h-agent";
 import { CRITERION_LABELS, describeFlight, formatPrice, introduceFlights, rankFlights } from "@/lib/flights/rank";
 import { normalizeText } from "@/lib/flights/read";
 import { shortAnswer } from "@/lib/voice/short-answers";
+import { isBali, nextDay } from "@/lib/planner";
 import type { ConversationItem, Trip } from "@/lib/trip-state";
 
 export const FLIGHT_QUESTION_FIELDS = ["return_date", "flight_criterion", "flight_choice"] as const;
@@ -266,10 +267,20 @@ function chooseFlight(trip: Trip, value: string): Trip {
   const chosen = result?.options.find((f) => String(f.index) === value);
   if (!chosen) return say(trip, "I lost that flight. Look at the tab on the left and choose one yourself.");
   const next = withResult(trip, { chosen });
+  const request = { ...next.request, arrival_at: next.request.arrival_at ?? landingFromFlight(next.request, chosen) };
   return say(
-    { ...next, agent_steps: [...next.agent_steps, `You chose ${chosen.airline}, ${formatPrice(chosen)}`] },
+    { ...next, request, agent_steps: [...next.agent_steps, `You chose ${chosen.airline}, ${formatPrice(chosen)}`] },
     `I'm opening ${describeFlight(chosen)}, watch the tab on the left.`,
   );
+}
+
+// The landing time, once a flight is chosen: its arrival time on the departure day (+1 when the page says so),
+// Bali time. Only for Bali, whose offset we know; elsewhere the landing stays unknown.
+export function landingFromFlight(request: Trip["request"], flight: FlightOption): string | null {
+  const time = /^(\d{2}:\d{2})(\+1)?$/.exec(flight.arrive_at.trim());
+  const { departure_date, destination, country_iso2 } = request;
+  if (!time || !departure_date || !destination || !country_iso2 || !isBali({ destination, country_iso2 })) return null;
+  return `${time[2] ? nextDay(departure_date) : departure_date}T${time[1]}+08:00`;
 }
 
 // The choice still to send to H (the report_flights call it is waiting on), once the traveller has picked a flight.

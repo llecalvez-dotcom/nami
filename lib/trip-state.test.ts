@@ -77,7 +77,7 @@ describe("parsed request flow", () => {
     expect(question.kind === "question" && question.options).toEqual([{ label: "Yes, French passport, from France", value: "FR" }]);
     trip = answerQuestion(trip, question.id, "FR", "Yes, French passport, from France");
     expect(trip.request).toMatchObject({ nationality: "FR", origin_country: "FR" });
-    expect(open(trip, "question")).toMatchObject({ field: "arrival_at" });
+    expect(open(trip, "question")).toMatchObject({ field: "purpose" });
   });
 
   it("asks nothing after the phrase for London once passport and departure are known, and checks the papers live", () => {
@@ -93,26 +93,24 @@ describe("parsed request flow", () => {
     expect(open(trip, "question")).toMatchObject({ field: "nationality", answer: null });
 
     trip = answerQuestion(trip, open(trip, "question").id, "FR", "Yes, French passport");
-    const landing = open(trip, "question");
-    // Nami proposes the landing rather than asking for it (Nathan, 2026-11-07).
-    expect(landing).toMatchObject({ field: "arrival_at", question: expect.stringContaining("you land in Bali the next day, Tuesday 10 November, around 6 pm. Is that right?") });
-    expect(landing.kind === "question" && landing.options).toEqual([
-      { label: "Yes, that's right", value: "2026-11-10T18:00+08:00" },
-    ]);
-
-    trip = answerQuestionWithText(trip, landing.id, "Tuesday 14:30", { ...trip.request, arrival_at: "2026-11-10T14:30+08:00" });
+    // The landing time is never asked (Clément, 2026-11-07): the papers assume the day after the departure.
+    expect(open(trip, "question")).toMatchObject({ field: "purpose" });
+    expect(trip.conversation.some((i) => i.kind === "question" && i.field === "arrival_at")).toBe(false);
     trip = answerQuestion(trip, open(trip, "question").id, "tourism", "Holiday");
     expect(trip.request.purpose).toBe("tourism");
+    expect(trip.request.arrival_at).toBeNull();
 
     const proposal = open(trip, "proposal");
     expect(proposal).toMatchObject({ action: "papers", accept_label: "Prepare my entry papers" });
     expect(trip.modules.find((m) => m.module === "papers")?.state).toBe("suggested");
 
     trip = decideProposal(trip, proposal.id, true, now);
+    // Landing assumed the day after the departure, 00:00 Bali time: the windows follow, the request stays without it.
     expect(trip.formalities.find((f) => f.id === "arrival_card")).toMatchObject({
-      opens_at: "2026-11-07T14:30+08:00",
-      closes_at: "2026-11-10T14:30+08:00",
+      opens_at: "2026-11-07T00:00+08:00",
+      closes_at: "2026-11-10T00:00+08:00",
     });
+    expect(trip.request.arrival_at).toBeNull();
     expect(trip.agent_run).toBeNull();
     // The visa first: no flight proposal until the visa is ready.
     expect(open(trip, "proposal")).toMatchObject({ action: "create_visa" });

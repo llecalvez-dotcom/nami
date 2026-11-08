@@ -1,5 +1,7 @@
 import { BALI_TIME_ZONE } from "@/lib/bali-papers";
 import type { TripRequest } from "@/lib/contracts";
+import { nextDay } from "@/lib/planner/next-question";
+import { isBali } from "@/lib/planner/suggest-modules";
 
 // Asia/Makassar has no daylight saving time.
 const BALI_UTC_OFFSET = "+08:00";
@@ -28,6 +30,20 @@ export function toBaliTime(epochMs: number): string {
 // Written rule when the landing time stays unknown: 00:00 Bali time on the arrival day.
 export function defaultBaliArrival(arrivalDate: string): string {
   return `${arrivalDate}T00:00${BALI_UTC_OFFSET}`;
+}
+
+// The landing used for the paper windows. Nami no longer asks for it: when it is unknown, a Bali trip is assumed to
+// land the day after the departure at 00:00 Bali time. The assumption is never written into the request nor said.
+export function assumedArrival(request: {
+  arrival_at?: string | null;
+  departure_date?: string | null;
+  destination?: string | null;
+  country_iso2?: string | null;
+}): string | null {
+  if (request.arrival_at) return request.arrival_at;
+  const { departure_date, destination, country_iso2 } = request;
+  if (!departure_date || !destination || !country_iso2 || !isBali({ destination, country_iso2 })) return null;
+  return defaultBaliArrival(nextDay(departure_date));
 }
 
 export function formalityWindows(

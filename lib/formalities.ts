@@ -4,7 +4,7 @@ import type { Formality, Source } from "@/lib/contracts";
 import { countryName } from "@/lib/countries";
 import { LinkupError, linkupStructuredSearch, type LinkupStructuredAnswer } from "@/lib/linkup";
 import { checkOfficialLink, governmentDomainsFor, hostOf, isOfficialUrl, OBSERVED_ON } from "@/lib/official-sites";
-import { FILLING_COUNTRY_BY_COUNTRY, formalityWindows, isBali } from "@/lib/planner";
+import { assumedArrival, FILLING_COUNTRY_BY_COUNTRY, formalityWindows, isBali } from "@/lib/planner";
 
 export const LIVE_TIMEOUT_MS = 15_000;
 
@@ -14,6 +14,8 @@ export const FormalitiesInputSchema = z.object({
   arrival_at: z
     .union([z.iso.datetime({ offset: true }), z.iso.datetime({ offset: true, precision: -1 })])
     .nullish(),
+  // When the landing time is unknown, the Bali papers assume the day after this departure (assumedArrival).
+  departure_date: z.iso.date().nullish(),
   // Passport and departure country of the traveller; a French passport leaving from France when not given.
   nationality: z.string().regex(/^[A-Z]{2}$/).nullish(),
   origin_country: z.string().regex(/^[A-Z]{2}$/).nullish(),
@@ -192,7 +194,7 @@ function compareWithTable(item: LiveFormality, paper: BaliPaper): string[] {
 
 function applyBaliTable(formalities: LiveFormality[], input: FormalitiesInput) {
   const taken = new Set<string>();
-  const windows = input.arrival_at ? formalityWindows({ arrival_at: input.arrival_at }, BALI_PAPERS) : [];
+  const windows = baliWindows(input);
   const matched = formalities.map((item) => {
     const paper = matchBaliPaper(item, taken);
     if (!paper) return item;
@@ -212,8 +214,15 @@ function applyBaliTable(formalities: LiveFormality[], input: FormalitiesInput) {
   return { formalities: matched, missing };
 }
 
-export function baliTableFormalities(input: Pick<FormalitiesInput, "arrival_at">): LiveFormality[] {
-  const windows = input.arrival_at ? formalityWindows({ arrival_at: input.arrival_at }, BALI_PAPERS) : [];
+type WindowInput = Pick<FormalitiesInput, "arrival_at" | "departure_date" | "destination" | "country_iso2">;
+
+function baliWindows(input: WindowInput) {
+  const arrival = assumedArrival(input);
+  return arrival ? formalityWindows({ arrival_at: arrival }, BALI_PAPERS) : [];
+}
+
+export function baliTableFormalities(input: WindowInput): LiveFormality[] {
+  const windows = baliWindows(input);
   return BALI_PAPERS.map((paper) => ({
     id: paper.id,
     name: paper.name,
