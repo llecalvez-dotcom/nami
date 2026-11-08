@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { GladiaError, languagesFromEnv, preRecordedBody, TRAVEL_VOCABULARY, transcribeWithGladia, transcribeWithLanguage, vocabularyFromEnv } from "@/lib/gladia";
+import { GladiaError, languagesFromEnv, modelFromEnv, preRecordedBody, TRAVEL_VOCABULARY, transcribeWithGladia, transcribeWithLanguage, vocabularyFromEnv } from "@/lib/gladia";
 
 const audio = new File([new Uint8Array([1, 2, 3])], "voice.webm", { type: "audio/webm" });
 
@@ -19,7 +19,7 @@ const done = (text: string) => ({ status: "done", result: { transcription: { ful
 describe("transcribeWithGladia", () => {
   it("uploads, creates the job in fr and en, polls until done", async () => {
     const fetchMock = gladia([{ status: "queued" }, { status: "processing" }, done(" Je pars à Bali lundi. ")]);
-    const text = await transcribeWithGladia(audio, { apiKey: "k", fetch: fetchMock, pollIntervalMs: 1, languages: [], vocabulary: [] });
+    const text = await transcribeWithGladia(audio, { apiKey: "k", fetch: fetchMock, pollIntervalMs: 1, languages: [], vocabulary: [], model: "" });
 
     expect(text).toBe("Je pars à Bali lundi.");
     const [uploadUrl, uploadInit] = fetchMock.mock.calls[0];
@@ -33,7 +33,7 @@ describe("transcribeWithGladia", () => {
 
   it("sends the language list and the vocabulary when given", async () => {
     const fetchMock = gladia([done("Je pars à Denpasar.")]);
-    await transcribeWithGladia(audio, { apiKey: "k", fetch: fetchMock, pollIntervalMs: 1, languages: ["fr", "en"], vocabulary: ["Denpasar"] });
+    await transcribeWithGladia(audio, { apiKey: "k", fetch: fetchMock, pollIntervalMs: 1, languages: ["fr", "en"], vocabulary: ["Denpasar"], model: "" });
     expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({
       audio_url: "https://api.gladia.io/file/abc",
       language_config: { languages: ["fr", "en"], code_switching: true },
@@ -54,7 +54,7 @@ describe("transcribeWithGladia", () => {
       if (path === "/pre-recorded/job-1") return Response.json(done("Bali"));
       return new Response("not found", { status: 404 });
     });
-    const text = await transcribeWithGladia(audio, { apiKey: "k", fetch: fetchMock, pollIntervalMs: 1, languages: ["fr"], vocabulary: ["Bali"] });
+    const text = await transcribeWithGladia(audio, { apiKey: "k", fetch: fetchMock, pollIntervalMs: 1, languages: ["fr"], vocabulary: ["Bali"], model: "solaria-3" });
     expect(text).toBe("Bali");
     expect(JSON.parse(String(fetchMock.mock.calls[2][1]?.body))).toEqual({ audio_url: "https://api.gladia.io/file/abc" });
   });
@@ -63,7 +63,7 @@ describe("transcribeWithGladia", () => {
     const fetchMock = vi.fn(async (url: string | URL | Request) =>
       String(url).endsWith("/upload") ? Response.json({ audio_url: "u" }) : new Response("bad", { status: 400 }),
     );
-    await expect(transcribeWithGladia(audio, { apiKey: "k", fetch: fetchMock, languages: [], vocabulary: [] })).rejects.toMatchObject({ status: 400 });
+    await expect(transcribeWithGladia(audio, { apiKey: "k", fetch: fetchMock, languages: [], vocabulary: [], model: "" })).rejects.toMatchObject({ status: 400 });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -112,6 +112,21 @@ describe("transcribeWithLanguage", () => {
       const fetchMock = gladia([{ status: "done", result: { transcription: { full_transcript: "Bali", languages } } }]);
       expect((await transcribeWithLanguage(audio, { apiKey: "k", fetch: fetchMock, pollIntervalMs: 1 })).language).toBeNull();
     }
+  });
+});
+
+describe("Gladia's model", () => {
+  it("uses solaria-3 unless GLADIA_MODEL says otherwise", () => {
+    expect(modelFromEnv(undefined)).toBe("solaria-3");
+    expect(modelFromEnv(" ")).toBe("solaria-3");
+    expect(modelFromEnv("solaria-1")).toBe("solaria-1");
+  });
+
+  it("sends the model, and never code switching with solaria-3", () => {
+    expect(preRecordedBody("u", ["fr", "en"], [], "solaria-3")).toEqual({
+      audio_url: "u", model: "solaria-3", language_config: { languages: ["fr", "en"], code_switching: false },
+    });
+    expect(preRecordedBody("u", [], [], "solaria-3")).toEqual({ audio_url: "u", model: "solaria-3" });
   });
 });
 
