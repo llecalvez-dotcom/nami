@@ -88,6 +88,7 @@ export const PANEL_TEXTS = [
   "Looking for your passport…",
   "Reading your passport…",
   "Looking for your ID photo…",
+  "Opening the official site…",
   RECONFIRM_TEXT,
   ...DROP_TEXTS,
 ];
@@ -375,9 +376,11 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
     const visaItem = flow.current.visaItem;
     if (!read || !visaItem) return;
     if (ticketId) setReturnTicketDocumentId(ticketId);
+    // The start route may restart the H bridge first (5 to 10 s): the wave works meanwhile instead of a frozen card.
+    setBusy("Opening the official site…");
     void actions.createVisa(visaItem, {
       passport: read.fields, documentId: read.documentId, photoDocumentId: flow.current.photoDocumentId, returnTicketDocumentId: ticketId,
-    });
+    }).finally(() => setBusy(null));
   };
 
   // The Return Ticket field of the e-VOA is required and takes a PDF only: without a confirmed one, the agent asks.
