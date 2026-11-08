@@ -45,10 +45,11 @@ describe("the Google Hotels address", () => {
 describe("the agent's task", () => {
   const task = (criterion: "cheapest" | "best_rated" | "best") => buildHotelsTask(HotelsStartSchema.parse({ destination: "Bali", checkin: "2026-11-23", checkout: "2026-12-03", criterion, local_session_id: "6e5f6051-e697-43ce-8763-4e9233e336bf" }));
 
-  it("sorts the page by what the traveller asked, so the page answers it", () => {
-    expect(task("cheapest")).toContain('"Lowest price"');
-    expect(task("best_rated")).toContain('"Highest rating"');
-    expect(task("best")).toContain('"Most reviewed"');
+  it("acts on the page for a rating criterion, and never looks for the hidden sort menu", () => {
+    expect(task("best_rated")).toContain('"4+ rating"');
+    expect(task("best")).toContain('"4+ rating"');
+    expect(task("cheapest")).not.toContain('"4+ rating"');
+    expect(task("cheapest")).not.toContain("Sort by");
     expect(task("cheapest")).toContain("call report_hotels");
   });
 });

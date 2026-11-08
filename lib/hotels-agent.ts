@@ -61,15 +61,20 @@ export function buildHotelsInstructions(): string {
 }
 
 // What the agent does on the page for the traveller's criterion, so that the page visibly answers it (Nathan, 2026-11-08:
-// « une image figée avec juste un curseur »). Purely visible: Nami ranks the hotels herself (lib/hotels/rank.ts).
-const SORT_OPTIONS: Record<HotelCriterion, string> = { cheapest: "Lowest price", best_rated: "Highest rating", best: "Most reviewed" };
+// « une image figée avec juste un curseur »). Purely visible: Nami ranks the hotels herself (lib/hotels/rank.ts). The "Sort
+// by" menu is not used: it is hidden at the end of the row of filters and the agent never reached it in 2 real runs.
+const PAGE_ACTIONS: Record<HotelCriterion, string> = {
+  cheapest: "As soon as the list of hotels is displayed with prices, go on.",
+  best_rated: 'As soon as the list of hotels is displayed with prices, click the "4+ rating" filter above the list.',
+  best: 'As soon as the list of hotels is displayed with prices, click the "4+ rating" filter above the list.',
+};
 
 export function buildHotelsTask(input: HotelsStart): string {
   return [
     "Work in the blank tab, never in another one: the other tabs hold the traveller's forms and flight, so never navigate or close them. If the current tab is not about:blank, first call switch_tab_web to go to the about:blank tab.",
     `Then, in that tab, open exactly this URL: ${googleHotelsUrl(input)}`,
     "If the cookie consent page appears first, click \"Tout refuser\" or \"Reject all\".",
-    `As soon as the list of hotels is displayed with prices, sort it. "Sort by" is the LAST filter of the row of filters above the list, usually hidden: click the ">" arrow at the right end of that row until "Sort by" is visible (do not open the "Price" filter), click "Sort by", click "${SORT_OPTIONS[input.criterion ?? "best"]}" in the popup, and close the popup with its X if it stays open. If you cannot do it in five actions, go on without it.`,
+    PAGE_ACTIONS[input.criterion ?? "best"],
     "Then call wait_web for 2 seconds, scroll down the list of hotels once so the traveller sees it, and call report_hotels. Do not read the hotels: Nami reads them herself.",
     "report_hotels answers with the hotel the traveller chose, or tells you what to do next. Click that hotel in the list, by its name (scroll the list if it is lower down). On its page, click the \"Prices\" tab.",
     `Stop there and call report_ready with a short summary (hotel, price). Do not click ${HOTELS_FORBIDDEN_BUTTONS.slice(0, 5).map((b) => `"${b}"`).join(", ")} or anything that leaves Google.`,
