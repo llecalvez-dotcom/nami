@@ -30,11 +30,11 @@ describe("FlightsStartSchema", () => {
 });
 
 describe("googleFlightsUrl", () => {
-  it("asks Google for the round trip from Paris in French, in euros", () => {
+  it("asks Google for the round trip from Paris on the English page (the only one that reads the query), in euros", () => {
     const url = new URL(googleFlightsUrl(START));
     expect(url.origin + url.pathname).toBe("https://www.google.com/travel/flights");
     expect(url.searchParams.get("q")).toBe("Flights from Paris to Bali on 2026-11-23 through 2026-12-03 for 2 adults economy");
-    expect(url.searchParams.get("hl")).toBe("fr");
+    expect(url.searchParams.get("hl")).toBe("en");
     expect(url.searchParams.get("curr")).toBe("EUR");
     expect(googleFlightsUrl({ ...START, destination: "Lisbonne", travellers: 1 })).toContain("to+Lisbonne+on+2026-11-23+through+2026-12-03+for+1+adult");
   });

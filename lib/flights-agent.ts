@@ -43,11 +43,14 @@ export const FlightsStartSchema = z.object({
 }).refine((v) => v.return_date >= v.departure_date, { message: "return_date before departure_date", path: ["return_date"] });
 export type FlightsStart = z.infer<typeof FlightsStartSchema>;
 
-// Google resolves the city names itself ("Bali", "Lisbonne"); the agent checks the fields once the page is open.
+// Google resolves the city names itself ("Bali", "Lisbonne"). hl=en on purpose: the "Flights from … to … on … through …"
+// query is only understood by the English page; with a French browser and hl=fr, Google opens its home page with no
+// search (seen on 8 Nov 2026), and the agent would have to fill the form itself (6 to 10 steps). Prices stay in EUR, and
+// lib/flights/extract.ts reads the English results list.
 export function googleFlightsUrl(input: Pick<FlightsStart, "origin" | "destination" | "departure_date" | "return_date" | "travellers">): string {
   const adults = input.travellers === 1 ? "1 adult" : `${input.travellers} adults`;
   const q = `Flights from ${input.origin} to ${input.destination} on ${input.departure_date} through ${input.return_date} for ${adults} economy`;
-  const params = new URLSearchParams({ q, hl: "fr", curr: "EUR" });
+  const params = new URLSearchParams({ q, hl: "en", curr: "EUR" });
   return `https://www.google.com/travel/flights?${params.toString()}`;
 }
 
