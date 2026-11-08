@@ -16,7 +16,8 @@ import { AgentStateSchema } from "@/lib/contracts";
 import { isTerminalStatus, type ToolRequest } from "@/lib/h-agent";
 import type { AgentRun, Formality, ModuleKind, ModuleState, ModuleSuggestion, TripRequestDraft } from "@/lib/contracts";
 import { TripRequestSchema } from "@/lib/contracts";
-import { isOfficialUrl } from "@/lib/official-sites";
+import type { FormalitiesResult } from "@/lib/formalities";
+import { hostOf, isOfficialUrl } from "@/lib/official-sites";
 import {
   answerFlightQuestion,
   answerFlightQuestionWithText,
@@ -86,6 +87,8 @@ export type Trip = {
   formalities: Formality[];
   agent_run: AgentRun | null;
   agent_steps: string[];
+  // Outside Bali: the entry papers are searched live once the request is complete (applyLivePapers).
+  papers_check?: "pending" | "done";
 };
 
 type NewConversationItem = ConversationItem extends infer T ? (T extends ConversationItem ? Omit<T, "id"> : never) : never;
@@ -231,7 +234,73 @@ function advance(trip: Trip): Trip {
       },
     );
   }
+  // Any other country: the papers are searched live on the official sites; the flights wait for that answer.
+  if (papers.state === "not_supported_yet") {
+    return push(
+      { ...trip, modules: suggestions.filter((s) => s.module !== "flights"), papers_check: "pending" },
+      { kind: "agent", text: papers.message },
+    );
+  }
   return push({ ...trip, modules: suggestions }, { kind: "agent", text: papers.message }, FLIGHTS_PROPOSAL);
+}
+
+function toFormality(live: FormalitiesResult["formalities"][number]): Formality {
+  return {
+    id: live.id,
+    name: live.name,
+    required: live.required,
+    official_url: live.official_url,
+    official_cost: live.official_cost,
+    opens_at: live.opens_at,
+    closes_at: live.closes_at,
+    sources: live.sources,
+    status: live.status,
+    checked_at: live.checked_at,
+  };
+}
+
+// The live answer of /api/formalities for a trip outside Bali: papers in the folder, one spoken summary, then the flights.
+// result null: the search itself failed. Applied once: the trip keeps papers_check "done".
+export function applyLivePapers(trip: Trip, result: FormalitiesResult | null): Trip {
+  if (trip.papers_check !== "pending") return trip;
+  const destination = trip.request.destination ?? result?.country_name ?? "your destination";
+  const checked: Trip = { ...trip, papers_check: "done" };
+  if (!result || result.mode === "unavailable") {
+    return push(
+      checked,
+      {
+        kind: "agent",
+        text: `I could not check the entry papers for ${destination} live. Check diplomatie.gouv.fr before you leave.`,
+      },
+      FLIGHTS_PROPOSAL,
+    );
+  }
+  const formalities = result.formalities.map(toFormality);
+  const required = result.formalities.filter((f) => f.required);
+  if (required.length === 0) {
+    const optional = result.formalities.map((f) => f.name);
+    return push(
+      { ...checked, formalities, modules: setModule(checked.modules, "papers", "none_needed") },
+      {
+        kind: "agent",
+        text:
+          optional.length > 0
+            ? `No mandatory entry paper for ${destination} on the official sites. Optional: ${optional.join(", ")}.`
+            : `No entry paper needed for ${destination}: nothing found on the official sites. Your passport is enough.`,
+      },
+      FLIGHTS_PROPOSAL,
+    );
+  }
+  const one = required.length === 1;
+  return push(
+    { ...checked, formalities, modules: setModule(checked.modules, "papers", "not_supported_yet") },
+    {
+      kind: "agent",
+      text: `For ${destination} you need ${required.length} entry paper${one ? "" : "s"}, found live on the official sites. I cannot fill ${one ? "it" : "them"} in for you yet: ${one ? "the" : "each"} official link is in your folder.`,
+      list: required.map((f) => `${f.name}: ${f.official_cost}, on ${hostOf(f.official_url) ?? f.official_url}`),
+    },
+    FLIGHTS_PROPOSAL,
+  );
 }
 
 function baliFormalities(request: TripRequestDraft): Formality[] {

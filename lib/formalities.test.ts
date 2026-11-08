@@ -78,6 +78,15 @@ describe("findFormalities: Linkup request", () => {
     expect(buildQuery({ destination: "Zanzibar", country_iso2: "TZ" })).toContain("Zanzibar, Tanzania");
     expect(buildQuery({ destination: "Japan", country_iso2: "JP" })).toContain("in Japan?");
   });
+
+  it("names the traveller's passport and departure country when they are not French", () => {
+    const query = buildQuery({ destination: "London", country_iso2: "GB", nationality: "BE", origin_country: "DE" });
+    expect(query).toContain("Belgium passport");
+    expect(query).toContain("leaving from Germany");
+    expect(buildQuery({ destination: "London", country_iso2: "GB", nationality: "FR", origin_country: null })).toContain(
+      "French passport, leaving from France",
+    );
+  });
 });
 
 describe("findFormalities: Bali", () => {

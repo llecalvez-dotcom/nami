@@ -14,6 +14,9 @@ export const FormalitiesInputSchema = z.object({
   arrival_at: z
     .union([z.iso.datetime({ offset: true }), z.iso.datetime({ offset: true, precision: -1 })])
     .nullish(),
+  // Passport and departure country of the traveller; a French passport leaving from France when not given.
+  nationality: z.string().regex(/^[A-Z]{2}$/).nullish(),
+  origin_country: z.string().regex(/^[A-Z]{2}$/).nullish(),
 });
 export type FormalitiesInput = z.infer<typeof FormalitiesInputSchema>;
 
@@ -91,11 +94,21 @@ type LinkupItem = z.infer<typeof LinkupItemSchema>;
 
 const LinkupDataSchema = z.object({ formalities: z.array(z.unknown()) });
 
-export function buildQuery({ destination, country_iso2 }: Pick<FormalitiesInput, "destination" | "country_iso2">): string {
+export function passportLabel(input: Pick<FormalitiesInput, "nationality">): string {
+  return `${input.nationality && input.nationality !== "FR" ? countryName(input.nationality) : "French"} passport`;
+}
+
+export function buildQuery({
+  destination,
+  country_iso2,
+  nationality,
+  origin_country,
+}: Pick<FormalitiesInput, "destination" | "country_iso2" | "nationality" | "origin_country">): string {
   const country = countryName(country_iso2);
   const place = destination.toLowerCase() === country.toLowerCase() ? country : `${destination}, ${country}`;
+  const origin = origin_country && origin_country !== "FR" ? countryName(origin_country) : "France";
   return (
-    `Which entry formalities does a traveller with a French passport, leaving from France, need for a short tourist stay in ${place}? ` +
+    `Which entry formalities does a traveller with a ${passportLabel({ nationality })}, leaving from ${origin}, need for a short tourist stay in ${place}? ` +
     `Use France Diplomatie (conseils aux voyageurs, entrée et séjour, ${country}) and the official government websites of ${country}. ` +
     `List each visa, electronic travel authorization, online arrival card or entry tax that applies, with its official name, ` +
     `whether it is mandatory, its official cost, the official government website where it is done, and when it can be done. ` +
@@ -325,7 +338,7 @@ export async function findFormalities(input: FormalitiesInput, deps: Deps): Prom
         ? `Found live${sourceLine}. This differs from our last check (${HAND_CHECK}).`
         : `Found live${sourceLine}. Matches our last check (${HAND_CHECK}).`
       : formalities.length === 0
-        ? `No entry paper found live for a French passport in ${base.country_name}. Check diplomatie.gouv.fr.`
+        ? `No entry paper found live for a ${passportLabel(input)} in ${base.country_name}. Check diplomatie.gouv.fr.`
         : `Found live${sourceLine}, not verified by hand. ${FILLING_COUNTRY_BY_COUNTRY}`,
   };
 }

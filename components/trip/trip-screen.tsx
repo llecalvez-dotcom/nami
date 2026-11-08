@@ -10,12 +10,12 @@ import { CountryStatusPill, SampleBadge } from "@/components/status-badge";
 import { AgentSettingsCard } from "@/components/trip/agent-settings";
 import { Conversation } from "@/components/trip/conversation";
 import { Dossier } from "@/components/trip/dossier";
-import { useLivePapers } from "@/components/trip/live-papers";
 import { PassportCard } from "@/components/trip/passport-card";
 import { PhotoCard } from "@/components/trip/photo-card";
 import { ReturnTicketCard } from "@/components/trip/return-ticket-card";
 import { TryAnotherCountry } from "@/components/trip/try-another-country";
 import { useAgentRun } from "@/components/trip/use-agent-run";
+import { usePapersCheck } from "@/components/trip/use-papers-check";
 import { useTripActions } from "@/components/trip/use-trip-actions";
 import { VisaProgress } from "@/components/trip/visa-progress";
 import { SAMPLE_TRIP_ID } from "@/data/sample";
@@ -23,6 +23,7 @@ import { countryName } from "@/lib/countries";
 import { destinationImage } from "@/lib/destination-images";
 import type { PassportFields } from "@/lib/contracts";
 import { tripStatus, visaSteps } from "@/lib/trip-progress";
+import { isBali } from "@/lib/planner";
 import { createSampleTrip, needsPassportReconfirm, type Trip } from "@/lib/trip-state";
 import { saveTrip, useTrips } from "@/lib/trip-store";
 
@@ -41,7 +42,6 @@ export function TripScreen({ id }: { id: string }) {
   const trips = useTrips();
   const demo = useSearchParams().get("demo") === "1";
   const found = trips?.find((t) => t.id === id) ?? null;
-  const { destination, country_iso2, arrival_at } = found?.request ?? {};
   const [passport, setPassport] = useState<PassportFields | null>(null);
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [photoDocumentId, setPhotoDocumentId] = useState<string | null>(null);
@@ -52,11 +52,7 @@ export function TripScreen({ id }: { id: string }) {
   const liveRun = found && !found.sample ? found.agent_run : null;
   const reconfirm = needsPassportReconfirm(liveRun, passport !== null);
   useAgentRun(id, liveRun?.session_id ?? null, liveRun !== null && !liveRun.drained && !reconfirm, secrets);
-  const livePapers = useLivePapers(
-    found && !found.sample && found.formalities.length > 0 && destination && country_iso2
-      ? { destination, country_iso2, arrival_at }
-      : null,
-  );
+  const livePapers = usePapersCheck(found);
 
   const current = found ?? (trips !== null && id === SAMPLE_TRIP_ID ? createSampleTrip(new Date()) : null);
   const actions = useTripActions({
@@ -101,6 +97,8 @@ export function TripScreen({ id }: { id: string }) {
 
   const update = (next: Trip) => saveTrip(next);
   const { request } = trip;
+  // Only Bali is filled in by the agent: elsewhere the passport is not asked for.
+  const fillable = request.destination !== null && request.country_iso2 !== null && isBali({ destination: request.destination, country_iso2: request.country_iso2 });
 
   return (
     <div className="flex flex-1 flex-col pb-28 md:pb-16">
@@ -175,7 +173,7 @@ export function TripScreen({ id }: { id: string }) {
                   only after that. Stop agent works meanwhile.
                 </p>
               ) : null}
-              {trip.formalities.length > 0 || demo || reconfirm ? (
+              {(trip.formalities.length > 0 && fillable) || demo || reconfirm ? (
                 <div ref={passportCard} tabIndex={-1} className="scroll-mt-24">
                   <PassportCard
                     demo={demo}
