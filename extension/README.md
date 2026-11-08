@@ -1,6 +1,6 @@
 # Extension Chrome Nami (ticket 08)
 
-Nami vit dans le panneau latéral de Chrome, l'agent H clique dans l'onglet. L'extension n'a **aucune logique d'agent** : elle affiche l'écran épuré de Nami (`http://localhost:3000/panel` par défaut, ticket 14) dans une `iframe` plein cadre et rend ses gestes visibles dans les onglets officiels (ticket 13). Sans réglage visible : la session du navigateur local vient de `NAMI_LOCAL_SESSION_ID` dans le `.env.local` de Nami.
+Nami vit dans le panneau latéral de Chrome, l'agent H clique dans l'onglet. L'extension n'a **aucune logique d'agent** : elle affiche l'écran épuré de Nami (`http://localhost:3000/panel` par défaut, ticket 14) dans une `iframe` plein cadre et rend ses gestes visibles dans les onglets officiels et sur Google Flights (ticket 13 ; une page qui se charge pendant la session demande l'état courant au service worker). Sans réglage visible : la session du navigateur local vient de `NAMI_LOCAL_SESSION_ID` dans le `.env.local` de Nami.
 
 ## Installation
 

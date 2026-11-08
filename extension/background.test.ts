@@ -15,14 +15,18 @@ function background() {
     { id: 6, url: "https://evisa.imigrasi.go.id.evil.example/" },
   ]);
   const sendMessage = vi.fn().mockResolvedValue(undefined);
+  const stored: { agentState?: unknown } = {};
   let onConnect!: (port: unknown) => void;
+  let onMessage!: (message: unknown, sender: unknown, sendResponse: (response: unknown) => void) => boolean | undefined;
   runInNewContext(source, {
     chrome: {
       runtime: {
         id: "nami", onInstalled: { addListener: vi.fn() }, onStartup: { addListener: vi.fn() },
         onConnect: { addListener: (listener: typeof onConnect) => { onConnect = listener; } },
+        onMessage: { addListener: (listener: typeof onMessage) => { onMessage = listener; } },
       },
       tabs: { query, sendMessage },
+      storage: { session: { get: vi.fn(async () => stored), set: vi.fn(async (value: typeof stored) => Object.assign(stored, value)) } },
     }, URL,
   });
   const connect = (name = "nami-panel", id = "nami") => {
@@ -30,7 +34,8 @@ function background() {
     onConnect({ name, sender: { id }, onDisconnect: { addListener: (listener: () => void) => { disconnect = listener; } } });
     return disconnect;
   };
-  return { query, sendMessage, connect };
+  const ask = (message: unknown, id = "nami") => new Promise<unknown>((resolve) => { if (onMessage(message, { id }, resolve) !== true) resolve("ignored"); });
+  return { query, sendMessage, connect, stored, ask };
 }
 
 describe("panel lifetime", () => {
@@ -65,5 +70,25 @@ describe("panel lifetime", () => {
     b.query.mockRejectedValue(new Error("Tabs unavailable"));
     disconnect();
     await vi.waitFor(() => expect(b.query).toHaveBeenCalledTimes(2));
+  });
+});
+
+describe("a page that loads while the agent works", () => {
+  it("gets the last relayed state, or an inactive one when nothing was relayed", async () => {
+    const b = background();
+    await expect(b.ask({ type: "nami:agent-state:get" })).resolves.toEqual({ type: "nami:agent-state", active: false, step: "" });
+    b.stored.agentState = { type: "nami:agent-state", active: true, step: "Choosing FRANCE" };
+    await expect(b.ask({ type: "nami:agent-state:get" })).resolves.toEqual({ type: "nami:agent-state", active: true, step: "Choosing FRANCE" });
+  });
+  it("answers nothing to other messages or foreign extensions", async () => {
+    const b = background();
+    await expect(b.ask({ type: "other" })).resolves.toBe("ignored");
+    await expect(b.ask({ type: "nami:agent-state:get" }, "foreign")).resolves.toBe("ignored");
+  });
+  it("forgets the state when the panel closes", async () => {
+    const b = background();
+    b.stored.agentState = { type: "nami:agent-state", active: true, step: "Choosing FRANCE" };
+    b.connect()!();
+    await vi.waitFor(() => expect(b.stored.agentState).toEqual({ type: "nami:agent-state", active: false, step: "" }));
   });
 });

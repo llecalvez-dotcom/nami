@@ -68,6 +68,8 @@ describe("the side panel shows one thing at a time", () => {
 
   it("has no dash in its fixed texts", () => {
     expect(PANEL_TEXTS.join(" ")).not.toMatch(/[–—]/);
+    // The status line and the marks are translated like the rest.
+    for (const text of ["Filling the form", "Waiting for you", "Done", "running", "to do", "Open the tab"]) expect(PANEL_TEXTS).toContain(text);
     expect(WATCH_MESSAGE).toMatch(/tab on the left/);
     expect(WATCH_MESSAGE).toMatch(/never click Pay/);
   });

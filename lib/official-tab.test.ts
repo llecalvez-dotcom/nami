@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { SAMPLE_AGENT_RUN, SAMPLE_FORMALITIES } from "@/data/sample";
-import { agentOfficialUrl, FOCUS_OFFICIAL, showOfficialSite } from "@/lib/official-tab";
+import { agentOfficialUrl, focusOfficialTab, FOCUS_OFFICIAL, PAPER_HOME_URLS, paperUrl, showOfficialSite } from "@/lib/official-tab";
+import type { Trip } from "@/lib/trip-state";
 
 describe("agentOfficialUrl", () => {
   it("points at the visa the paper agent fills in", () => {
@@ -13,6 +14,31 @@ describe("agentOfficialUrl", () => {
     expect(agentOfficialUrl({ agent_run: null, formalities: SAMPLE_FORMALITIES })).toBeNull();
     expect(agentOfficialUrl({ agent_run: { ...SAMPLE_AGENT_RUN, kind: "flights" }, formalities: SAMPLE_FORMALITIES })).toBeNull();
     expect(agentOfficialUrl({ agent_run: SAMPLE_AGENT_RUN, formalities: [] })).toBeNull();
+  });
+});
+
+const bali = { country_iso2: "ID" } as Trip["request"];
+const japan = { country_iso2: "JP" } as Trip["request"];
+
+describe("paperUrl", () => {
+  it("points each paper at its official form, the flights at the page the agent opened", () => {
+    const trip = { agent_run: null, formalities: SAMPLE_FORMALITIES, request: bali };
+    expect(paperUrl(trip, "visa")).toBe(SAMPLE_FORMALITIES.find((f) => f.id === "evoa")?.official_url);
+    expect(paperUrl(trip, "arrival_card")).toBe(SAMPLE_FORMALITIES.find((f) => f.id === "arrival_card")?.official_url);
+    expect(paperUrl(trip, "flights")).toBe(PAPER_HOME_URLS.flights);
+    const flights = { ...SAMPLE_AGENT_RUN, kind: "flights" as const, result: { flights: { url: "https://www.google.com/travel/flights/search?x=1", options: [] } } };
+    expect(paperUrl({ agent_run: flights, formalities: [], request: japan }, "flights")).toBe("https://www.google.com/travel/flights/search?x=1");
+  });
+
+  it("falls back to the Indonesian sites only for Indonesia; elsewhere, the paper found live or nothing", () => {
+    expect(paperUrl({ agent_run: null, formalities: [], request: bali }, "visa")).toBe(PAPER_HOME_URLS.visa);
+    expect(paperUrl({ agent_run: null, formalities: [], request: bali }, "arrival_card")).toBe(PAPER_HOME_URLS.arrival_card);
+    expect(paperUrl({ agent_run: null, formalities: [], request: japan }, "visa")).toBeNull();
+    expect(paperUrl({ agent_run: null, formalities: [], request: japan }, "arrival_card")).toBeNull();
+    const live = [{ ...SAMPLE_FORMALITIES[0], id: "jp-visa", required: true, official_url: "https://www.evisa.mofa.go.jp/" }];
+    expect(paperUrl({ agent_run: null, formalities: live, request: japan }, "visa")).toBe("https://www.evisa.mofa.go.jp/");
+    expect(paperUrl({ agent_run: null, formalities: live, request: japan }, "arrival_card")).toBeNull();
+    expect(Object.values(PAPER_HOME_URLS).every((url) => url.startsWith("https://"))).toBe(true);
   });
 });
 
@@ -70,5 +96,29 @@ describe("showOfficialSite", () => {
     silent.timeout();
     await expect(b).resolves.toBe("opened");
     expect(silent.raw.open).toHaveBeenCalledOnce();
+  });
+});
+
+describe("focusOfficialTab", () => {
+  it("does nothing outside the side panel, and inside it only brings an existing tab to the front", async () => {
+    const plain = fakeHost(false);
+    expect(focusOfficialTab(URL_, plain.host)).toBeNull();
+    expect(plain.raw.open).not.toHaveBeenCalled();
+    const framed = fakeHost(true);
+    const done = focusOfficialTab(URL_, framed.host);
+    expect(framed.parent.postMessage).toHaveBeenCalledWith({ type: FOCUS_OFFICIAL, url: URL_, open: false }, "*");
+    framed.reply({ type: `${FOCUS_OFFICIAL}:done`, result: "focused" });
+    await expect(done).resolves.toBe("focused");
+  });
+
+  it("never opens a tab itself: a missing tab or no answer is just missing", async () => {
+    const framed = fakeHost(true);
+    const missing = focusOfficialTab(URL_, framed.host);
+    framed.reply({ type: `${FOCUS_OFFICIAL}:done`, result: "missing" });
+    await expect(missing).resolves.toBe("missing");
+    const silent = focusOfficialTab(URL_, framed.host);
+    framed.timeout();
+    await expect(silent).resolves.toBe("missing");
+    expect(framed.raw.open).not.toHaveBeenCalled();
   });
 });
