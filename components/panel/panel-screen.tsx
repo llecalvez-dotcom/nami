@@ -13,6 +13,7 @@ import { ReturnTicketCard } from "@/components/trip/return-ticket-card";
 import { useAgentRun } from "@/components/trip/use-agent-run";
 import { usePapersCheck } from "@/components/trip/use-papers-check";
 import { useTripActions } from "@/components/trip/use-trip-actions";
+import { ANSWER_MODE_TEXTS, AnswerModeToggle } from "@/components/voice/answer-mode-toggle";
 import { MuteToggle } from "@/components/voice/mute-toggle";
 import { useVoiceInput } from "@/components/voice/use-voice-input";
 import { speakLine, stopSpeaking, useConversationSpeech, useSpeaking } from "@/components/voice/speech";
@@ -75,6 +76,7 @@ const RECONFIRM_TEXT = "The agent may still be running. Confirm your passport ag
 export const PANEL_TEXTS = [
   ...STAGE_TEXTS,
   ...CHECKLIST_LABELS,
+  ...ANSWER_MODE_TEXTS,
   "Tell me where you're going. I'll take care of the papers.",
   "Speak, in any language. You keep the last word.",
   "Type instead",
@@ -638,6 +640,7 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
           <IconButton label={t("What we said")} onClick={() => setHistory(true)}>
             <MessagesSquare className="size-[18px]" />
           </IconButton>
+          <AnswerModeToggle className="size-10 text-[var(--np-ink)]" t={t} />
           <MuteToggle className="size-10 text-[var(--np-ink)]" />
           <IconButton
             label={t("New trip")}

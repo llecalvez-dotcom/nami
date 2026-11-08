@@ -1,7 +1,8 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { FocusStage, type AgentView } from "@/components/panel/focus-stage";
+import { FocusStage, TypeInstead, type AgentView } from "@/components/panel/focus-stage";
+import { AnswerModeToggle, ANSWER_MODE_TEXTS } from "@/components/voice/answer-mode-toggle";
 import { agentSpeech, PANEL_TEXTS, StatusLine, WATCH_MESSAGE } from "@/components/panel/panel-screen";
 import { agentChecklist, REOPENED_TEXTS } from "@/lib/panel-focus";
 import type { ConversationItem } from "@/lib/trip-state";
@@ -72,6 +73,57 @@ describe("the side panel shows one thing at a time", () => {
     for (const text of ["Filling the form", "Waiting for you", "Done", "running", "to do", "Open the tab", ...Object.values(REOPENED_TEXTS)]) expect(PANEL_TEXTS).toContain(text);
     expect(WATCH_MESSAGE).toMatch(/tab on the left/);
     expect(WATCH_MESSAGE).toMatch(/never click Pay/);
+  });
+});
+
+describe("voice, typing or a tap at every step (ticket 20)", () => {
+  const purpose: ConversationItem = {
+    id: "q",
+    kind: "question",
+    from: "nami",
+    field: "purpose",
+    question: "Why are you going?",
+    options: [
+      { value: "tourism", label: "Tourism" },
+      { value: "business", label: "Business" },
+    ],
+    input: null,
+    answer: null,
+  };
+
+  it("offers the text field on a question that has no text input, next to its buttons and the microphone", () => {
+    const html = stage({ item: purpose });
+    expect(html).toContain("Type instead");
+    expect(html).toContain("Tourism");
+    expect(html).toContain("Business");
+    expect(html).toContain('aria-label="Speak"');
+  });
+
+  it("offers yes, no, the microphone and the text field on a proposal", () => {
+    const html = stage({ item: visa });
+    expect(html).toContain("Create my visa");
+    expect(html).toContain("Not now");
+    expect(html).toContain('aria-label="Speak"');
+    expect(html).toContain("Type instead");
+  });
+
+  it("shows the field closed in Voice mode and open and focused in Typing mode", () => {
+    const t = (text: string) => text;
+    const closed = renderToStaticMarkup(createElement(TypeInstead, { t, onSubmit: noop }));
+    expect(closed).toContain("Type instead");
+    expect(closed).not.toContain("<input");
+    const open = renderToStaticMarkup(createElement(TypeInstead, { t, onSubmit: noop, defaultOpen: true }));
+    expect(open).toContain("<input");
+    expect(open).toMatch(/<input[^>]*autofocus/i);
+  });
+
+  it("has a Voice / Typing switch, separate from mute, with translated texts", () => {
+    const html = renderToStaticMarkup(createElement(AnswerModeToggle, { t: (text: string) => text }));
+    expect(html).toContain('aria-label="Switch to typing"');
+    expect(html).toContain('data-answer-mode="voice"');
+    expect(html).not.toContain("Mute");
+    for (const text of ANSWER_MODE_TEXTS) expect(PANEL_TEXTS).toContain(text);
+    expect(ANSWER_MODE_TEXTS.join(" ")).not.toMatch(/[–—]/);
   });
 });
 
