@@ -347,8 +347,6 @@ export function applyFlightsChanges(trip: Trip, changes: AgentChanges, secrets: 
 
   if (terminal && !wasTerminal) {
     next = closeFlightQuestions({ ...next, agent_run: { ...next.agent_run!, pending_question: undefined } }, "Agent stopped");
-    // The run ended without opening the flight: its landing time goes, the papers get back their assumed windows.
-    if (flightsResult(run)?.landing_from_flight) next = withLanding(withResult(next, { landing_from_flight: false }), null);
     if (changes.left_official_site) {
       const host = redact(changes.left_official_site, secrets);
       next = retry(say(next, `Agent stopped: it left Google Flights (${host}). Nothing was booked.${changes.cancel_failed ? " Run holo local stop in a terminal to stop it." : ""}`));
@@ -361,6 +359,12 @@ export function applyFlightsChanges(trip: Trip, changes: AgentChanges, secrets: 
     } else {
       next = retry(say(next, "The flight search was closed. Nothing was booked."));
     }
+  }
+
+  // The run ended without opening the flight (here, or by Stop before this poll): its landing time goes, the papers
+  // get back their assumed windows. Once only: the flag is cleared.
+  if (terminal && flightsResult(run)?.landing_from_flight && !flightsResult(run)?.ready) {
+    next = withLanding(withResult(next, { landing_from_flight: false }), null);
   }
 
   return { trip: next, toolCalls: terminal ? [] : freshToolCalls(changes.pending_tool_calls, run.handled_tool_ids ?? []) };

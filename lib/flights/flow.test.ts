@@ -269,6 +269,14 @@ describe("the flights session", () => {
     expect(failed.request.arrival_at).toBeNull();
     expect(failed.formalities.find((f) => f.id === "arrival_card")?.closes_at).toBe("2026-11-24T00:00+08:00");
     expect(flightsResult(failed.agent_run)?.landing_from_flight).toBe(false);
+    // Stop by the traveller marks the run interrupted before the next poll: the landing goes all the same.
+    const stopped = stopAgent({ ...trip, agent_run: { ...trip.agent_run!, state: "running" } });
+    expect(stopped.request.arrival_at).toBe("2026-11-24T14:55+08:00");
+    const polled = applyAgentChanges(stopped, {
+      no_change: false, status: "interrupted", next_index: 9, steps: [], pending_tool_calls: [], answer: null, outcome: null, error_code: null, metrics: null,
+    }, []).trip;
+    expect(polled.request.arrival_at).toBeNull();
+    expect(polled.formalities.find((f) => f.id === "arrival_card")?.closes_at).toBe("2026-11-24T00:00+08:00");
     let kept = offerFlights(searching(), REPORT, FLIGHTS);
     kept = answerQuestion(kept, (last(kept) as { id: string }).id, "1", item.options[1].label);
     expect(kept.request.arrival_at).toBe(REQUEST.arrival_at);
