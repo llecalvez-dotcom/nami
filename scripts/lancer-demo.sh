@@ -222,7 +222,9 @@ set_env_local() {
   touch "$file"
   if grep -q "^$1=" "$file"; then
     local tmp; tmp="$(mktemp)"
-    grep -v "^$1=" "$file" > "$tmp" && printf '%s=%s\n' "$1" "$2" >> "$tmp" && mv "$tmp" "$file"
+    # grep -v returns 1 when nothing else is in the file: not an error here.
+    { grep -v "^$1=" "$file" || true; } > "$tmp"
+    printf '%s=%s\n' "$1" "$2" >> "$tmp" && mv "$tmp" "$file"
   else
     printf '%s=%s\n' "$1" "$2" >> "$file"
   fi
