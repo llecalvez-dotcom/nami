@@ -26,8 +26,7 @@ import {
   reopenAgentQuestion,
   startVisaRun,
   stopAgent,
-  type Trip,
-} from "@/lib/trip-state";
+  type Trip, hearFreeText } from "@/lib/trip-state";
 import { getTrip, saveTrip } from "@/lib/trip-store";
 
 // An empty local session lets the server use NAMI_LOCAL_SESSION_ID (the side panel shows no settings).
@@ -252,8 +251,24 @@ export function useTripActions({
     update(next);
     // "Search again" (or yes to the flights) with the city, the dates and the criterion already answered: no question
     // again, the Google Flights session starts now with the same parameters (lib/flights/flow.ts, startFlightsFlow).
-    if (accepted && item?.kind === "proposal" && item.action === "flights" && flightsAnswered(next)) void startFlightsRun();
+    // A search still running from the old city or dates is stopped first, then started again with the new ones.
+    if (accepted && item?.kind === "proposal" && item.action === "flights" && flightsAnswered(next)) void restartFlights();
     if (accepted && item?.kind === "proposal" && item.action === "hotels" && hotelsAnswered(next)) void startHotelsRun();
+  };
+
+  const restartFlights = async () => {
+    const current = latest();
+    if (current && current.agent_run?.kind === "flights" && isAgentActive(current.agent_run)) await stop();
+    await startFlightsRun();
+  };
+
+  // A sentence said while nothing was asked: read with the current request, only its corrections and preferences
+  // count (lib/trip-state.ts, hearFreeText). The trip is never started over.
+  const tell = async (text: string) => {
+    const current = latest();
+    if (!current) return;
+    const { request } = await requestTripParse({ transcript: text, current_request: current.request });
+    update(hearFreeText(latest() ?? current, text, request));
   };
 
   const sendChoice = async () => {
@@ -353,5 +368,5 @@ export function useTripActions({
     update(stopAgent(latest() ?? current));
   };
 
-  return { starting, createVisa, decide, answer, answerWithText, answerAgent, stop, startFlightsRun };
+  return { starting, createVisa, decide, answer, answerWithText, answerAgent, tell, stop, startFlightsRun };
 }

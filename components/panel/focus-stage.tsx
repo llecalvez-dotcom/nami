@@ -30,6 +30,8 @@ type Handlers = {
   onAnswerText: (itemId: string, text: string) => Promise<void>;
   onDecide: (itemId: string, accepted: boolean) => void;
   onStop: () => void;
+  // A sentence said while nothing is asked ("au fait, pas de vol de nuit"): corrections and preferences only.
+  onTell?: (text: string) => Promise<void>;
 };
 
 type Props = Handlers & {
@@ -62,6 +64,7 @@ export const STAGE_TEXTS = [
   "Your passport",
   "Your ID photo",
   "Type instead",
+  "Anything to change?",
   ...Object.values(READY_TITLE),
   ...Object.values(AGENT_TITLE),
 ];
@@ -405,15 +408,30 @@ function Answering(props: Props & { item: ConversationItem }) {
   );
 }
 
-// Nothing to answer: the wave follows Nami's voice and the agent; Stop while the agent works.
+// Nothing to answer: the wave follows Nami's voice and the agent; Stop while the agent works. The microphone on the
+// wave opens on a tap only, never by itself (no loop while the agent speaks): a correction or a preference said
+// meanwhile is noted without starting the trip over.
 function Resting(props: Props) {
-  const { agent, busy, t, onStop, scene } = props;
+  const { agent, busy, t, onStop, onTell, scene } = props;
   const speaking = useSpeaking();
+  const [telling, setTelling] = useState(false);
+  const voice = useVoiceInput(async (text) => {
+    if (!onTell) return;
+    setTelling(true);
+    try {
+      await onTell(text);
+    } finally {
+      setTelling(false);
+    }
+  });
+  const working = agent !== null || busy !== null || telling;
   return (
     <>
-      <Painting scene={scene} wave={waveState(null, speaking, agent !== null || busy !== null)} />
+      <Painting scene={scene} wave={waveState(onTell ? voice : null, speaking, working)} mic={onTell ? <WaveMic voice={voice} t={t} /> : undefined} />
       <Wall {...props} />
-      <div className="flex min-h-[76px] items-end px-5 pb-5">
+      <div className="flex min-h-[76px] flex-col justify-end gap-1 px-5 pb-5">
+        {onTell ? <VoiceHint voice={voice} t={t} unclear={null} /> : null}
+        {onTell ? <TypeInstead t={t} onSubmit={onTell} placeholder={t("Anything to change?")} /> : null}
         {agent ? (
           <button type="button" onClick={onStop} className={cn(secondaryButton, "flex items-center justify-center gap-2 bg-[var(--np-fill)] text-[var(--np-ink)]")}>
             <Square className="size-3.5 fill-current" /> {t("Stop")}

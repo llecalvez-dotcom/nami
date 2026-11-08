@@ -668,6 +668,7 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
         onAnswerAgent={(itemId, value) => void actions.answerAgent(itemId, value)}
         onDecide={decide}
         onStop={() => void actions.stop()}
+        onTell={actions.tell}
       />
       {history ? <History items={shownItems} t={t} onClose={() => setHistory(false)} /> : null}
       {showCard ? (

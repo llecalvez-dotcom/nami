@@ -8,6 +8,7 @@ import { AgentStateSchema, FlightCriterionSchema, FlightOptionSchema, type Agent
 import { isTerminalStatus, type ToolRequest } from "@/lib/h-agent";
 import { CRITERION_LABELS, describeFlight, flightLabel, formatPrice, introduceFlights, rankFlights } from "@/lib/flights/rank";
 import { normalizeText } from "@/lib/flights/read";
+import { applyPreferences, UNMET_PREFERENCE_TEXTS, unmetPreference } from "@/lib/journey/context";
 import { HOTELS_PROPOSAL } from "@/lib/hotels/rank";
 import { FLIGHTS_ORIGIN } from "@/lib/flights-agent";
 import { shortAnswer } from "@/lib/voice/short-answers";
@@ -292,13 +293,16 @@ function offerWithStops(trip: Trip): Trip {
 }
 
 // The same question again, with the same options: for the choice, the report_flights call H waits on stays attached.
-function askAgain(trip: Trip, item: FlightQuestion, text: string, reason = "Sorry, I didn't catch that."): Trip {
-  return push(say(answerItem(trip, item.id, text), reason), question(item.field, item.question, item.options, item.input === "text" ? "text" : null));
+// reason null: the sentence was a correction or a preference, already said back; the question just comes again.
+function askAgain(trip: Trip, item: FlightQuestion, text: string, reason: string | null = "Sorry, I didn't catch that."): Trip {
+  const told = reason === null ? answerItem(trip, item.id, text) : say(answerItem(trip, item.id, text), reason);
+  return push(told, question(item.field, item.question, item.options, item.input === "text" ? "text" : null));
 }
 
 // A spoken or typed answer. The return date is understood by /api/trip/parse (it already reads a date or a duration);
 // the criterion and the flight are matched here, on the words said. Nothing understood: the same question again.
-export function answerFlightQuestionWithText(trip: Trip, item: FlightQuestion, text: string, request: TripRequestDraft): Trip {
+export function answerFlightQuestionWithText(trip: Trip, item: FlightQuestion, text: string, request: TripRequestDraft, heard = false): Trip {
+  const again = heard ? null : undefined;
   switch (item.field) {
     case "origin": {
       const parsed = request.origin && request.origin !== trip.request.origin ? request.origin : null;
@@ -318,19 +322,19 @@ export function answerFlightQuestionWithText(trip: Trip, item: FlightQuestion, t
     }
     case "flight_criterion": {
       const criterion = matchCriterion(text);
-      if (!criterion) return askAgain(trip, item, text);
+      if (!criterion) return askAgain(trip, item, text, again);
       const told = matchCriteria(text).length > 1 ? say(trip, BALANCED_CRITERIA_MESSAGE) : trip;
       return answerFlightQuestion(told, item, criterion, CRITERION_LABELS[criterion]);
     }
     case "flight_choice": {
       const flight = matchFlight(text, flightsResult(trip.agent_run)?.options ?? [], flightCriterion(trip));
-      if (!flight) return askAgain(trip, item, text);
+      if (!flight) return askAgain(trip, item, text, again);
       const label = item.options.find((o) => o.value === String(flight.index))?.label ?? describeFlight(flight);
       return answerFlightQuestion(trip, item, String(flight.index), label);
     }
     case "flight_relax": {
       const short = shortAnswer("proposal", text);
-      if (!short) return askAgain(trip, item, text);
+      if (!short) return askAgain(trip, item, text, again);
       const option = item.options[short === "accept" ? 0 : 1];
       return answerFlightQuestion(trip, item, option.value, option.label);
     }
@@ -372,15 +376,19 @@ export function offerFlights(trip: Trip, call: ToolRequest, flights: FlightOptio
   const run = trip.agent_run;
   if (!run || run.kind !== "flights" || (run.handled_tool_ids ?? []).includes(toolCallKey(call))) return trip;
   const criterion = flightCriterion(trip);
-  const ranked = rankFlights(flights, criterion);
+  // The preferences first (night flights set aside when a day flight exists), then the criterion.
+  const preferred = applyPreferences(flights, trip.preferences).kept;
+  const unmet = unmetPreference(flights, trip.preferences);
+  const ranked = rankFlights(preferred, criterion);
   const marked = withResult(trip, { criterion, read: flights.length, options: ranked, tool_req: call }, { handled_tool_ids: [...(run.handled_tool_ids ?? []), toolCallKey(call)] });
   const withStep = { ...marked, agent_steps: [...marked.agent_steps, `Read ${flights.length} flights`] };
   if (criterion === "direct_only" && ranked.length === 0 && flights.length > 0) return explainNoDirect(withStep, flights);
   if (ranked.length === 0) return say(withStep, FLIGHTS_UNREADABLE_MESSAGE);
+  const warned = unmet ? say(withStep, UNMET_PREFERENCE_TEXTS[unmet]) : withStep;
   const intro = introduceFlights(criterion, flights).replace(/\.$/, "");
   const list = ranked.map((f) => describeFlight(f)).join("; then ");
   const options = ranked.map((f) => ({ label: flightLabel(f), value: String(f.index) }));
-  return push(withStep, question("flight_choice", `${intro}: ${list}: which one shall I open?`, options, null));
+  return push(warned, question("flight_choice", `${intro}: ${list}: which one shall I open?`, options, null));
 }
 
 // Direct only and nothing direct on the page: the constraint is said, not dropped. The flights with the fewest stops

@@ -1,3 +1,5 @@
+import { detectPreferences, mergePreferences, newPreferences, preferenceNoted, type Preference } from "@/lib/journey/context";
+import { affectedSearches, changeSentence, requestChanges, type RequestChange, type Search } from "@/lib/journey/corrections";
 import { INVALID_AGENT_ANSWER, parseAgentAnswer } from "@/lib/agent-answer";
 import {
   SAMPLE_AGENT_RUN,
@@ -100,6 +102,8 @@ export type Trip = {
   agent_steps: string[];
   // Outside Bali: the entry papers are searched live once the request is complete (applyLivePapers).
   papers_check?: "pending" | "done";
+  // What the traveller prefers, heard in any sentence and applied to every flight list (lib/journey/context.ts).
+  preferences?: Preference[];
 };
 
 type NewConversationItem = ConversationItem extends infer T ? (T extends ConversationItem ? Omit<T, "id"> : never) : never;
@@ -365,7 +369,9 @@ export function createSampleTrip(now: Date): Trip {
 }
 
 export function createTripFromRequest(id: string, request: TripRequestDraft, now: Date): Trip {
+  const preferences = detectPreferences(request.raw_text);
   const trip: Trip = {
+    ...(preferences.length ? { preferences } : {}),
     id,
     created_at: now.toISOString(),
     sample: false,
@@ -379,10 +385,57 @@ export function createTripFromRequest(id: string, request: TripRequestDraft, now
   return advance(push(trip, { kind: "user", text: request.raw_text }));
 }
 
+// What a sentence changes besides the answer: corrections ("Toulouse, not Lyon") and preferences ("no night flights"),
+// said back in one line each. A flight search already made from the old values is offered again, not redone silently;
+// a flight choice still open is closed, since its flights no longer match the request.
+export type Heard = { trip: Trip; changes: RequestChange[]; searches: Search[]; heard: boolean; closed: boolean };
+
+export function hearContext(trip: Trip, text: string, request: TripRequestDraft, except?: string): Heard {
+  const changes = requestChanges(trip.request, request, except);
+  const found = detectPreferences(text);
+  const fresh = newPreferences(trip.preferences, found);
+  let next: Trip = found.length ? { ...trip, preferences: mergePreferences(trip.preferences, found) } : trip;
+  if (changes.length) {
+    const patched = { ...next.request };
+    for (const c of changes) (patched as Record<string, unknown>)[c.field] = c.to;
+    if (changes.some((c) => c.field === "origin") && request.origin_country) patched.origin_country = request.origin_country;
+    next = { ...next, request: patched };
+  }
+  const sentence = changeSentence(changes);
+  if (sentence) next = push(next, { kind: "agent", text: sentence });
+  const noted = preferenceNoted(fresh);
+  if (noted) next = push(next, { kind: "agent", text: noted });
+  const searches = affectedSearches(changes);
+  let closed = false;
+  if (searches.includes("flights") && next.agent_run?.kind === "flights") {
+    const open = next.conversation.find((i) => i.kind === "question" && (i.field === "flight_choice" || i.field === "flight_relax") && i.answer === null);
+    if (open) {
+      next = updateItem(next, open.id, { answer: text });
+      closed = true;
+    }
+    const from = next.request.origin ? ` from ${next.request.origin}` : "";
+    next = pushProposal(next, "flights", `Shall I search your flights again${from}, with these changes?`, "Search again", "Not now");
+  }
+  return { trip: next, changes, searches, heard: changes.length > 0 || fresh.length > 0, closed };
+}
+
+export const NOTHING_HEARD_MESSAGE = "I heard you, nothing changes in your trip.";
+
+// A sentence said while nothing was asked (the agent works, or Nami rests): only its corrections and preferences count.
+export function hearFreeText(trip: Trip, text: string, request: TripRequestDraft): Trip {
+  const said = push(trip, { kind: "user", text });
+  const heard = hearContext(said, text, request);
+  return heard.heard ? heard.trip : push(heard.trip, { kind: "agent", text: NOTHING_HEARD_MESSAGE });
+}
+
 export function answerQuestionWithText(trip: Trip, itemId: string, text: string, request: TripRequestDraft): Trip {
   const item = trip.conversation.find((i) => i.id === itemId);
   if (!item || item.kind !== "question" || item.from !== "nami" || item.answer !== null) return trip;
-  if (isFlightQuestion(item.field)) return answerFlightQuestionWithText(trip, { ...item, field: item.field }, text, request);
+  const heard = hearContext(trip, text, request, item.field);
+  if (heard.closed) return heard.trip;
+  trip = heard.trip;
+  request = { ...request, ...Object.fromEntries(heard.changes.map((c) => [c.field, c.to])) };
+  if (isFlightQuestion(item.field)) return answerFlightQuestionWithText(trip, { ...item, field: item.field }, text, request, heard.heard);
   if (isHotelQuestion(item.field)) return answerHotelQuestionWithText(trip, { ...item, field: item.field }, text, request);
   const answered = { ...updateItem(trip, itemId, { answer: text }), request };
   const stillMissing = item.field !== "email" && request[item.field] === null;
