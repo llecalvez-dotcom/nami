@@ -9,7 +9,7 @@
     :host, *, *::before, *::after { pointer-events: none !important; box-sizing: border-box; }
     :host { all: initial; font-family: system-ui, sans-serif; }
     .cursor { position: fixed; left: 0; top: 0; width: 24px; height: 24px; opacity: 0;
-      transition: transform 450ms cubic-bezier(0.23, 1, 0.32, 1), opacity 200ms ease-out; filter: drop-shadow(0 1px 3px #3b176e66); }
+      transition: transform var(--glide, 450ms) cubic-bezier(0.23, 1, 0.32, 1), opacity 200ms ease-out; filter: drop-shadow(0 1px 3px #3b176e66); }
     .ripple { position: fixed; width: 18px; height: 18px; margin: -9px; border: 2px solid #8b5cf6;
       border-radius: 50%; background: #8b5cf633; animation: ripple 400ms ease-out forwards; }
     @keyframes ripple { from { transform: scale(.5); opacity: 1; } to { transform: scale(3); opacity: 0; } }
@@ -54,9 +54,31 @@
   // The agent's clicks and a real mouse send the same trusted events (CDP sets the same screen coordinates, measured
   // 2026-11-07). The cursor therefore follows presses only: hovering with the real mouse never moves it, and it glides
   // from one click of the agent to the next. It stays visible while the agent works.
-  const move = (event) => {
-    cursor.style.transform = `translate(${event.clientX}px, ${event.clientY}px)`;
+  let lastPoint = 0;
+  const place = (x, y, glide) => {
+    cursor.style.setProperty("--glide", glide);
+    cursor.style.transform = `translate(${x}px, ${y}px)`;
     cursor.style.opacity = agentActive ? "1" : "0";
+  };
+  const move = (event) => {
+    lastPoint = Date.now();
+    place(event.clientX, event.clientY, "450ms");
+  };
+  // For the demo (Nathan, 2026-11-08): while the agent works the cursor is always there and always moving, between the
+  // things one could click on the page, even on a page where the agent has not clicked yet. Purely visual: it never
+  // clicks, and a real click of the agent takes over at once.
+  const clickable = 'a[href], button, select, input:not([type=hidden]), [role="button"], [role="link"], [role="option"], li';
+  let wanderTimer;
+  const spot = () => {
+    const rects = [...document.querySelectorAll(clickable)].slice(0, 200).map((element) => element.getBoundingClientRect())
+      .filter((r) => r.width > 8 && r.height > 8 && r.top > 40 && r.left >= 0 && r.bottom < innerHeight - 20 && r.right <= innerWidth);
+    const r = rects[Math.floor(Math.random() * rects.length)];
+    return r ? [r.left + r.width / 2, r.top + r.height / 2] : [innerWidth * (0.25 + Math.random() * 0.5), innerHeight * (0.25 + Math.random() * 0.5)];
+  };
+  const wander = () => {
+    if (!agentActive) return;
+    if (document.visibilityState === "visible" && Date.now() - lastPoint > 1200) place(...spot(), "1000ms");
+    wanderTimer = setTimeout(wander, 1300 + Math.random() * 700);
   };
   const ripple = (x, y) => {
     const ring = layer("ripple");
@@ -93,8 +115,11 @@
   }
   const apply = (message) => {
     if (message?.type !== "nami:agent-state" || typeof message.active !== "boolean" || typeof message.step !== "string") return;
+    const started = message.active && !agentActive;
     agentActive = message.active;
     if (!agentActive) cursor.style.opacity = "0";
+    clearTimeout(wanderTimer);
+    if (agentActive) wanderTimer = setTimeout(wander, started ? 150 : 600);
     frame.hidden = label.hidden = !message.active;
     bubble.textContent = message.step.slice(0, 320).replace(/[–—]/g, ", ");
     bubble.hidden = !message.active || !message.step.trim();
