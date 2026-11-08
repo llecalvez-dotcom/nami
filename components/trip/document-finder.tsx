@@ -103,12 +103,7 @@ export function DocumentFinder({ onConfirm, demo = false, focusOnMount = false, 
         </div>
       ) : (
         <>
-          {documents.length === 0 ? (
-            <>
-              <p className="text-sm">{texts.empty}</p>
-              <DocumentDrop kind={kind} onUploaded={onConfirm} />
-            </>
-          ) : null}
+          {documents.length === 0 ? <p className="text-sm">{texts.empty}</p> : null}
           {documents.map((document) => (
             <div key={document.id} className="flex flex-wrap items-center gap-3 rounded-xl bg-card p-3">
               <DocumentPreview document={document} demo={demo} />
@@ -119,6 +114,7 @@ export function DocumentFinder({ onConfirm, demo = false, focusOnMount = false, 
               <Button type="button" size="sm" onClick={() => onConfirm(document)}>This one</Button>
             </div>
           ))}
+          <DocumentDrop kind={kind} onUploaded={onConfirm} />
           <Button type="button" size="sm" variant="ghost" onClick={() => setDismissed(true)}>None of these</Button>
         </>
       )}
