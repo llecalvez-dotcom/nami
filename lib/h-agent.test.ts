@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { browserSettings, agentName, agentSettings, cancelSession, createSession, createSessionBody, getAvailableSessionSlots, getChanges, HAgentError, sendToolResult } from "@/lib/h-agent";
+import { browserSettings, agentName, agentSettings, cancelSession, CREATE_TIMEOUT_MS, createSession, createSessionBody, getAvailableSessionSlots, getChanges, getSessionStatus, getSessionSteps, H_DID_NOT_ANSWER, H_TIMEOUT_STATUS, HAgentError, REQUEST_TIMEOUT_MS, sendToolResult } from "@/lib/h-agent";
 import { PAPER_ANSWER_FORMAT } from "@/lib/agent-answer";
 
 const API = "https://agp.eu.hcompany.ai/api/v2";
@@ -263,5 +263,78 @@ describe("sendToolResult and cancelSession", () => {
     await cancelSession("s-1");
     expect(lastCall(fetch)[0]).toBe(`${API}/sessions/s-1`);
     expect(lastCall(fetch)[1].method).toBe("DELETE");
+  });
+});
+
+describe("a deadline on every call (bench 2026-11-08: POST /sessions pended for minutes)", () => {
+  const pending = () => vi.fn<(url: string, init: RequestInit) => Promise<Response>>((_url, init) =>
+    new Promise((_resolve, reject) => init.signal?.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })))));
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("cuts a pending session creation after 30 s with the cause, as a 504 for the route", async () => {
+    const fetch = pending();
+    vi.stubGlobal("fetch", fetch);
+    const result = createSession(INPUT).catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(CREATE_TIMEOUT_MS - 1);
+    expect(fetch).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(1);
+    const error = await result;
+    expect(error).toBeInstanceOf(HAgentError);
+    expect((error as HAgentError).status).toBe(H_TIMEOUT_STATUS);
+    expect((error as HAgentError).message).toContain(H_DID_NOT_ANSWER);
+    expect((error as HAgentError).message).toContain("30 s on POST /sessions");
+  });
+
+  it("cuts the other calls after 20 s, retries included, and never after a success", async () => {
+    const fetch = pending();
+    vi.stubGlobal("fetch", fetch);
+    const result = getSessionStatus("s-1").catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    expect(await result).toMatchObject({ status: H_TIMEOUT_STATUS });
+    expect(fetch).toHaveBeenCalledOnce();
+
+    // Retries stay inside the same deadline: a second 10 s backoff would end at the deadline, so the call gives up.
+    const slow = vi.fn(async () => new Response("private", { status: 503, headers: { "Retry-After": "10" } }));
+    vi.stubGlobal("fetch", slow);
+    const retried = getSessionStatus("s-1").catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+    expect(await retried).toMatchObject({ status: H_TIMEOUT_STATUS });
+    expect(slow).toHaveBeenCalledTimes(2);
+
+    const quick = vi.fn(async () => Response.json({ status: "running" }));
+    vi.stubGlobal("fetch", quick);
+    expect(await getSessionStatus("s-1")).toBe("running");
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS * 2);
+    expect(quick).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the long poll of changes on its own timeout", async () => {
+    const fetch = pending();
+    vi.stubGlobal("fetch", fetch);
+    const result = getChanges("s-1", 0, { waitForSeconds: 20 }).catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS + 5_000);
+    let settled = false;
+    void result.then(() => { settled = true; });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await result).toMatchObject({ status: H_TIMEOUT_STATUS });
+  });
+});
+
+describe("getSessionSteps", () => {
+  it("reads metrics.steps without waiting, 204 meaning nothing happened, and counts the actions when metrics are missing", async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json({ status: "running", metrics: { steps: 4 } }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(Response.json({ status: "running", metrics: null, new_events: [{ type: "AgentEvent", data: { kind: "observation_event" } }] }))
+      .mockResolvedValueOnce(Response.json({ status: "running", new_events: [{ type: "AgentEvent", data: { kind: "policy_event" } }, { type: "AgentEvent", data: { kind: "policy_event" } }] }));
+    await expect(getSessionSteps("s1", { fetch })).resolves.toBe(4);
+    expect(String(fetch.mock.calls[0][0])).toContain("/sessions/s1/changes?from_index=0&wait_for_seconds=0");
+    await expect(getSessionSteps("s1", { fetch })).resolves.toBe(0);
+    await expect(getSessionSteps("s1", { fetch })).resolves.toBe(0);
+    await expect(getSessionSteps("s1", { fetch })).resolves.toBe(2);
   });
 });

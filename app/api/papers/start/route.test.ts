@@ -434,6 +434,37 @@ describe("POST /api/papers/start (route 5)", () => {
     expect(fetch).toHaveBeenCalledTimes(60);
   });
 
+  it("frees the start slot when H never answers the creation: 30 s, a clear 503, then the next click is accepted", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.useFakeTimers();
+    try {
+      fetch.mockImplementation((url: string, init: RequestInit) => url.endsWith("/quota")
+        ? Promise.resolve(Response.json({ scope: "organization", limit: 3, active: 0, available: 3 }))
+        : new Promise<Response>((_resolve, reject) => init.signal?.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })))));
+      const first = start(BODY);
+      await vi.advanceTimersByTimeAsync(10);
+      // While the first start waits for H, the concurrency guard says busy (not a quota), 429 in a few ms.
+      const meanwhile = await start(BODY);
+      expect(meanwhile.status).toBe(429);
+      expect(await meanwhile.json()).toEqual({ error: "Busy, try again in a moment.", busy: true });
+
+      await vi.advanceTimersByTimeAsync(30_000);
+      const response = await first;
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ error: "H did not answer. Try again in a moment.", transient: true });
+      expect(response.headers.get("Retry-After")).toBe("5");
+
+      fetch.mockImplementation(async (url: string) => url.endsWith("/quota")
+        ? Response.json({ scope: "organization", limit: 3, active: 0, available: 3 })
+        : Response.json({ id: "s-2", status: { status: "pending" } }, { status: 201 }));
+      const second = await start(BODY);
+      expect(second.status).toBe(201);
+      expect(await second.json()).toMatchObject({ session_id: "s-2" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("answers 429 when another H session runs", async () => {
     fetch.mockImplementation(async () => new Response("quota", { status: 429, headers: { "Retry-After": "0" } }));
     const response = await start(BODY);

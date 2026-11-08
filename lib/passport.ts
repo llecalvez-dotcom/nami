@@ -20,11 +20,25 @@ export type ReaderName = "off" | "h" | "anthropic";
 // Reads one passport image and returns the raw JSON text of the model. Never logs the image or the answer.
 export type PassportReader = { name: string; read: (image: PassportImage) => Promise<string> };
 
+// transient: the provider was slow or down (timeout, 5xx, 408, 429, network), the document itself is not in cause.
 export class PassportReadError extends Error {
-  constructor(message: string) {
+  constructor(message: string, readonly transient = false) {
     super(message);
     this.name = "PassportReadError";
   }
+}
+
+const TRANSIENT_STATUS = /returned (408|429|5\d\d)$/;
+export const PROVIDER_LABELS: Record<string, string> = { h: "H", anthropic: "Anthropic" };
+export const providerDidNotAnswer = (reader: PassportReader) => `${PROVIDER_LABELS[reader.name] ?? "The reader"} did not answer. Try again in a moment.`;
+// Between the two tries when the provider fails: short, the traveller is waiting with the passport found.
+export const READ_RETRY_DELAY_MS = 1_500;
+
+export function isTransientReadError(error: unknown): boolean {
+  if (error instanceof PassportReadError) return error.transient || TRANSIENT_STATUS.test(error.message);
+  if (error instanceof DOMException) return error.name === "TimeoutError" || error.name === "AbortError";
+  if (error instanceof Error) return error.name === "TimeoutError" || error.name === "AbortError" || error instanceof TypeError;
+  return false;
 }
 
 const MODEL_OUTPUT_JSON_SCHEMA = {
@@ -60,7 +74,7 @@ function dataUri(image: PassportImage): string {
 
 async function okJson(response: Response, provider: string): Promise<unknown> {
   // The body may contain passport data: never copy it into the error.
-  if (!response.ok) throw new PassportReadError(`${provider} returned ${response.status}`);
+  if (!response.ok) throw new PassportReadError(`${provider} returned ${response.status}`, response.status === 408 || response.status === 429 || response.status >= 500);
   return response.json();
 }
 
@@ -237,11 +251,34 @@ function unconfirmed(extraction: DocumentExtraction): boolean {
 
 const score = (extraction: DocumentExtraction) => (extraction.mrz_verified?.length ?? 0) * 10 - extraction.warnings.length;
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// One read of the provider. H was down for 3 minutes on the bench (2026-11-08: two 502 after 30 s on the passport):
+// a timeout or a 5xx is tried once more after a short delay, and a second failure names the provider, not the document.
+async function readOnce(image: PassportImage, reader: PassportReader, retryDelayMs: number): Promise<string> {
+  try {
+    return await reader.read(image);
+  } catch (error) {
+    if (!isTransientReadError(error)) throw error;
+    console.error(`passport: ${reader.name} reader slow or down, trying once more`);
+    await sleep(retryDelayMs);
+    try {
+      return await reader.read(image);
+    } catch (second) {
+      if (!isTransientReadError(second)) throw second;
+      throw new PassportReadError(providerDidNotAnswer(reader), true);
+    }
+  }
+}
+
 // The vision model reads the same image differently from one call to the next (seen on 2026-11-07): when the MRZ
 // does not confirm the first reading, it reads once more and the better reading is kept.
-export async function extractPassport(image: PassportImage, trip: TripDates, reader: PassportReader): Promise<DocumentExtraction> {
+export async function extractPassport(
+  image: PassportImage, trip: TripDates, reader: PassportReader, options: { retryDelayMs?: number } = {},
+): Promise<DocumentExtraction> {
+  const retryDelayMs = options.retryDelayMs ?? READ_RETRY_DELAY_MS;
   try {
-    const first = toExtraction(await reader.read(image), trip);
+    const first = toExtraction(await readOnce(image, reader, retryDelayMs), trip);
     if (!unconfirmed(first)) return first;
     try {
       const second = toExtraction(await reader.read(image), trip);
@@ -251,6 +288,7 @@ export async function extractPassport(image: PassportImage, trip: TripDates, rea
     }
   } catch (error) {
     console.error(`passport: ${reader.name} reader failed:`, error instanceof PassportReadError ? error.message : "request failed");
-    throw error instanceof PassportReadError ? error : new PassportReadError("Passport reading failed");
+    if (error instanceof PassportReadError) throw error;
+    throw new PassportReadError("Passport reading failed", isTransientReadError(error));
   }
 }

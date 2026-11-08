@@ -4,6 +4,8 @@ import {
   expiryWarning,
   extractPassport,
   hReader,
+  isTransientReadError,
+  PassportReadError,
   readerName,
   type PassportReader,
   toExtraction,
@@ -112,6 +114,55 @@ describe("extractPassport", () => {
     expect(JSON.stringify(log.mock.calls)).not.toContain(IMAGE.base64);
     expect(JSON.stringify(log.mock.calls)).not.toContain("secret response");
     log.mockRestore();
+  });
+});
+
+describe("extractPassport when H is slow or down (bench, 2026-11-08: two 502 after 30 s)", () => {
+  const quiet = () => vi.spyOn(console, "error").mockImplementation(() => {});
+  const timeout = () => new DOMException("The operation was aborted due to timeout", "TimeoutError");
+
+  it("reads again once after a timeout, and succeeds", async () => {
+    const log = quiet();
+    const h = vi.fn().mockRejectedValueOnce(timeout()).mockResolvedValueOnce(JSON.stringify(SPECIMEN));
+    const extraction = await extractPassport(IMAGE, TRIP, reader("h", h), { retryDelayMs: 0 });
+    expect(extraction.fields.surname).toBe("MARTIN");
+    // Two reads for the failure and the retry; a third may follow for the MRZ check, as before.
+    expect(h.mock.calls.length).toBeGreaterThanOrEqual(2);
+    log.mockRestore();
+  });
+
+  it("reads again once after a 5xx of the provider", async () => {
+    const log = quiet();
+    const h = vi.fn().mockRejectedValueOnce(new PassportReadError("H Models API returned 502", true)).mockResolvedValueOnce(JSON.stringify(SPECIMEN));
+    await expect(extractPassport(IMAGE, TRIP, reader("h", h), { retryDelayMs: 0 })).resolves.toMatchObject({ fields: { surname: "MARTIN" } });
+    expect(h.mock.calls.length).toBeGreaterThanOrEqual(2);
+    log.mockRestore();
+  });
+
+  it("names H, not the document, after two failures", async () => {
+    const log = quiet();
+    const h = vi.fn().mockRejectedValueOnce(timeout()).mockRejectedValueOnce(new PassportReadError("H Models API returned 503", true));
+    const failure = extractPassport(IMAGE, TRIP, reader("h", h), { retryDelayMs: 0 });
+    await expect(failure).rejects.toThrow("H did not answer. Try again in a moment.");
+    await expect(failure).rejects.toMatchObject({ transient: true });
+    expect(h).toHaveBeenCalledTimes(2);
+    log.mockRestore();
+  });
+
+  it("does not retry a failure of the document itself (bad JSON, 4xx)", async () => {
+    const log = quiet();
+    const h = vi.fn().mockRejectedValue(new PassportReadError("H Models API returned 400"));
+    await expect(extractPassport(IMAGE, TRIP, reader("h", h), { retryDelayMs: 0 })).rejects.toMatchObject({ transient: false });
+    expect(h).toHaveBeenCalledTimes(1);
+    log.mockRestore();
+  });
+
+  it("flags a 5xx, 408 or 429 of the provider as transient in hReader", async () => {
+    const fetchImpl = vi.fn(async () => new Response("private", { status: 502 })) as unknown as typeof fetch;
+    const failure = hReader("fictitious-key", fetchImpl).read(IMAGE);
+    await expect(failure).rejects.toMatchObject({ transient: true, message: "H Models API returned 502" });
+    expect(isTransientReadError(new PassportReadError("H Models API returned 401"))).toBe(false);
+    expect(isTransientReadError(new TypeError("fetch failed"))).toBe(true);
   });
 });
 

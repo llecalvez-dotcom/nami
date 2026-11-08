@@ -10,7 +10,7 @@ import {
   SAMPLE_SUGGESTIONS,
   SAMPLE_TRIP_ID,
 } from "@/data/sample";
-import { freshToolCalls, redact, toolCallKey, type AgentChanges } from "@/lib/agent-changes";
+import { freshToolCalls, H_NOT_ANSWERING_MESSAGE, H_SLOW_RESTART_MESSAGE, redact, toolCallKey, wantsAutoRestart, type AgentChanges } from "@/lib/agent-changes";
 import { BALI_PAPERS, getBaliPaper } from "@/lib/bali-papers";
 import { AgentStateSchema } from "@/lib/contracts";
 import { isTerminalStatus, type ToolRequest } from "@/lib/h-agent";
@@ -522,15 +522,15 @@ export function pushAgentMessage(trip: Trip, text: string): Trip {
   return push(trip, { kind: "agent", text });
 }
 
-export function startVisaRun(trip: Trip, itemId: string, sessionId: string, now: Date, passportFileReady = false): Trip {
+// quiet: the automatic restart after a slow H, already announced; the "agent is filling in" line is not said twice.
+export function startVisaRun(trip: Trip, itemId: string, sessionId: string, now: Date, passportFileReady = false, quiet = false): Trip {
   const item = trip.conversation.find((i) => i.id === itemId);
   // Already "accepted" when the side panel went looking for the passport first; never a second run.
   if (!item || item.kind !== "proposal" || (item.action !== "create_visa" && item.action !== "create_arrival_card")
     || item.decision === "declined" || isAgentActive(trip.agent_run)) return trip;
   const paperId = item.action === "create_arrival_card" ? "arrival_card" : "evoa";
   const paper = getBaliPaper(paperId);
-  return push(
-    {
+  const started: Trip = {
       ...updateItem(trip, itemId, { decision: "accepted" }),
       agent_run: {
         session_id: sessionId,
@@ -546,16 +546,27 @@ export function startVisaRun(trip: Trip, itemId: string, sessionId: string, now:
         "Session created on your local Chrome",
         ...(passportFileReady ? ["Passport file ready for the agent"] : []),
       ],
-    },
-    {
-      kind: "agent",
-      text: `The agent is filling in your ${paperId === "evoa" ? "visa" : "arrival card"} on ${paper.domain}, in your Chrome. Keep your hand on Stop agent.`,
-    },
-  );
+    };
+  if (quiet) return started;
+  return push(started, {
+    kind: "agent",
+    text: `The agent is filling in your ${paperId === "evoa" ? "visa" : "arrival card"} on ${paper.domain}, in your Chrome. Keep your hand on Stop agent.`,
+  });
 }
 
 function withRun(trip: Trip, patch: Partial<AgentRun>): Trip {
   return trip.agent_run ? { ...trip, agent_run: { ...trip.agent_run, ...patch } } : trip;
+}
+
+// The one automatic restart of a session H never started: "taken" while the panel starts it again, "done" on the new
+// run, "failed" when that start failed (the traveller gets the retry proposal instead).
+export function markAutoRestart(trip: Trip, step: "taken" | "failed" | "done"): Trip {
+  return withRun(trip, { auto_restart: step });
+}
+
+// After the automatic restart failed too: said once, with the same paper proposed again (manual retry).
+export function giveUpAutoRestart(trip: Trip, paperId: "evoa" | "arrival_card"): Trip {
+  return push(markAutoRestart(trip, "failed"), { kind: "agent", text: H_NOT_ANSWERING_MESSAGE }, retryProposal(paperId));
 }
 
 function closeAgentQuestions(trip: Trip, answer: string): Trip {
@@ -616,7 +627,11 @@ export function applyAgentChanges(
     next = { ...closeAgentQuestions(next, "Agent stopped"), agent_run: { ...next.agent_run!, pending_question: undefined } };
     const reachedPayment = typeof run.result?.summary === "string";
     const retry = retryProposal(run.paper_id ?? "evoa");
-    if (changes.left_official_site) {
+    if (wantsAutoRestart(run, changes)) {
+      next = push(withRun(next, { auto_restart: "due" }), { kind: "agent", text: H_SLOW_RESTART_MESSAGE });
+    } else if (changes.error_code === "stalled") {
+      next = push(next, { kind: "agent", text: H_NOT_ANSWERING_MESSAGE }, retry);
+    } else if (changes.left_official_site) {
       const host = redact(changes.left_official_site, secrets);
       next = push(
         next,

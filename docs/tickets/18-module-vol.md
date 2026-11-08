@@ -109,6 +109,10 @@ Copie de `scripts/passage-evoa.mjs` : démarre par `/api/flights/start`, suit `/
 7. **Ordre des questions** : le critère est demandé avant de lancer l'agent (pendant qu'il ouvre Google, H n'attend pas), le choix du vol après la lecture ; H attend le résultat de `report_flights` pendant le choix, dans les 600 s ; à l'expiration, Nami le dit et propose de relancer.
 8. **Session Vol** : outils `ask_user`, `report_ready`, `report_flights` seulement (pas de `<select>` natif sur Google Flights) ; liaison en mémoire comme les papiers ; aucune donnée personnelle dans la session.
 
+## Note du 8 novembre : H lent (F38)
+
+Quand H ouvre la session Vol mais ne pilote jamais le navigateur (aucune action en 45 s), Nami relance la même recherche une fois toute seule, avec les mêmes dates, la même ville de départ et le même critère (`flightsStartBody`), sans reposer une question ; la ligne d'état dit « H is slow, starting again ». Si la relance se fige aussi, « H is not answering right now. Try again in a minute. » et la proposition « Shall I search your flights again? » (`FLIGHTS_RETRY_PROPOSAL`, jamais en double). Une session qui avait déjà agi n'est pas relancée automatiquement. Détails : [docs/tests/2026-11-08-h-lent.md](../tests/2026-11-08-h-lent.md).
+
 ## Ce qui est hors de ce ticket
 
 - Choix du siège, bagages, assurance, paiement : jamais.

@@ -144,12 +144,23 @@ describe("POST /api/documents/extract (route 12)", () => {
     expect((await form(jpeg())).status).toBe(503);
   });
 
-  it("answers 502 without leaking the model answer when reading fails", async () => {
+  it("answers 503 naming H, after one retry, when H fails twice, without leaking its body (2026-11-08)", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
-    vi.stubGlobal("fetch", vi.fn(async () => new Response("secret body", { status: 500 })));
+    const fetch = vi.fn(async () => new Response("secret body", { status: 500 }));
+    vi.stubGlobal("fetch", fetch);
+    const response = await form(jpeg());
+    expect(response.status).toBe(503);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    const text = await response.text();
+    expect(text).toContain("H did not answer. Try again in a moment.");
+    expect(text).not.toContain("secret body");
+  });
+
+  it("answers 502 when the model answer itself is unusable (the document, not H)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ choices: [{ message: { content: "not json at all" } }] })));
     const response = await form(jpeg());
     expect(response.status).toBe(502);
-    expect(await response.text()).not.toContain("secret body");
   });
 });
 

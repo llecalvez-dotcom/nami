@@ -14,11 +14,13 @@ export const API_LIMITS = {
   intent: 16 * 1024,
 } as const;
 
+// Per client and per 10 min. Raised on 2026-11-08: an evening of bench tests chains the retries, and a slow H made the
+// former limits (formalities 20, extract 5, parse 30, say 400, transcribe 20) answer 429 in the middle of a visa.
 const QUOTA_LIMITS = {
-  parse: 30,
-  formalities: 20,
-  transcribe: 20,
-  extract: 5,
+  parse: 60,
+  formalities: 60,
+  transcribe: 120,
+  extract: 30,
   access: 10,
   // Each call starts a paid H agent session in the traveller's Chrome. 30 per 10 min: a full run (visa, arrival card,
   // flights) plus retries hit the former 5 on the bench (2026-11-08).
@@ -29,10 +31,19 @@ const QUOTA_LIMITS = {
   // One call per new message of Nami or step of the agent, in the traveller's language.
   translate: 200,
   // Lines read aloud through the Mac's speakers, local only.
-  say: 400,
+  say: 1200,
   // One call per spoken answer the closed word lists do not understand.
   intent: 200,
 } as const;
+
+export const BUSY_MESSAGE = "Busy, try again in a moment.";
+
+// The delay is in the message too: the panel shows the body, not the header.
+export function tooManyRequests(retryAfterS: number): string {
+  const minutes = Math.ceil(retryAfterS / 60);
+  const wait = retryAfterS < 90 ? `${retryAfterS} seconds` : `${minutes} minutes`;
+  return `Too many requests. Try again in ${wait}.`;
+}
 
 const CONCURRENCY_LIMITS = {
   parse: 4,
@@ -105,13 +116,15 @@ export function guard(request: Request, route: ApiRoute, now: () => number = Dat
   if (exhaustedQuota) {
     const retryAfter = Math.max(1, Math.ceil((exhaustedQuota.quota.resetAt - timestamp) / 1000));
     return Response.json(
-      { error: "Too many requests. Try again later." },
+      { error: tooManyRequests(retryAfter) },
       { status: 429, headers: { "Retry-After": String(retryAfter) } },
     );
   }
 
   const active = activeByRoute.get(route) ?? 0;
-  if (active >= CONCURRENCY_LIMITS[route]) return Response.json({ error: "Busy, try again in a moment." }, { status: 429 });
+  // busy: a call of the same kind is still running (a start waiting for H, up to 30 s): not a quota, the panel waits
+  // and tries again by itself.
+  if (active >= CONCURRENCY_LIMITS[route]) return Response.json({ error: BUSY_MESSAGE, busy: true }, { status: 429 });
 
   if (quotas.size >= 1000) {
     for (const [entry, value] of quotas) {

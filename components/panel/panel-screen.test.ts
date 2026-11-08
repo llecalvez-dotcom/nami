@@ -80,7 +80,7 @@ describe("what Nami says aloud about the agent", () => {
     expect(agentSpeech("FRANCE is selected. Now I need to select the purpose.")).toBe("FRANCE is selected.");
   });
 
-  it.each(["Action: scroll_web", "On evisa.imigrasi.go.id", "A step failed, the agent retries", "Session created on your local Chrome", "Agent finished", "OK"])(
+  it.each(["Action: scroll_web", "On evisa.imigrasi.go.id", "A step failed, the agent retries", "Session created on your local Chrome", "Agent finished", "OK", "The agent stopped answering"])(
     "stays silent on a technical step: %s",
     (step) => expect(agentSpeech(step)).toBeNull(),
   );

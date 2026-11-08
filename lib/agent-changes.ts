@@ -1,4 +1,5 @@
 // Shared by the changes route (server) and the Trip screen (browser): plain functions, no logging.
+import type { AgentRun } from "@/lib/contracts";
 import type { HChanges, HEvent, ToolRequest } from "@/lib/h-agent";
 
 export type AgentMetrics = { steps: number; total_cost: number | null };
@@ -17,7 +18,18 @@ export type AgentChanges = {
   // Set by the changes route when the agent left the paper's official domain: the H session was cancelled.
   left_official_site?: string;
   cancel_failed?: boolean;
+  // With error_code "stalled": H never acted (no field touched), so the panel starts the same session again, once.
+  stalled_before_action?: boolean;
 };
+
+// Said once each, in the panel and aloud, when H is slow (bench 2026-11-08: H opened the sessions and never drove the browser).
+export const H_SLOW_RESTART_MESSAGE = "H is slow, starting again.";
+export const H_NOT_ANSWERING_MESSAGE = "H is not answering right now. Try again in a minute.";
+
+// The run just ended as stalled before H's first action, and it was not itself the automatic restart: start it again.
+export function wantsAutoRestart(run: Pick<AgentRun, "auto_restart">, changes: Pick<AgentChanges, "error_code" | "stalled_before_action">): boolean {
+  return changes.error_code === "stalled" && changes.stalled_before_action === true && run.auto_restart !== "done";
+}
 
 const MAX_STEP_LENGTH = 160;
 

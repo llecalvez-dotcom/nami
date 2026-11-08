@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { preflightBrowser, resetBrowserPreflight } from "@/lib/agent-preflight";
-import { abandonSession, resetAgentStall } from "@/lib/agent-stall";
+import { BUSY, preflightBrowser, releaseBrowser, resetBrowserPreflight } from "@/lib/agent-preflight";
+import { abandonSession, FIRST_STALL_MS, isAbandoned, releaseSession, resetAgentStall, trackProgress } from "@/lib/agent-stall";
 import type { CdpConnection } from "@/lib/chrome-cdp";
 
 const DOMAIN = "evisa.imigrasi.go.id";
@@ -23,6 +23,7 @@ beforeEach(() => {
 
 afterEach(() => {
   resetBrowserPreflight();
+  resetAgentStall();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
 });
@@ -89,9 +90,16 @@ describe("browser preflight", () => {
     lease.release();
   });
 
+  // The previous session has acted (a policy_event): it is really at work in the browser.
+  const acting = (sessionId = "session-1") => trackProgress(sessionId, {
+    status: "running", started_at: null, finished_at: null, error: null, error_code: null, outcome: null, answer: null, metrics: null,
+    first_index: 0, pending_tool_calls: [], new_events: [{ type: "AgentEvent", data: { kind: "policy_event" } }],
+  });
+
   it.each(["pending", "queued", "running", "paused", "idle", "awaiting_tool_results", "unknown"])(
     "refuses an existing non-terminal session: %s", async (status) => {
       await started();
+      acting();
       fetch.mockResolvedValue(Response.json({ status }));
       await expect(preflightBrowser("new-bridge-id", connect)).rejects.toMatchObject({ status: 409 });
       expect(fetch).toHaveBeenCalledWith("https://agp.eu.hcompany.ai/api/v2/sessions/session-1/status", expect.objectContaining({ method: "GET" }));
@@ -110,6 +118,7 @@ describe("browser preflight", () => {
 
   it.each([503, 404])("keeps the active record when its status cannot be verified: %s", async (status) => {
     await started();
+    acting();
     for (let attempt = 0; attempt < (status === 503 ? 3 : 1); attempt++) {
       fetch.mockResolvedValueOnce(new Response("private details", { status, headers: { "Retry-After": "0" } }));
     }
@@ -120,16 +129,107 @@ describe("browser preflight", () => {
 
   it("lets a new session take the browser from a stalled session Nami gave up, without asking H (H still says running)", async () => {
     await started();
+    acting();
     abandonSession("session-1");
     const lease = await preflightBrowser("bridge-1", connect);
     lease.commit("session-2");
     lease.release();
     expect(fetch).not.toHaveBeenCalled();
-    resetAgentStall();
+  });
+
+  // Bench 2026-11-08 at 04:06: Stop agent, DELETE answered 204, H still said "running" (for over an hour), and the next
+  // start got a 409. The cancel route releases the session and the browser: the next start is accepted, no 409.
+  it("lets a new session start right after Stop agent, while H still says the cancelled one is running", async () => {
+    await started();
+    acting();
+    releaseSession("session-1");
+    releaseBrowser("session-1");
+    fetch.mockResolvedValue(Response.json({ status: "running" }));
+    const lease = await preflightBrowser("bridge-1", connect);
+    lease.commit("session-2");
+    lease.release();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(connect).toHaveBeenCalledTimes(2);
+  });
+
+  it("releases the browser alone too (cancel route): the active record goes", async () => {
+    await started();
+    acting();
+    releaseBrowser("session-1");
+    fetch.mockResolvedValue(Response.json({ status: "running" }));
+    const lease = await preflightBrowser("bridge-1", connect);
+    lease.release();
+    expect(fetch).not.toHaveBeenCalled();
+    releaseBrowser("unknown-session");
+  });
+
+  it("keeps the reservation of a start under way when another session is cancelled meanwhile", async () => {
+    await started();
+    acting();
+    fetch.mockResolvedValue(Response.json({ status: "completed" }));
+    const lease = await preflightBrowser("bridge-1", connect);
+    releaseBrowser("session-1");
+    await expect(preflightBrowser("bridge-1", connect)).rejects.toMatchObject({ status: 409, message: BUSY });
+    lease.commit("session-2");
+    lease.release();
+  });
+
+  const stepsUrl = (id: string) => `https://agp.eu.hcompany.ai/api/v2/sessions/${id}/changes?from_index=0&wait_for_seconds=0`;
+  const hSays = (steps: number | null | "no-metrics") => fetch.mockImplementation(async (url: string, init: RequestInit) => {
+    if (init.method === "DELETE") return new Response(null, { status: 204 });
+    if (url === stepsUrl("session-1")) {
+      if (steps === null) return new Response(null, { status: 204 });
+      if (steps === "no-metrics") return Response.json({ status: "running", new_events: [{ type: "AgentEvent", data: { kind: "observation_event" } }] });
+      return Response.json({ status: "running", metrics: { steps } });
+    }
+    return Response.json({ status: "running" });
+  });
+
+  it.each([0, null, "no-metrics"] as const)("gives up a session that never acted in FIRST_STALL_MS (H counts %s steps) and takes the browser, cancelling it best effort", async (steps) => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    await started();
+    now.mockReturnValue(1_000_000 + FIRST_STALL_MS);
+    hSays(steps);
+    const lease = await preflightBrowser("bridge-1", connect);
+    lease.commit("session-2");
+    lease.release();
+    expect(isAbandoned("session-1")).toBe(true);
+    expect(fetch).toHaveBeenCalledWith("https://agp.eu.hcompany.ai/api/v2/sessions/session-1", expect.objectContaining({ method: "DELETE" }));
+    expect(fetch).not.toHaveBeenCalledWith("https://agp.eu.hcompany.ai/api/v2/sessions/session-1/status", expect.anything());
+    now.mockRestore();
+  });
+
+  // The panel stopped polling (tab closed) while the agent was filling fields: Nami saw no action, H counts steps.
+  it("keeps a session Nami never saw act when H counts steps for it", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    await started();
+    now.mockReturnValue(1_000_000 + FIRST_STALL_MS);
+    hSays(3);
+    await expect(preflightBrowser("bridge-1", connect)).rejects.toMatchObject({ status: 409, message: BUSY });
+    expect(isAbandoned("session-1")).toBe(false);
+    expect(fetch).not.toHaveBeenCalledWith("https://agp.eu.hcompany.ai/api/v2/sessions/session-1", expect.objectContaining({ method: "DELETE" }));
+    now.mockRestore();
+  });
+
+  it("keeps a session Nami never saw act when H cannot say its steps", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    await started();
+    now.mockReturnValue(1_000_000 + FIRST_STALL_MS);
+    fetch.mockImplementation(async (url: string) => url === stepsUrl("session-1") ? Response.json({ error: "down" }, { status: 400 }) : Response.json({ status: "running" }));
+    await expect(preflightBrowser("bridge-1", connect)).rejects.toMatchObject({ status: 409, message: BUSY });
+    expect(isAbandoned("session-1")).toBe(false);
+    now.mockRestore();
+  });
+
+  it("still refuses a young session that has not acted yet (H may be starting it)", async () => {
+    await started();
+    fetch.mockResolvedValue(Response.json({ status: "running" }));
+    await expect(preflightBrowser("bridge-1", connect)).rejects.toMatchObject({ status: 409, message: BUSY });
   });
 
   it("rejects malformed status rather than assuming the previous session is finished", async () => {
     await started();
+    acting();
     fetch.mockResolvedValue(Response.json({ status: null }));
     await expect(preflightBrowser("bridge-1", connect)).rejects.toMatchObject({ status: 503 });
   });
@@ -146,6 +246,7 @@ describe("browser preflight", () => {
 
   it("checks an active bridge even after the configured port changes", async () => {
     await started();
+    acting();
     vi.stubEnv("NAMI_AGENT_CHROME_PORT", "9444");
     await expect(preflightBrowser("bridge-1", connect)).rejects.toMatchObject({ status: 409 });
   });

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createVisaStartAttempt, H_SLOTS_BUSY, resetVisaStartAttempts } from "@/lib/paper-start-client";
+import { createVisaStartAttempt, H_SLOTS_BUSY, resetVisaStartAttempts, startWithBusyRetry, STARTING_SLOW_MESSAGE } from "@/lib/paper-start-client";
 
 describe("visa start attempts", () => {
   it("keeps the UUID and exact body across retries, but assigns a new UUID to a new attempt", async () => {
@@ -104,5 +104,49 @@ describe("visa start attempts", () => {
     await createVisaStartAttempt({ paper_id: "evoa" }, { fetch, uuid, scope: "trip-1" })();
     const bodies = fetch.mock.calls.map((call) => JSON.parse((call[1] as RequestInit).body as string));
     expect(bodies[1]).toMatchObject({ idempotency_key: bodies[0].idempotency_key, resume: true });
+  });
+
+  it("tries once more after 2 s on a 409 (browser being freed after Stop agent), and not on other errors", async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json({ error: "busy" }, { status: 409 }))
+      .mockResolvedValueOnce(Response.json({ session_id: "s-9" }, { status: 201 }));
+    expect(await createVisaStartAttempt({ paper_id: "evoa" }, { fetch, uuid: () => "00000000-0000-4000-8000-000000000009", busyRetryMs: 0 })()).toBe("s-9");
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(fetch.mock.calls[0][1].body).toBe(fetch.mock.calls[1][1].body);
+    const twice = vi.fn(async () => Response.json({ error: "busy" }, { status: 409 }));
+    await expect(createVisaStartAttempt({ paper_id: "evoa" }, { fetch: twice, uuid: () => "00000000-0000-4000-8000-000000000010", busyRetryMs: 0 })()).rejects.toThrow("busy");
+    expect(twice).toHaveBeenCalledTimes(2);
+    const other = vi.fn(async () => Response.json({ error: "no" }, { status: 400 }));
+    await expect(startWithBusyRetry(other, "/api/flights/start", { method: "POST" }, 0)).resolves.toMatchObject({ status: 400 });
+    expect(other).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for a start still pending on H (429 busy), says so once, and tries again by itself", async () => {
+    const busy = () => Response.json({ error: "Busy, try again in a moment.", busy: true }, { status: 429 });
+    const send = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(busy()).mockResolvedValueOnce(busy())
+      .mockResolvedValueOnce(Response.json({ session_id: "s-2" }, { status: 201 }));
+    const onBusy = vi.fn();
+    const response = await startWithBusyRetry(send, "/api/papers/start", { method: "POST" }, 0, onBusy);
+    expect(response.status).toBe(201);
+    expect(send).toHaveBeenCalledTimes(3);
+    expect(onBusy).toHaveBeenCalledTimes(1);
+    expect(onBusy).toHaveBeenCalledWith(STARTING_SLOW_MESSAGE);
+  });
+
+  it("shows a quota 429 (Too many requests) as it is, without retrying", async () => {
+    const quota = vi.fn(async () => Response.json({ error: "Too many requests. Try again in 9 minutes." }, { status: 429 }));
+    const onBusy = vi.fn();
+    const response = await startWithBusyRetry(quota, "/api/papers/start", { method: "POST" }, 0, onBusy);
+    expect(response.status).toBe(429);
+    expect(quota).toHaveBeenCalledTimes(1);
+    expect(onBusy).not.toHaveBeenCalled();
+  });
+
+  it("gives the busy start up after the wait and returns the last busy answer", async () => {
+    const busy = vi.fn(async () => Response.json({ error: "Busy, try again in a moment.", busy: true }, { status: 429 }));
+    const response = await startWithBusyRetry(busy, "/api/papers/start", { method: "POST" }, 0, undefined, 0);
+    expect(response.status).toBe(429);
+    expect(busy).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,7 +1,7 @@
 import { toolCallKey } from "@/lib/agent-changes";
 import { INVALID_AGENT_ANSWER } from "@/lib/agent-answer";
 import { describe, expect, it } from "vitest";
-import { freshToolCalls, redact, toAgentChanges, type AgentChanges } from "@/lib/agent-changes";
+import { freshToolCalls, H_NOT_ANSWERING_MESSAGE, H_SLOW_RESTART_MESSAGE, redact, toAgentChanges, wantsAutoRestart, type AgentChanges } from "@/lib/agent-changes";
 import { TripRequestDraftSchema } from "@/lib/contracts";
 import {
   ARRIVAL_CARD_READY_MESSAGE,
@@ -11,6 +11,8 @@ import {
   needsPassportReconfirm,
   createTripFromRequest,
   decideProposal,
+  giveUpAutoRestart,
+  markAutoRestart,
   reopenAgentQuestion,
   reportReady,
   recordPassportUpload,
@@ -285,5 +287,49 @@ describe("second paper: the arrival card after the visa", () => {
     const afterVisa = reportReady(liveTrip(), REPORT, SECRETS);
     const declined = decideProposal(afterVisa, afterVisa.conversation.at(-1)!.id, false, now);
     expect(declined.conversation.at(-1)).toMatchObject({ kind: "proposal", action: "flights" });
+  });
+});
+
+describe("H never acted: one automatic restart (bench 2026-11-08)", () => {
+  const stalledBefore = changes({ status: "failed", error_code: "stalled", stalled_before_action: true, steps: ["The agent stopped answering"] });
+  const stalledAfter = changes({ status: "failed", error_code: "stalled", stalled_before_action: false, steps: ["The agent stopped answering"] });
+  const texts = (trip: Trip) => trip.conversation.filter((i) => i.kind === "agent").map((i) => (i as { text: string }).text);
+  const retries = (trip: Trip) => trip.conversation.filter((i) => i.kind === "proposal" && i.action === "create_visa" && i.decision === null);
+
+  it("marks the restart due and says H is slow, without a question, when the stall came before any action", () => {
+    const { trip } = applyAgentChanges(liveTrip(), stalledBefore, SECRETS);
+    expect(trip.agent_run).toMatchObject({ state: "failed", auto_restart: "due" });
+    expect(texts(trip).at(-1)).toBe(H_SLOW_RESTART_MESSAGE);
+    expect(retries(trip)).toEqual([]);
+    expect(trip.conversation.at(-1)?.kind).toBe("agent");
+  });
+
+  it("never restarts a session that had acted: it may have filled fields, the traveller decides", () => {
+    const { trip } = applyAgentChanges(liveTrip(), stalledAfter, SECRETS);
+    expect(trip.agent_run?.auto_restart).toBeUndefined();
+    expect(texts(trip).at(-1)).toBe(H_NOT_ANSWERING_MESSAGE);
+    expect(retries(trip)).toHaveLength(1);
+  });
+
+  it("restarts once only: a second stall before action proposes the manual retry", () => {
+    const first = applyAgentChanges(liveTrip(), stalledBefore, SECRETS).trip;
+    const visa = first.conversation.find((i) => i.kind === "proposal" && i.action === "create_visa")!;
+    // The restart keeps the accepted proposal and says nothing new (quiet): "H is slow, starting again" was just said.
+    const restarted = markAutoRestart(startVisaRun(markAutoRestart(first, "taken"), visa.id, "s-2", now, true, true), "done");
+    expect(restarted.agent_run).toMatchObject({ session_id: "s-2", state: "pending", auto_restart: "done" });
+    expect(texts(restarted)).toEqual(texts(first));
+    expect(wantsAutoRestart(restarted.agent_run!, stalledBefore)).toBe(false);
+    const second = applyAgentChanges(restarted, stalledBefore, SECRETS).trip;
+    expect(second.agent_run).toMatchObject({ session_id: "s-2", state: "failed", auto_restart: "done" });
+    expect(texts(second).at(-1)).toBe(H_NOT_ANSWERING_MESSAGE);
+    expect(retries(second)).toHaveLength(1);
+  });
+
+  it("when the restart itself fails, says H is not answering and proposes the manual retry once", () => {
+    const due = applyAgentChanges(liveTrip(), stalledBefore, SECRETS).trip;
+    const failed = giveUpAutoRestart(markAutoRestart(due, "taken"), "evoa");
+    expect(failed.agent_run?.auto_restart).toBe("failed");
+    expect(texts(failed).at(-1)).toBe(H_NOT_ANSWERING_MESSAGE);
+    expect(retries(failed)).toHaveLength(1);
   });
 });

@@ -62,7 +62,8 @@ function writeCurrentTrip(id: string | null) {
 // What Nami says aloud about the agent's work: its first sentence, and nothing for the technical steps.
 export function agentSpeech(step: string): string | null {
   const text = step.trim();
-  if (text.length < 12 || /^(Action:|On [\w.-]+$|Session created|Passport file ready|Agent started|Agent finished)|step failed/i.test(text)) return null;
+  // "The agent stopped answering" is not read: the message that follows it (starting again, or try again) is.
+  if (text.length < 12 || /^(Action:|On [\w.-]+$|Session created|Passport file ready|Agent started|Agent finished|The agent stopped answering)|step failed/i.test(text)) return null;
   return text.split(/(?<=[.!?])\s/)[0];
 }
 
@@ -320,7 +321,9 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
     // The photo picked in the card when none was found by voice.
     pickedPhotoId?: string;
     tickets: Found[];
-  }>({ visaItem: null, passports: [], reader: null, offered: null, read: null, photos: [], tickets: [] });
+    // The reader (H) failed on the passport found: "Try again" reads the same file, without a new search.
+    readerDown: boolean;
+  }>({ visaItem: null, passports: [], reader: null, offered: null, read: null, photos: [], tickets: [], readerDown: false });
   const secrets = useMemo(() => [passport?.passport_number, passport?.birth_date], [passport]);
   const run = trip.agent_run;
   const reconfirm = needsPassportReconfirm(run, passport !== null);
@@ -364,7 +367,8 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
     onNeedPassport: () => setSearchRequest((request) => request + 1),
     // No tab is opened here: the agent drives the tab already open next to the panel. Opening the official site
     // before the agent reaches it would create a second official tab, and upload_file refuses to choose between two.
-    onStarted: (started) => saveTrip(pushAgentMessage(started, WATCH_MESSAGE)),
+    // Not on the automatic restart after a slow H: "H is slow, starting again" was just said, nothing else is repeated.
+    onStarted: (started) => saveTrip(started.agent_run?.auto_restart === "done" ? started : pushAgentMessage(started, WATCH_MESSAGE)),
   });
   // The traveller sees the agent arrive: its tab comes to the front once the agent is seen on the site ("On <host>"),
   // never at the start (the only tab is still blank then, and opening one would double the agent's own tab). Each new
@@ -460,7 +464,13 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
         body: JSON.stringify({ id: documentToRead, consent_provider: reader }),
       });
       const body = await response.json();
+      if (!response.ok && (response.status === 503 || response.status === 429) && typeof body.error === "string") {
+        // H slow or down, or Nami's quota reached: the passport found is kept, the same file is read again on "Try again".
+        flow.current.readerDown = true;
+        return ask("read_passport", body.error, "Try again", "Type the fields");
+      }
       if (!response.ok) throw new Error(body.error ?? "The passport could not be read.");
+      flow.current.readerDown = false;
       const extraction = body as DocumentExtraction;
       const summary = readSummary(extraction);
       if (!summary.ok) return fallBackToCard(summary.text);
@@ -524,7 +534,13 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
     }
     if (item.action === "read_passport" || item.action === "confirm_passport" || item.action === "use_photo" || item.action === "use_return_ticket") {
       actions.decide(itemId, accepted);
-      if (item.action === "read_passport") return void (accepted ? readPassport() : offerPassport());
+      if (item.action === "read_passport") {
+        if (accepted) return void readPassport();
+        if (!flow.current.readerDown) return void offerPassport();
+        flow.current.readerDown = false;
+        setDrop("passport");
+        return fallBackToCard("Type the fields of your passport below, or drop a photo of it.");
+      }
       if (item.action === "confirm_passport") return accepted ? void confirmPassport() : fallBackToCard("Check the fields below, then confirm them.");
       if (item.action === "use_photo") {
         const found = flow.current.photos[0]?.id;
