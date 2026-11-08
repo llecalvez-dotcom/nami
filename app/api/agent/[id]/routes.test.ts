@@ -5,7 +5,7 @@ import { GET as changes } from "@/app/api/agent/[id]/changes/route";
 import { POST as fill } from "@/app/api/agent/[id]/fill/route";
 import { uploadSessionDocument } from "@/lib/agent-passport-upload";
 import { fillField, waitForPageText } from "@/lib/local-chrome";
-import { resetAgentStall, STALL_MS } from "@/lib/agent-stall";
+import { FIRST_STALL_MS, resetAgentStall } from "@/lib/agent-stall";
 
 vi.mock("@/lib/agent-passport-upload", () => ({ uploadSessionDocument: vi.fn() }));
 vi.mock("@/lib/local-chrome", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/local-chrome")>()), fillField: vi.fn(), waitForPageText: vi.fn() }));
@@ -151,7 +151,7 @@ describe("GET /api/agent/[id]/changes (route 6)", () => {
       new_events: [{ type: "AgentEvent", data: { kind: "observation_event", metadata: { url: "about:blank" } } }],
     }));
     expect((await (await get("stall-1")).json()).status).toBe("running");
-    now.mockReturnValue(1_000_000 + STALL_MS);
+    now.mockReturnValue(1_000_000 + FIRST_STALL_MS);
     fetch.mockResolvedValueOnce(new Response(null, { status: 204 })).mockResolvedValueOnce(new Response(null, { status: 204 }));
     const body = await (await get("stall-1", "1")).json();
     expect(body).toMatchObject({ status: "failed", error_code: "stalled", steps: ["The agent stopped answering"] });

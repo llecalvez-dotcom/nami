@@ -131,7 +131,7 @@ describe("createSession", () => {
         model: "holo4-27b",
         reasoning_effort: "medium",
         instructions: "Never submit or pay.",
-        environments: [{ id: "browser", kind: "web", host: "user_device", session_id: "local-42", settle_s: 2, mode: { type: "visual", markdown: true } }],
+        environments: [{ id: "browser", kind: "web", host: "user_device", session_id: "local-42", settle_s: 0.5, mode: { type: "visual", markdown: true } }],
         tools: [TOOL],
         answer_format: PAPER_ANSWER_FORMAT,
       },
@@ -173,11 +173,11 @@ describe("agent model and reasoning settings", () => {
     expect(createSessionBody(INPUT).agent.model).toBe("holo4-27b");
   });
 
-  it("keeps settle_s at 2 s and the page text by default, and takes the speed-run settings from the env", () => {
-    expect(browserSettings({})).toEqual({ settle_s: 2, markdown: true });
+  it("waits 0.5 s after each action and keeps the page text by default, and takes the speed-run settings from the env", () => {
+    expect(browserSettings({})).toEqual({ settle_s: 0.5, markdown: true });
     expect(browserSettings({ NAMI_AGENT_SETTLE_S: "0.5", NAMI_AGENT_MARKDOWN: "off" })).toEqual({ settle_s: 0.5, markdown: false });
-    expect(browserSettings({ NAMI_AGENT_SETTLE_S: "11" }).settle_s).toBe(2);
-    expect(browserSettings({ NAMI_AGENT_SETTLE_S: "x" }).settle_s).toBe(2);
+    expect(browserSettings({ NAMI_AGENT_SETTLE_S: "11" }).settle_s).toBe(0.5);
+    expect(browserSettings({ NAMI_AGENT_SETTLE_S: "x" }).settle_s).toBe(0.5);
     vi.stubEnv("NAMI_AGENT_SETTLE_S", "1");
     expect(createSessionBody(INPUT).agent.environments[0]).toMatchObject({ settle_s: 1, mode: { type: "visual", markdown: true } });
   });

@@ -317,7 +317,7 @@ describe("POST /api/papers/start (route 5)", () => {
     expect(body.max_steps).toBe(80);
     expect(body.agent).toMatchObject({ model: "holo4-27b", reasoning_effort: "medium", instructions: expect.any(String) });
     expect(body.agent.environments).toEqual([
-      { id: "browser", kind: "web", host: "user_device", session_id: "local-42", settle_s: 2, mode: { type: "visual", markdown: true } },
+      { id: "browser", kind: "web", host: "user_device", session_id: "local-42", settle_s: 0.5, mode: { type: "visual", markdown: true } },
     ]);
     expect(body.agent.tools.map((t: { name: string }) => t.name)).toEqual(["ask_user", "report_ready", "pick_option", "fill_field", "upload_file"]);
     expect(body.agent.tools[3].input_schema.required).toEqual(["field", "value"]);

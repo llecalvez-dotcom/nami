@@ -19,8 +19,10 @@ export function agentSettings(env: Record<string, string | undefined> = process.
 }
 
 // settle_s: H waits this long after each browser action before the next screenshot (H's default 1, range 0 to 10).
-// markdown: the page's text sent with each screenshot. Both tunable for the speed runs of 2026-11-08.
-export const DEFAULT_SETTLE_S = 2;
+// markdown: the page's text sent with each screenshot. Measured on the e-VOA on 2026-11-08 (bench runs, report_ready
+// after the session start): settle 2 s 85 s; 1 s 66 to 73 s (3 of 3); 0.5 s 60 to 65 s (3 of 3), kept. Without the
+// page's text: 62 and 65 s, no gain, so the text stays (it helps read PRANCIS).
+export const DEFAULT_SETTLE_S = 0.5;
 
 export function browserSettings(env: Record<string, string | undefined> = process.env) {
   const settle = Number(env.NAMI_AGENT_SETTLE_S);

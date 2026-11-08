@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { abandonSession, isAbandoned, resetAgentStall, STALL_MS, trackProgress } from "@/lib/agent-stall";
+import { abandonSession, FIRST_STALL_MS, isAbandoned, resetAgentStall, STALL_MS, trackProgress } from "@/lib/agent-stall";
 import type { HChanges } from "@/lib/h-agent";
 
 const changes = (kinds: string[], extra: Partial<HChanges> = {}): HChanges => ({
@@ -14,14 +14,20 @@ const changes = (kinds: string[], extra: Partial<HChanges> = {}): HChanges => ({
 afterEach(() => resetAgentStall());
 
 describe("stalled H sessions (2026-11-08: the model never answered the first screenshot)", () => {
-  it("gives up a session whose last screenshot got no answer for STALL_MS", () => {
+  it("gives up sooner when the first screenshot gets no answer (nothing done yet)", () => {
     expect(trackProgress("s", changes(["message_event", "observation_event"]), 0)).toBe(false);
-    expect(trackProgress("s", null, STALL_MS - 1)).toBe(false);
+    expect(trackProgress("s", null, FIRST_STALL_MS - 1)).toBe(false);
+    expect(trackProgress("s", null, FIRST_STALL_MS)).toBe(true);
+  });
+
+  it("waits STALL_MS once the agent has acted", () => {
+    trackProgress("s", changes(["observation_event", "policy_event", "tool_result", "observation_event"]), 0);
+    expect(trackProgress("s", null, FIRST_STALL_MS)).toBe(false);
     expect(trackProgress("s", null, STALL_MS)).toBe(true);
   });
 
   it("counts a tool result with no answer as a stall too", () => {
-    trackProgress("s", changes(["state:running", "tool_result"]), 0);
+    trackProgress("s", changes(["policy_event", "state:running", "tool_result"]), 0);
     expect(trackProgress("s", null, STALL_MS)).toBe(true);
   });
 
@@ -35,7 +41,7 @@ describe("stalled H sessions (2026-11-08: the model never answered the first scr
   });
 
   it("restarts the clock on every new event, and ignores finished sessions", () => {
-    trackProgress("s", changes(["observation_event"]), 0);
+    trackProgress("s", changes(["policy_event", "observation_event"]), 0);
     trackProgress("s", changes(["observation_event"]), STALL_MS - 5);
     expect(trackProgress("s", null, STALL_MS + 1)).toBe(false);
     trackProgress("d", changes(["observation_event"]), 0);
