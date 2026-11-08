@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { BRIDGE_READY_LINE, bridgeIsUsed, bridgeManaged, markBridgeUsed, refreshBridge, resetBridgeState, type BridgeDeps } from "@/lib/local-bridge";
+import { BRIDGE_DESTROY_LINE, BRIDGE_READY_LINE, bridgeIsUsed, bridgeManaged, markBridgeUsed, refreshBridge, resetBridgeState, usedSinceLastStart, type BridgeDeps } from "@/lib/local-bridge";
 
 function fakeDeps(script: { pids: (number | null)[]; log?: (string | null)[]; chrome?: boolean[] }) {
   let clock = 0;
@@ -46,6 +46,17 @@ describe("bridgeIsUsed and markBridgeUsed", () => {
     expect(await bridgeIsUsed(other.deps)).toBe(false);
   });
 
+  it("trusts the bridge log over the pid: a destroy since the last start line means used, even with a new pid", async () => {
+    const served = `${BRIDGE_READY_LINE} abc\n... command goto dispatched\n... ${BRIDGE_DESTROY_LINE} dispatched in 0.01s\n`;
+    expect(usedSinceLastStart(served)).toBe(true);
+    expect(usedSinceLastStart(`... ${BRIDGE_DESTROY_LINE} dispatched\n${BRIDGE_READY_LINE} abc\n... command goto dispatched\n`)).toBe(false);
+    expect(usedSinceLastStart("")).toBe(false);
+    const { deps } = fakeDeps({ pids: [100], log: [served] });
+    expect(await bridgeIsUsed(deps)).toBe(true);
+    const restarted = fakeDeps({ pids: [100], log: [`${served}${BRIDGE_READY_LINE} abc\n`] });
+    expect(await bridgeIsUsed(restarted.deps)).toBe(false);
+  });
+
   it("forgets when no bridge is found", async () => {
     const { deps } = fakeDeps({ pids: [null] });
     await markBridgeUsed(deps);
@@ -74,11 +85,10 @@ describe("refreshBridge", () => {
     expect(await refreshBridge(deps)).toBe("refreshed");
   });
 
-  it("does nothing when the running bridge is not the used one, or when none runs", async () => {
+  it("does nothing when no bridge runs; a new pid without log is not used", async () => {
     const fresh = fakeDeps({ pids: [100, 200] });
     await markBridgeUsed(fresh.deps);
-    expect(await refreshBridge(fresh.deps)).toBe("skipped");
-    expect(fresh.killed).toEqual([]);
+    expect(await bridgeIsUsed(fresh.deps)).toBe(false);
     const none = fakeDeps({ pids: [null] });
     expect(await refreshBridge(none.deps)).toBe("skipped");
   });
