@@ -1,5 +1,5 @@
 import { namiUrl } from "./settings.js";
-import { isAgentPage, relayAgentState } from "./agent-state.js";
+import { pickTab, relayAgentState } from "./agent-state.js";
 
 chrome.runtime.connect({ name: "nami-panel" });
 
@@ -8,28 +8,15 @@ const origin = await namiUrl();
 // Nami opens on its side panel screen (/panel); messages are still checked against its origin.
 frame.src = `${origin}/panel`;
 
-// How well a tab matches the page asked for: the exact page, then the agent's section of a shared site (Google
-// Flights, never a Google search), then the official site itself (the agent moves between its pages).
-const match = (tabUrl, url) => {
-  try {
-    const tab = new URL(tabUrl);
-    const sameHost = tab.hostname === url.hostname || tab.hostname.endsWith(`.${url.hostname}`);
-    if (!sameHost || tab.protocol !== "https:") return 0;
-    if (tab.href === url.href) return 3;
-    if (isAgentPage(tab)) return 2;
-    return isAgentPage(url) ? 0 : 1;
-  } catch {
-    return 0;
-  }
-};
+const PAPERS = new Set(["visa", "arrival_card", "flights"]);
 
-async function bringToFront(url, open) {
+// A tab of the site is brought to the front as it is (its URL is never changed: the form the agent filled in lives
+// there); a new tab opens only when none is left.
+async function bringToFront(url, paper, open) {
   const tabs = await chrome.tabs.query({});
-  // Several tabs on the site: prefer the exact page, then the one used last (the agent's). None left: open it again.
-  const tab = tabs
-    .filter((t) => t.url && match(t.url, url) > 0)
-    .sort((a, b) => match(b.url, url) - match(a.url, url) || (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0];
-  if (tab?.id !== undefined) {
+  const remembered = (await chrome.storage?.session?.get("agentTabs").catch(() => ({})))?.agentTabs ?? {};
+  const tab = pickTab(tabs, url, paper, remembered);
+  if (tab) {
     await chrome.tabs.update(tab.id, { active: true });
     await chrome.windows.update(tab.windowId, { focused: true });
     return "focused";
@@ -45,7 +32,7 @@ window.addEventListener("message", async (event) => {
     if (typeof event.data.active === "boolean" && typeof event.data.step === "string") await relayAgentState(event.data);
     return;
   }
-  const { type, url, open } = event.data ?? {};
+  const { type, url, paper, open } = event.data ?? {};
   if (type !== "nami:focus-official" || typeof url !== "string") return;
   let target;
   try {
@@ -54,6 +41,6 @@ window.addEventListener("message", async (event) => {
     return;
   }
   if (target.protocol !== "https:") return;
-  const result = await bringToFront(target, open !== false).catch(() => "failed");
+  const result = await bringToFront(target, PAPERS.has(paper) ? paper : undefined, open !== false).catch(() => "failed");
   frame.contentWindow.postMessage({ type: "nami:focus-official:done", result }, origin);
 });

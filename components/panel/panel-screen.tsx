@@ -20,7 +20,7 @@ import { resetSpokenLanguage, useSpokenLanguage } from "@/lib/voice/language";
 import { requestTranslations, translated, useTranslatedConversation, useTranslationsVersion } from "@/lib/voice/translations";
 import type { DocumentExtraction, PassportFields } from "@/lib/contracts";
 import { bestFirst, foundPassportText, foundPhotoText, foundReturnTicketText, readSummary, type Reader } from "@/lib/panel-documents";
-import { agentChecklist, agentStatusLine, CHECKLIST_LABELS, focusItem, paperInFocus, paperOfRun, readyPaper, sceneFor, STATUS_TEXTS, type Paper } from "@/lib/panel-focus";
+import { agentChecklist, agentStatusLine, type AgentStatus, CHECKLIST_LABELS, focusItem, paperInFocus, paperOfRun, readyPaper, REOPENED_TEXTS, sceneFor, STATUS_TEXTS, type Paper } from "@/lib/panel-focus";
 import { focusOfficialTab, paperUrl, showOfficialSite } from "@/lib/official-tab";
 import { isFlightReadyMessage } from "@/lib/flights/flow";
 import { requestTripParse } from "@/lib/trip-parse-client";
@@ -174,6 +174,19 @@ type Mark = { label: string; state: "done" | "running" | "todo"; paper?: Paper; 
 
 const MARK_STATES: Record<Mark["state"], string> = { done: "done", running: "running", todo: "to do" };
 
+// One short line under the marks: what the agent is doing, or, right after a mark had to open a site again, that
+// its tab was gone (the traveller lands on the site's first page, not where the agent stopped).
+export function StatusLine({ status, reopened, paper, pulsing, t }: { status: AgentStatus | null; reopened: Paper | null; paper: Paper; pulsing: boolean; t: Translate }) {
+  const line = reopened ? { text: REOPENED_TEXTS[reopened] } : status;
+  if (!line) return null;
+  return (
+    <p role="status" aria-live="polite" className="flex items-center gap-2 px-5 pb-1 text-[12px] text-[var(--np-ink-soft)]">
+      <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", pulsing && !reopened ? "animate-pulse" : "")} style={{ background: PAPER_COLORS[reopened ?? paper] }} />
+      <span className="truncate">{t(line.text)}{line.progress ? ` (${line.progress})` : ""}</span>
+    </p>
+  );
+}
+
 // The shore: what is already done, in the color of its paper. A paper's mark brings its tab back to the front
 // (Clément, 2026-11-08: finish the visa by hand after the agent stopped, from the panel).
 export function Shore({ marks, t }: { marks: Mark[]; t: Translate }) {
@@ -304,6 +317,12 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
   const [manual, setManual] = useState(false);
   const [editing, setEditing] = useState(false);
   const [history, setHistory] = useState(false);
+  const [reopened, setReopened] = useState<Paper | null>(null);
+  useEffect(() => {
+    if (!reopened) return;
+    const timer = window.setTimeout(() => setReopened(null), 8000);
+    return () => window.clearTimeout(timer);
+  }, [reopened]);
   const [busy, setBusy] = useState<string | null>(null);
   // The upload zone, when no passport or no ID photo is found on this computer.
   const [drop, setDrop] = useState<"passport" | "photo" | null>(null);
@@ -385,7 +404,7 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
     focusTried.current = attempt;
     const url = paperUrl(trip, runPaperSeen);
     if (!url) return;
-    void focusOfficialTab(url)?.then((result) => {
+    void focusOfficialTab(url, window, 1000, runPaperSeen)?.then((result) => {
       if (result === "focused") focusedSession.current = run.session_id;
     });
   }, [run, lastHostStep, trip]);
@@ -582,9 +601,16 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
   const status = agentStatusLine(run, trip.agent_steps);
   const has = (text: string) => trip.conversation.some((item) => item.kind === "agent" && item.text === text);
   const markState = (done: boolean, markPaper: Paper): Mark["state"] => (done ? "done" : agent?.paper === markPaper ? "running" : "todo");
+  // A mark brings the paper's tab back as it is; when no tab of the site was left, the site opened again and the
+  // status line says so for a moment.
+  const openPaper = (url: string, markPaper: Paper) => {
+    void showOfficialSite(url, window, 1000, markPaper).then((result) => {
+      if (result === "opened") setReopened(markPaper);
+    });
+  };
   const paperMark = (label: string, done: boolean, markPaper: Paper): Mark => {
     const url = paperUrl(trip, markPaper);
-    return { label, paper: markPaper, state: markState(done, markPaper), onOpen: url ? () => void showOfficialSite(url) : undefined };
+    return { label, paper: markPaper, state: markState(done, markPaper), onOpen: url ? () => openPaper(url, markPaper) : undefined };
   };
   const marks: Mark[] = [
     { label: "Passport", state: passport !== null ? "done" : "todo", onOpen: passport !== null ? () => { setEditing(true); setManual(true); } : undefined },
@@ -625,13 +651,8 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
         </div>
       </header>
       <Shore marks={marks} t={t} />
-      {status ? (
-        // Always there while a session exists: what the agent is doing, even when the panel asks something else.
-        <p role="status" aria-live="polite" className="flex items-center gap-2 px-5 pb-1 text-[12px] text-[var(--np-ink-soft)]">
-          <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", agent ? "animate-pulse" : "")} style={{ background: PAPER_COLORS[runPaper] }} />
-          <span className="truncate">{t(status.text)}{status.progress ? ` (${status.progress})` : ""}</span>
-        </p>
-      ) : null}
+      {/* Always there while a session exists: what the agent is doing, even when the panel asks something else. */}
+      <StatusLine status={status} reopened={reopened} paper={runPaper} pulsing={agent !== null} t={t} />
       <FocusStage
         item={shownFocus}
         scene={scene}
