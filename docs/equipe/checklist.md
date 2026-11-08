@@ -72,6 +72,8 @@
 | B8 | Module Vol (Google Flights), seulement s'il reste du temps | ⬜ | Clément | sans ticket |
 | B9 | Routes payantes protégées : code d'accès, quotas par 10 min, taille et concurrence limitées | ✅ (PR #12) | Ali | PR #12 |
 
+| B11 | Banc de test et mesure (ticket 0, PR vers `v2`) : CI GitHub Actions (test, lint, tsc, build sur ubuntu et windows, Node 22) ; maquettes locales de l'e-VOA et de la carte d'arrivée (`fixtures/sites`, `NAMI_MOCK_SITES=on`, jamais en production, clics Next / Submit enregistrés comme échecs) ; documents SPECIMEN de Samy (`fixtures/test-documents`, dans `v2`) lus par le vrai chemin (`lib/test-documents.test.ts`) ; `scripts/bench/setup.sh` et `scripts/bench/run.mjs` (voyage tapé complet par les routes, 3 passages max, sessions toujours fermées) ; rapport `scripts/bench/report.mjs`. | 🟡 PR ticket 0 ; base de référence `docs/tests/00-baseline.md` à mesurer dès que les clés sont là | Samy / Devin | 00 |
+
 ## 3. Tests de faisabilité (avec les vraies clés)
 
 | # | Ce qu'on vérifie | État | Qui | Résultat attendu dans |

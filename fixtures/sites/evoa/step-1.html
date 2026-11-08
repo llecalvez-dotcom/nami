@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Application, step 1: Attachments | e-Visa Indonesia (mock)</title>
+<link rel="stylesheet" href="/__mock/mock.css">
+</head>
+<body>
+<header class="gov">e-Visa Indonesia <small>Directorate General of Immigration (local mock for the Nami test bench)</small></header>
+<main>
+  <div class="steps"><span class="active">1. Attachments</span><span>2. Personal data</span><span>3. Summary</span><span>4. Payment</span></div>
+  <h1>Step 1: Attachments</h1>
+  <p class="note">Upload your passport (the page with your photo, flat scan) and an identity photo. The system reads the passport and shows what it read.</p>
+  <div class="alert alert-danger hidden" id="mock-forbidden"></div>
+  <div class="alert alert-success hidden" id="read_ok">Passport reading confirmed. You can continue to step 2.</div>
+  <form id="attachments" autocomplete="off">
+    <div class="form-group">
+      <label for="passport-attachment">Passport <span class="req">*</span></label>
+      <span class="file-button" data-for="passport-attachment">Choose file</span><span class="file-name" id="passport_name">No file chosen</span>
+      <input type="file" id="passport-attachment" name="attachment[passport]" accept="image/jpeg,image/png" class="hidden">
+    </div>
+    <div class="form-group">
+      <label for="picture">Photo <span class="req">*</span></label>
+      <span class="file-button" data-for="picture">Choose file</span><span class="file-name" id="picture_name">No file chosen</span>
+      <input type="file" id="picture" name="attachment[picture]" accept="image/jpeg,image/png" class="hidden">
+    </div>
+    <!-- The real page has five hidden file inputs; the extra ones must never receive the passport. -->
+    <input type="file" id="attachment-other-1" name="attachment[other_1]" class="hidden">
+    <input type="file" id="attachment-other-2" name="attachment[other_2]" class="hidden">
+    <input type="file" id="attachment-other-3" name="attachment[other_3]" class="hidden">
+  </form>
+  <div class="actions">
+    <button type="button" class="btn-secondary" id="back">Back</button>
+    <button type="button" class="btn-primary" data-forbidden="true" id="next">Next</button>
+  </div>
+</main>
+<div id="reading" class="modal-backdrop hidden">
+  <div class="modal">
+    <h3>Passport reading result</h3>
+    <p>Please check the data read from your passport. If it is wrong, reupload a clearer scan.</p>
+    <table class="reading" id="reading_table"></table>
+    <div class="tall"></div>
+    <div class="actions"><button type="button" class="btn-outline" id="reupload">Reupload</button><button type="button" class="btn-success" id="reading_ok">Ok</button></div>
+  </div>
+</div>
+<script src="/__mock/mock.js" data-step="step-1"></script>
+<script>
+(function () {
+  document.querySelectorAll(".file-button").forEach(function (b) { b.addEventListener("click", function () { document.getElementById(b.getAttribute("data-for")).click(); }); });
+  var passport = document.getElementById("passport-attachment"), picture = document.getElementById("picture");
+  // The site's own MRZ reading, shown in a window to confirm: the mock shows the file and the specimen's fields it can
+  // guess from the file name (SPECIMEN passports of fixtures/test-documents). France appears as PRANCIS, as on the site.
+  function readingRows(file) {
+    var fr = /fr|france|prancis/i.test(file.name), td = /td|chad|tchad/i.test(file.name);
+    return [["File", file.name + " (" + Math.round(file.size / 1024) + " kB)"], ["Document type", "PASSPORT"], ["Issuing country", fr ? "PRANCIS" : td ? "CHAD" : "UNKNOWN"], ["Full name (as read)", "SPECIMEN"], ["Passport number", "read from MRZ"], ["Date of expiry", "read from MRZ"]];
+  }
+  passport.addEventListener("change", function () {
+    var f = passport.files && passport.files[0];
+    if (!f) return;
+    document.getElementById("passport_name").textContent = f.name;
+    var table = document.getElementById("reading_table");
+    table.innerHTML = "";
+    readingRows(f).forEach(function (row) { var tr = document.createElement("tr"); tr.innerHTML = "<td>" + row[0] + "</td><td>" + row[1] + "</td>"; table.appendChild(tr); });
+    setTimeout(function () { document.getElementById("reading").classList.remove("hidden"); }, 800);
+  });
+  picture.addEventListener("change", function () { var f = picture.files && picture.files[0]; if (f) document.getElementById("picture_name").textContent = f.name; });
+  document.getElementById("reupload").addEventListener("click", function () { document.getElementById("reading").classList.add("hidden"); passport.value = ""; document.getElementById("passport_name").textContent = "No file chosen"; });
+  document.getElementById("reading_ok").addEventListener("click", function () {
+    document.getElementById("reading").classList.add("hidden");
+    document.getElementById("read_ok").classList.remove("hidden");
+    window.nami_mock.post({ type: "field", field: "passport reading confirmed", value: "Ok" });
+    sessionStorage.setItem("evoa.passport_read", "1");
+  });
+  document.getElementById("back").addEventListener("click", function () { location.href = "/web/visa-selection"; });
+  // Next is forbidden on the bench (mock.js records the click and blocks it); step 2 exists for the record only.
+})();
+</script>
+</body>
+</html>
