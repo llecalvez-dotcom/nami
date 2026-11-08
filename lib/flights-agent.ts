@@ -8,9 +8,10 @@ import { formatPrice } from "@/lib/flights/rank";
 
 export { FLIGHT_DOMAINS } from "@/lib/flights/page";
 
-// Module Vol (ticket 18): the agent searches Google Flights in the traveller's Chrome, reads the flights, and once
-// the traveller has chosen one, opens it up to Google's booking options page and stops there.
-export const FLIGHTS_MAX_STEPS = 60;
+// Module Vol (ticket 18): the agent opens Google Flights in the traveller's Chrome and tells Nami when the list is on
+// screen; Nami reads the flights herself (lib/flights/extract.ts), and once the traveller has chosen one, the agent
+// opens it up to Google's booking options page and stops there. About 10 steps when all goes well.
+export const FLIGHTS_MAX_STEPS = 40;
 export const FLIGHTS_MAX_TIME_S = 600;
 // For offDomainHost: www.google.com and consent.google.com both end with it.
 export const FLIGHTS_DOMAIN = "google.com";
@@ -53,12 +54,13 @@ export function googleFlightsUrl(input: Pick<FlightsStart, "origin" | "destinati
 export const REPORT_FLIGHTS_TOOL: ToolSpec = {
   name: "report_flights",
   description:
-    "Report the round trips you can read on the Google Flights results page, exactly as displayed, then wait: the answer tells you which flight the traveller chose. Never invent a flight.",
+    "Call it with no flights as soon as the Google Flights results list is on screen: Nami reads the flights from the page herself, you do not read them. Then wait: the answer tells you which flight the traveller chose, or what to do next. Only when the answer asks you to, call it again with the flights you can read, exactly as displayed. Never invent a flight.",
   input_schema: {
     type: "object",
     properties: {
       flights: {
         type: "array",
+        description: "Leave empty on the first call. Only when asked: the round trips exactly as displayed on the page.",
         maxItems: MAX_REPORTED_FLIGHTS,
         items: {
           type: "object",
@@ -84,7 +86,7 @@ export const REPORT_FLIGHTS_TOOL: ToolSpec = {
         },
       },
     },
-    required: ["flights"],
+    required: [],
   },
 };
 
@@ -97,6 +99,7 @@ export function buildFlightsInstructions(): string {
     `Never click ${FLIGHTS_FORBIDDEN_BUTTONS.map((b) => `"${b}"`).join(", ")} or any button that opens an airline, an agency or a payment page. Never sign in.`,
     "Never type personal data: no name, no passport, no e-mail, no card.",
     "Never invent a flight, a price or a time: report only what you can read on the page. If you cannot read the flights, say so with ask_user.",
+    "Be quick: Nami reads the results page herself. Do not scroll to read flights, do not open flight details, do not take extra looks at the page. One action per step, no pause between steps.",
     "If a captcha or an \"unusual traffic\" page appears, or if Google does not recognise the city, stop and call ask_user.",
     "Stop condition: the Google Flights booking options page of the chosen flight is displayed (the page that lists where to book, with prices). Then call report_ready and do nothing more.",
     UNTRUSTED_CONTENT_RULE,
@@ -108,9 +111,9 @@ export function buildFlightsTask(input: FlightsStart): string {
   return [
     `Open exactly this URL: ${googleFlightsUrl(input)}`,
     `It should show round trips from ${input.origin} to ${input.destination}, leaving ${input.departure_date} and returning ${input.return_date}, ${adults}, economy, prices in EUR.`,
-    "Take a screenshot and check the fields at the top of the page: round trip, departure city, destination, both dates, number of passengers. If a field is wrong or empty, fix it in the form on the page and search again.",
-    "When the list of flights is shown, read every visible flight (scroll if needed, open \"Plus de vols\" / \"More flights\" if shown) and call report_flights with, for each one: its position in the list, the airline exactly as written, the total price in digits, the currency, the number of stops, the outbound duration in minutes, the departure and arrival times as displayed, and the layover airports.",
-    "report_flights answers with the flight the traveller chose, or asks you to read the page again. Then click that outbound flight in the list, then the matching return flight, until Google Flights shows the booking options page for this trip.",
+    "If the cookie consent page appears first, click \"Tout refuser\" or \"Reject all\".",
+    "Do not read the flights and do not scroll: Nami reads the page herself. As soon as the list of flights is displayed with prices, call report_flights with no flights. If the page still says the results are loading, call wait_web for 2 seconds first. Only if the top of the page shows another city, another date, or no search at all, fix the form on the page and search, then call report_flights with no flights.",
+    "report_flights answers with the flight the traveller chose (airline, total price, departure time) or tells you what to do next. Click that outbound flight: the row showing this airline, price and departure time. Then, on the return list (\"Choose return\" / \"Sélectionner un vol de retour\"), click the first flight showing the same total price. Google Flights then shows the booking options page for this trip.",
     `Stop on that booking options page and call report_ready with a short summary (airline, price, stops). Do not click ${FLIGHTS_FORBIDDEN_BUTTONS.slice(0, 4).map((b) => `"${b}"`).join(", ")} or anything that leaves Google.`,
   ].join("\n");
 }
@@ -120,5 +123,5 @@ export const FlightChoiceSchema = z.object({ flight: FlightOptionSchema });
 // The tool result sent to H once the traveller has chosen: it tells which line to click, nothing personal.
 export function flightChoiceResult(flight: FlightOption): string {
   const stops = flight.stops === 0 ? "direct" : `${flight.stops} stop${flight.stops > 1 ? "s" : ""}`;
-  return `The traveller chose flight number ${flight.index} in the list: ${flight.airline}, ${formatPrice(flight)}, ${stops}, leaving at ${flight.depart_at}. Click this outbound flight, then the matching return flight, until the Google Flights booking options page is shown. Then call report_ready. Do not book.`;
+  return `The traveller chose flight number ${flight.index} in the list: ${flight.airline}, ${formatPrice(flight)}, ${stops}, leaving at ${flight.depart_at}. Click the outbound row showing ${flight.airline}, ${formatPrice(flight)} and ${flight.depart_at} (row ${flight.index} from the top of the results). Then, on the return list, click the first flight at ${formatPrice(flight)}. When the Google Flights booking options page is shown, call report_ready. Do not book.`;
 }

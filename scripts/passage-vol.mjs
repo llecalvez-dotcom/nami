@@ -82,6 +82,9 @@ async function tabUrl() {
 const handled = new Set();
 const key = (c) => c.id ?? `${c.tool_name}:${JSON.stringify(c.args)}`;
 let next = 0, steps = 0, asks = 0, done = false, last = null, chosen = null;
+// Timings for docs/tests/g1-vols.md: seconds from the start to the flights proposed, and to the booking options page.
+const timing = { flights_proposed_s: null, booking_page_s: null, source: null };
+const since = () => Math.round((Date.now() - t0) / 1000);
 while (!done) {
   let ch;
   try { ch = await call("GET", `/api/agent/${sid}/changes?from_index=${next}`); }
@@ -106,6 +109,7 @@ while (!done) {
   for (const c of ready ? [ready] : calls) {
     try {
       if (c.tool_name === "report_ready") {
+        timing.booking_page_s ??= since();
         log("REPORT_READY:", JSON.stringify(c.args).slice(0, 400), "url:", url);
         await call("POST", `/api/agent/${sid}/cancel`);
         log("cancelled after report_ready");
@@ -113,10 +117,11 @@ while (!done) {
       } else if (c.tool_name === "report_flights") {
         const reported = Array.isArray(c.args.flights) ? c.args.flights.length : 0;
         const checked = await call("POST", `/api/agent/${sid}/flights`, { tool_req: c });
-        log(`REPORT_FLIGHTS: ${reported} reported, ${checked.flights.length} on the page, dropped ${checked.dropped ?? 0}, invalid ${checked.invalid ?? 0}`,
-          checked.retry ? "(reread asked)" : checked.unreadable ? "(page unreadable)" : "");
+        log(`REPORT_FLIGHTS: ${reported} reported, ${checked.flights.length} on the page (read by ${checked.source ?? "nobody"}), dropped ${checked.dropped ?? 0}, invalid ${checked.invalid ?? 0}`,
+          checked.retry ? (checked.loading ? "(still loading, wait asked)" : "(reread asked)") : checked.unreadable ? "(page unreadable)" : "");
         writeFileSync(`${DIR}/${label}-flights-${steps}.json`, JSON.stringify({ reported: c.args.flights, checked: checked.flights }, null, 2));
         if (checked.flights.length) {
+          if (timing.flights_proposed_s === null) { timing.flights_proposed_s = since(); timing.source = checked.source ?? null; }
           const ranked = rank(checked.flights);
           ranked.forEach((f, i) => log(`  ${i + 1}. ${f.airline}, ${f.price} ${f.currency}, ${f.stops} stop(s), ${f.duration_min} min, #${f.index}`));
           chosen = ranked[Math.min(choice, ranked.length) - 1];
@@ -140,4 +145,6 @@ while (!done) {
 await sleep(3000);
 try { last = await call("GET", `/api/agent/${sid}/changes?from_index=${next}`); } catch {}
 log("END status:", last?.status, "outcome:", last?.outcome, "error:", last?.error_code, "metrics:", JSON.stringify(last?.metrics));
-log("chosen:", chosen ? `${chosen.airline} ${chosen.price} ${chosen.currency}` : "none", "duration_s:", Math.round((Date.now() - t0) / 1000), "steps:", steps);
+log("chosen:", chosen ? `${chosen.airline} ${chosen.price} ${chosen.currency}` : "none", "duration_s:", since(), "steps:", steps);
+log("TIMING:", JSON.stringify({ ...timing, total_s: since(), steps }), "(target: flights proposed in under 60 s)");
+writeFileSync(`${DIR}/${label}-timing.json`, JSON.stringify({ ...timing, total_s: since(), steps, criterion, choice }, null, 2));

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { FlightOptionSchema } from "@/lib/contracts";
-import { enoughFlights, normalizeText, pageTextExpression, parseReportedFlights, readFlights, verifyAgainstPage } from "@/lib/flights/read";
+import { enoughFlights, normalizeText, pageTextExpression, parseReportedFlights, readFlights, REREAD_FLIGHTS, RESULTS_LOADING, retryMessage, verifyAgainstPage } from "@/lib/flights/read";
 
 const SCOOT = { index: 1, airline: "Scoot", price: 646, currency: "EUR", stops: 1, duration_min: 1325, depart_at: "13:50", arrive_at: "14:55+1", layovers: [{ airport: "Singapour", duration_min: 150 }] };
 const QATAR = { index: 2, airline: "Qatar Airways", price: 912, currency: "EUR", stops: 1, duration_min: 1110, depart_at: "21:35", arrive_at: "22:05+1", layovers: [{ airport: "Doha" }] };
@@ -82,8 +82,35 @@ describe("verifyAgainstPage", () => {
     expect(enoughFlights(result)).toBe(false);
   });
 
-  it("the page expression reads the body text and the aria-labels", () => {
+  it("the page expression reads the body text and the aria-labels, one per line", () => {
     expect(pageTextExpression()).toContain("document.body.innerText");
     expect(pageTextExpression()).toContain("[aria-label]");
+    expect(pageTextExpression()).toContain('replace(/\\s+/g, " ")');
+  });
+
+  it("reads the flights from the results list first, without any report", () => {
+    const labels = [
+      "From 642 euros round trip total. 1 stop flight with Etihad. Leaves Aéroport de Paris-Charles de Gaulle at 9:55 AM on Monday, November 23 and arrives at I Gusti Ngurah Rai International Airport at 11:35 AM on Tuesday, November 24. Total duration 18 hr 40 min.  Layover (1 of 1) is a 2 hr 35 min layover at Zayed International Airport in Abu Dhabi. Select flight",
+      "From 827 euros round trip total. 1 stop flight with Qatar Airways. Leaves Aéroport de Paris-Charles de Gaulle at 10:00 PM on Monday, November 23 and arrives at I Gusti Ngurah Rai International Airport at 10:40 PM on Tuesday, November 24. Total duration 17 hr 40 min.  Layover (1 of 1) is a 1 hr 50 min layover at Hamad International Airport in Doha. Select flight",
+    ].join("\n");
+    const result = readFlights({}, `${PAGE}\n${labels}`);
+    expect(result.source).toBe("page");
+    expect(result.kept.map((f) => f.airline)).toEqual(["Etihad", "Qatar Airways"]);
+    expect(enoughFlights(result)).toBe(true);
+    // One row only on the page: the agent's report, verified, takes over.
+    const one = readFlights({ flights: [SCOOT, QATAR, KLM] }, `${PAGE}\n${labels.split("\n")[0]}`);
+    expect(one.source).toBe("agent");
+    expect(one.kept).toHaveLength(3);
+  });
+
+  it("tells loading apart from an unreadable list", () => {
+    const loading = readFlights({}, "Loading results\nFlight search\nParis\nBali");
+    expect(loading.kept).toEqual([]);
+    expect(loading.loading).toBe(true);
+    expect(retryMessage(loading)).toBe(RESULTS_LOADING);
+    const home = readFlights({}, "Explorer\nVols\nAtlanta\nà partir de 107 €");
+    expect(home.loading).toBe(false);
+    expect(retryMessage(home)).toBe(REREAD_FLIGHTS);
+    expect(retryMessage(readFlights({ flights: [SCOOT] }, "Loading results\n13:50 Scoot 646 €"))).toBe(REREAD_FLIGHTS);
   });
 });
