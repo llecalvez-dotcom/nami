@@ -367,17 +367,24 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
     onStarted: (started) => saveTrip(pushAgentMessage(started, WATCH_MESSAGE)),
   });
   // The traveller sees the agent arrive: its tab comes to the front once the agent is seen on the site ("On <host>"),
-  // never at the start (the only tab is still blank then, and opening one would double the agent's own tab). Sessions
-  // already running when the panel opens are left alone.
-  const seenOnSite = trip.agent_steps.some((step) => step.startsWith("On "));
+  // never at the start (the only tab is still blank then, and opening one would double the agent's own tab). Each new
+  // host is tried until the tab is found (consent.google.com comes before Google Flights). Sessions already running
+  // when the panel opens are left alone.
+  const lastHostStep = trip.agent_steps.findLast((step) => step.startsWith("On ")) ?? null;
   const focusedSession = useRef<string | null>(run?.session_id ?? null);
+  const focusTried = useRef<string | null>(null);
   useEffect(() => {
     const runPaperSeen = paperOfRun(run);
-    if (!run || !runPaperSeen || !seenOnSite || focusedSession.current === run.session_id) return;
-    focusedSession.current = run.session_id;
+    if (!run || !runPaperSeen || !lastHostStep || focusedSession.current === run.session_id) return;
+    const attempt = `${run.session_id} ${lastHostStep}`;
+    if (focusTried.current === attempt) return;
+    focusTried.current = attempt;
     const url = paperUrl(trip, runPaperSeen);
-    if (url) void focusOfficialTab(url);
-  }, [run, seenOnSite, trip]);
+    if (!url) return;
+    void focusOfficialTab(url)?.then((result) => {
+      if (result === "focused") focusedSession.current = run.session_id;
+    });
+  }, [run, lastHostStep, trip]);
   const latest = () => getTrip(trip.id) ?? trip;
   const say = (text: string) => saveTrip(pushAgentMessage(latest(), text));
   const ask = (action: "read_passport" | "confirm_passport" | "use_photo" | "use_return_ticket", text: string, yes: string, no: string) =>
