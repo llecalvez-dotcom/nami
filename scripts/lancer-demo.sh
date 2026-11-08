@@ -190,8 +190,9 @@ BRIDGE_LOG="$LOG_DIR/holo-local-browser.log"
       kill -TERM $$ 2> /dev/null
       exit 1
     fi
-    say "H bridge stopped (code $code), restarting in 2 s with the same session id."
-    sleep 2
+    # 1 s: Nami kills a used bridge before each new H session (lib/local-bridge.ts) and waits for this restart.
+    say "H bridge stopped (code $code), restarting in 1 s with the same session id."
+    sleep 1
   done
 ) &
 BRIDGE_PID=$!
@@ -215,10 +216,25 @@ trap cleanup EXIT INT TERM
 sleep 3
 kill -0 "$BRIDGE_PID" 2> /dev/null || die "The H bridge did not start (log: $BRIDGE_LOG)"
 
+# .env.local: the session id and the bridge log, read by the Nami started below (or by one started by hand).
+set_env_local() {
+  local file="$ROOT/.env.local"
+  touch "$file"
+  if grep -q "^$1=" "$file"; then
+    local tmp; tmp="$(mktemp)"
+    grep -v "^$1=" "$file" > "$tmp" && printf '%s=%s\n' "$1" "$2" >> "$tmp" && mv "$tmp" "$file"
+  else
+    printf '%s=%s\n' "$1" "$2" >> "$file"
+  fi
+}
+set_env_local NAMI_LOCAL_SESSION_ID "$SESSION_ID"
+set_env_local NAMI_BRIDGE_LOG "$BRIDGE_LOG"
+export NAMI_BRIDGE_LOG="$BRIDGE_LOG"
+
 if [ "$ENV_LOCAL_SESSION_ID" = "$SESSION_ID" ]; then
   ENV_LOCAL_HINT="Already in .env.local, so the side panel needs no setting:"
 else
-  ENV_LOCAL_HINT="Put this line in .env.local (then restart any Nami not started by this script):"
+  ENV_LOCAL_HINT="Written to .env.local (restart any Nami not started by this script):"
 fi
 
 cat << INFO
