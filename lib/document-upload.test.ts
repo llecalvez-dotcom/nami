@@ -19,20 +19,25 @@ describe("upload type sniffing", () => {
   });
 
   it("refuses by kind: images only for the photo, PDF only for the return ticket", () => {
-    expect(refuseUpload("passport", new Uint8Array(pdf))).toEqual({ kind: "passport", type: "pdf" });
+    expect(refuseUpload("passport", new Uint8Array(pdf))).toEqual({ error: "Send a JPEG, PNG or HEIC photo of your passport.", status: 415 });
     expect(refuseUpload("photo", new Uint8Array(pdf))).toEqual({ error: "Send a JPEG, PNG or HEIC photo.", status: 415 });
     expect(refuseUpload("return_ticket", new Uint8Array(png))).toEqual({ error: "Send a PDF.", status: 415 });
     expect(refuseUpload("return_ticket", new Uint8Array(pdf))).toEqual({ kind: "return_ticket", type: "pdf" });
     expect(refuseUpload(null, new Uint8Array(jpeg))).toEqual({ error: "Unsupported document kind.", status: 400 });
-    expect(refuseUpload("passport", new Uint8Array(10 * 1024 * 1024 + 1))).toEqual({ error: "File too large (10 MB max).", status: 413 });
+    expect(refuseUpload("photo", new Uint8Array(10 * 1024 * 1024 + 1))).toEqual({ error: "File too large (10 MB max).", status: 413 });
+    // The passport reader takes 5 MB: refused here rather than after the upload.
+    expect(refuseUpload("passport", new Uint8Array(5 * 1024 * 1024 + 1))).toEqual({ error: "File too large (5 MB max).", status: 413 });
   });
 });
 
 describe("upload file names", () => {
   it("are safe, prefixed by the kind and dated", () => {
-    const name = uploadFileName("return_ticket", "pdf", new Date("2026-11-08T02:15:30.123Z"));
-    expect(name).toBe("uploaded-return-ticket-2026-11-08T02-15-30-123.pdf");
+    const name = uploadFileName("return_ticket", "pdf", new Date("2026-11-08T02:15:30.123Z"), "ab12");
+    expect(name).toBe("uploaded-return-ticket-2026-11-08T02-15-30-123-ab12.pdf");
     expect(name).toMatch(/^[a-z0-9.-]+$/i);
-    expect(uploadFileName("photo", "jpg", new Date("2026-11-08T02:15:30.123Z"))).toBe("uploaded-photo-2026-11-08T02-15-30-123.jpg");
+    expect(uploadFileName("photo", "jpg", new Date("2026-11-08T02:15:30.123Z"))).toMatch(/^uploaded-photo-2026-11-08T02-15-30-123-[0-9a-f]{4}\.jpg$/);
+    // Two files in the same millisecond get different names.
+    const now = new Date();
+    expect(uploadFileName("photo", "jpg", now)).not.toBe(uploadFileName("photo", "jpg", now));
   });
 });

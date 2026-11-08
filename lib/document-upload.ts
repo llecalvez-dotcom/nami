@@ -1,6 +1,8 @@
+import { randomBytes } from "node:crypto";
 import { mkdir, open, readFile, realpath, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { documentsEnabled, DOCUMENT_KINDS, MAX_DOCUMENT_BYTES, registerDocument, type DocumentKind, type FoundDocument } from "@/lib/documents";
+import { MAX_IMAGE_BYTES } from "@/lib/passport";
 import { convertHeic, isHeic } from "@/lib/upload-scan";
 
 // The upload zone: when Nami finds no passport, ID photo or return ticket on this computer, the traveller drops one.
@@ -9,11 +11,12 @@ import { convertHeic, isHeic } from "@/lib/upload-scan";
 export const UPLOAD_FOLDER = "nami-uploads";
 export const MAX_UPLOAD_BYTES = MAX_DOCUMENT_BYTES;
 export type UploadType = "jpg" | "png" | "heic" | "pdf";
-export const UPLOAD_ACCEPT = ".jpg,.jpeg,.png,.heic,.pdf,image/jpeg,image/png,image/heic,application/pdf";
+// The passport is read by extract-found, which takes JPEG and PNG images up to MAX_IMAGE_BYTES (HEIC becomes a JPEG).
+export const MAX_PASSPORT_BYTES = MAX_IMAGE_BYTES;
 
-// What each field of the official site takes: the ID photo and the return ticket are handed over as they are.
+// What each reader or field of the official site takes: the ID photo and the return ticket are handed over as they are.
 const TYPES_BY_KIND: Record<DocumentKind, readonly UploadType[]> = {
-  passport: ["jpg", "png", "heic", "pdf"],
+  passport: ["jpg", "png", "heic"],
   photo: ["jpg", "png", "heic"],
   return_ticket: ["pdf"],
 };
@@ -36,20 +39,22 @@ export function sniffUploadType(bytes: Uint8Array): UploadType | null {
 export function refuseUpload(kind: string | null, bytes: Uint8Array): UploadRefusal | { kind: DocumentKind; type: UploadType } {
   if (!DOCUMENT_KINDS.includes(kind as DocumentKind)) return { error: "Unsupported document kind.", status: 400 };
   if (bytes.length === 0) return { error: "No file received.", status: 400 };
-  if (bytes.length > MAX_UPLOAD_BYTES) return { error: "File too large (10 MB max).", status: 413 };
+  const max = kind === "passport" ? MAX_PASSPORT_BYTES : MAX_UPLOAD_BYTES;
+  if (bytes.length > max) return { error: `File too large (${max / (1024 * 1024)} MB max).`, status: 413 };
   const type = sniffUploadType(bytes);
   const allowed = TYPES_BY_KIND[kind as DocumentKind];
   if (!type || !allowed.includes(type)) {
-    const list = kind === "return_ticket" ? "a PDF" : kind === "photo" ? "a JPEG, PNG or HEIC photo" : "a JPEG, PNG, HEIC or PDF";
+    const list = kind === "return_ticket" ? "a PDF" : kind === "photo" ? "a JPEG, PNG or HEIC photo" : "a JPEG, PNG or HEIC photo of your passport";
     return { error: `Send ${list}.`, status: 415 };
   }
   return { kind: kind as DocumentKind, type };
 }
 
-// uploaded-<kind>-<timestamp>.<ext>: safe characters only, and a name the search of its kind scores first.
-export function uploadFileName(kind: DocumentKind, type: UploadType, now: Date = new Date()): string {
+// uploaded-<kind>-<timestamp>-<salt>.<ext>: safe characters only, a name the search of its kind scores first, and two
+// files sent in the same millisecond never collide.
+export function uploadFileName(kind: DocumentKind, type: UploadType, now: Date = new Date(), salt: string = randomBytes(2).toString("hex")): string {
   const stamp = now.toISOString().replace(/[:.]/g, "-").replace(/Z$/, "");
-  return `uploaded-${kind.replace("_", "-")}-${stamp}.${type}`;
+  return `uploaded-${kind.replace("_", "-")}-${stamp}-${salt}.${type}`;
 }
 
 // wx: never over an existing file, readable by the owner only.
@@ -71,18 +76,16 @@ export async function saveUploadedDocument(kind: DocumentKind, type: UploadType,
   await mkdir(folder, { recursive: true, mode: 0o700 });
   const path = await writeNew(join(folder, uploadFileName(kind, type, now)), bytes);
   // iPhone photos are HEIC, which neither the passport readers nor the official site accept: a JPEG copy is kept
-  // instead when the Mac can make one (sips); elsewhere the HEIC passport stays, as a file found in the folder would.
+  // instead when the Mac can make one (sips); elsewhere the file is refused rather than kept unreadable.
   if (type === "heic" && (await isHeic(path))) {
     const converted = await convertHeic(path);
-    if (converted) {
-      const jpeg = await writeNew(join(folder, uploadFileName(kind, "jpg", now)), await readFile(converted.path).finally(converted.cleanup));
-      await unlink(path).catch(() => {});
-      return registerDocument(jpeg, kind);
-    }
-    if (kind === "photo") {
+    if (!converted) {
       await unlink(path).catch(() => {});
       return null;
     }
+    const jpeg = await writeNew(join(folder, uploadFileName(kind, "jpg", now)), await readFile(converted.path).finally(converted.cleanup));
+    await unlink(path).catch(() => {});
+    return registerDocument(jpeg, kind);
   }
   return registerDocument(path, kind);
 }

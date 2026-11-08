@@ -91,7 +91,8 @@ export async function findDocuments(kind: DocumentKind = "passport"): Promise<Fo
     }
   }
   await scan(root, 0);
-  return candidates.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name)).slice(0, 5).map(({ path, ...file }) => {
+  // Best score first, then the newest: a file just sent stays in the five shown.
+  return candidates.sort((a, b) => b.score - a.score || b.modified_at.localeCompare(a.modified_at) || a.name.localeCompare(b.name)).slice(0, 5).map(({ path, ...file }) => {
     const id = randomBytes(24).toString("hex");
     current.set(id, { root, path, kind });
     return { id, ...file };

@@ -11,8 +11,8 @@ describe("the upload zone", () => {
     const passport = drop("passport");
     expect(passport).toContain("Drop the file here");
     expect(passport).toContain("Choose a file");
-    expect(passport).toContain("JPEG, PNG, HEIC or PDF, 10 MB max.");
-    expect(passport).toContain('accept=".jpg,.jpeg,.png,.heic,.pdf,image/jpeg,image/png,image/heic,application/pdf"');
+    expect(passport).toContain("JPEG, PNG or HEIC, 5 MB max.");
+    expect(passport).toContain('accept=".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic"');
     expect(drop("photo")).toContain('accept=".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic"');
     expect(drop("return_ticket")).toContain('accept=".pdf,application/pdf"');
     expect(drop("return_ticket")).toContain("Your return ticket as a PDF, 10 MB max.");

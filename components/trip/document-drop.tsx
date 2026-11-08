@@ -11,29 +11,36 @@ type Translate = (text: string) => string;
 // The upload zone shown when Nami finds no passport, ID photo or return ticket on this computer: the traveller drops a
 // file or chooses one, it is saved in the documents folder (POST /api/documents/upload) and the path resumes as if the
 // file had been found. Fixed texts only, so the panel can translate them.
+const HINTS: Record<Kind, string> = {
+  passport: "A photo or scan of your passport: JPEG, PNG or HEIC, 5 MB max.",
+  photo: "Your ID photo: JPEG, PNG or HEIC, 10 MB max.",
+  return_ticket: "Your return ticket as a PDF, 10 MB max.",
+};
+const TYPE_ERRORS: Record<Kind, string> = {
+  passport: "Send a JPEG, PNG or HEIC photo of your passport.",
+  photo: "Send a JPEG, PNG or HEIC photo.",
+  return_ticket: "Send a PDF.",
+};
+const SIZE_ERRORS: Record<Kind, string> = {
+  passport: "File too large (5 MB max).",
+  photo: "File too large (10 MB max).",
+  return_ticket: "File too large (10 MB max).",
+};
 export const DROP_TEXTS = [
   "Drop the file here",
   "Choose a file",
   "Sending…",
-  "A photo or scan of your passport: JPEG, PNG, HEIC or PDF, 10 MB max.",
-  "Your ID photo: JPEG, PNG or HEIC, 10 MB max.",
-  "Your return ticket as a PDF, 10 MB max.",
-  "Send a JPEG, PNG, HEIC or PDF.",
-  "Send a JPEG, PNG or HEIC photo.",
-  "Send a PDF.",
-  "File too large (10 MB max).",
   "The file could not be saved. Try again.",
+  ...Object.values(HINTS),
+  ...Object.values(TYPE_ERRORS),
+  ...new Set(Object.values(SIZE_ERRORS)),
 ];
 
-const HINTS: Record<Kind, string> = { passport: DROP_TEXTS[3], photo: DROP_TEXTS[4], return_ticket: DROP_TEXTS[5] };
-const TYPE_ERRORS: Record<Kind, string> = { passport: DROP_TEXTS[6], photo: DROP_TEXTS[7], return_ticket: DROP_TEXTS[8] };
-const EXTENSIONS: Record<Kind, RegExp> = { passport: /\.(jpe?g|png|heic|pdf)$/i, photo: /\.(jpe?g|png|heic)$/i, return_ticket: /\.pdf$/i };
-const ACCEPT: Record<Kind, string> = {
-  passport: ".jpg,.jpeg,.png,.heic,.pdf,image/jpeg,image/png,image/heic,application/pdf",
-  photo: ".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic",
-  return_ticket: ".pdf,application/pdf",
-};
-const MAX_BYTES = 10 * 1024 * 1024;
+const EXTENSIONS: Record<Kind, RegExp> = { passport: /\.(jpe?g|png|heic)$/i, photo: /\.(jpe?g|png|heic)$/i, return_ticket: /\.pdf$/i };
+const IMAGES = ".jpg,.jpeg,.png,.heic,image/jpeg,image/png,image/heic";
+const ACCEPT: Record<Kind, string> = { passport: IMAGES, photo: IMAGES, return_ticket: ".pdf,application/pdf" };
+// The same caps as the server: the passport reader takes 5 MB, the files handed to the official site 10 MB.
+const MAX_BYTES: Record<Kind, number> = { passport: 5 * 1024 * 1024, photo: 10 * 1024 * 1024, return_ticket: 10 * 1024 * 1024 };
 
 export function DocumentDrop({ kind, onUploaded, t = (text) => text, className }: {
   kind: Kind;
@@ -49,7 +56,7 @@ export function DocumentDrop({ kind, onUploaded, t = (text) => text, className }
   const send = async (file: File) => {
     setError(null);
     if (!EXTENSIONS[kind].test(file.name)) return setError(t(TYPE_ERRORS[kind]));
-    if (file.size > MAX_BYTES) return setError(t("File too large (10 MB max)."));
+    if (file.size > MAX_BYTES[kind]) return setError(t(SIZE_ERRORS[kind]));
     setBusy(true);
     try {
       const form = new FormData();

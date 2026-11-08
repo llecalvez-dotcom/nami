@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     const checked = refuseUpload(kind, bytes);
     if ("error" in checked) return fail(checked.error, checked.status);
     const document = await saveUploadedDocument(checked.kind, checked.type, bytes);
-    if (!document) return fail("This HEIC photo could not be converted here. Send a JPEG or PNG.", 415);
+    if (!document) return fail("This HEIC file could not be converted here. Send a JPEG or PNG.", 415);
     return Response.json(document, { headers });
   } catch {
     return fail("The file could not be saved. Try again.", 500);

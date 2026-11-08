@@ -53,7 +53,7 @@ describe("POST /api/documents/upload", () => {
     const document = await response.json();
     expect(document).toEqual({
       id: expect.stringMatching(/^[a-f0-9]{48}$/),
-      name: expect.stringMatching(/^uploaded-passport-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}\.jpg$/),
+      name: expect.stringMatching(/^uploaded-passport-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}-[0-9a-f]{4}\.jpg$/),
       folder: UPLOAD_FOLDER,
       size_bytes: JPEG.byteLength,
       modified_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
@@ -81,7 +81,8 @@ describe("POST /api/documents/upload", () => {
   });
 
   it.each([
-    ["a text file as passport", { kind: "passport", file: { bytes: TEXT, name: "passport.jpg", type: "image/jpeg" } }, 415, "Send a JPEG, PNG, HEIC or PDF."],
+    ["a text file as passport", { kind: "passport", file: { bytes: TEXT, name: "passport.jpg", type: "image/jpeg" } }, 415, "Send a JPEG, PNG or HEIC photo of your passport."],
+    ["a PDF as passport, which the reader cannot read", { kind: "passport", file: { bytes: PDF, name: "passport.pdf" } }, 415, "Send a JPEG, PNG or HEIC photo of your passport."],
     ["a PDF as ID photo", { kind: "photo", file: { bytes: PDF, name: "photo.pdf" } }, 415, "Send a JPEG, PNG or HEIC photo."],
     ["a JPEG as return ticket", { kind: "return_ticket", file: { bytes: JPEG, name: "ticket.jpg" } }, 415, "Send a PDF."],
     ["an unknown kind", { kind: "visa", file: { bytes: JPEG, name: "x.jpg" } }, 400, "Unsupported document kind."],
@@ -93,6 +94,18 @@ describe("POST /api/documents/upload", () => {
     expect(response.status).toBe(status);
     expect(await response.json()).toEqual({ error });
     expect(await readdir(root)).toEqual([]);
+  });
+
+  it("keeps the newest upload in the five files the search shows", async () => {
+    const names: string[] = [];
+    for (let i = 0; i < 6; i += 1) {
+      names.push((await (await call({ kind: "photo", file: { bytes: PNG, name: "me.png" } })).json()).name);
+      await new Promise((resolve) => setTimeout(resolve, 3));
+    }
+    const found = (await findDocuments("photo")).map((d) => d.name);
+    expect(found).toHaveLength(5);
+    expect(found[0]).toBe(names[5]);
+    expect(found).not.toContain(names[0]);
   });
 
   it("refuses a file over the limit before reading it, and a body without a length", async () => {
