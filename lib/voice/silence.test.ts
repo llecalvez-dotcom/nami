@@ -12,7 +12,7 @@ describe("silence detector", () => {
     const voice = 0.2;
     const results = feed([
       [quiet, 0],
-      [voice, 100],
+      [voice, 400],
       [voice, 600],
       [quiet, 700],
       [quiet, 700 + SILENCE_MS - 100],
