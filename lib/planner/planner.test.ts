@@ -21,6 +21,7 @@ function draft(fields: Partial<TripRequestDraft>): TripRequestDraft {
 const complete: TripRequest = {
   raw_text: "test",
   nationality: "FR",
+  origin: null,
   origin_country: "FR",
   destination: "Bali",
   country_iso2: "ID",

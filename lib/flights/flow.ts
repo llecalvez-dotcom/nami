@@ -8,12 +8,13 @@ import { AgentStateSchema, FlightCriterionSchema, FlightOptionSchema, type Agent
 import { isTerminalStatus, type ToolRequest } from "@/lib/h-agent";
 import { CRITERION_LABELS, describeFlight, formatPrice, introduceFlights, rankFlights } from "@/lib/flights/rank";
 import { normalizeText } from "@/lib/flights/read";
+import { FLIGHTS_ORIGIN } from "@/lib/flights-agent";
 import { shortAnswer } from "@/lib/voice/short-answers";
 import { assumedArrival, formalityWindows, isBali, nextDay } from "@/lib/planner";
 import { BALI_PAPERS } from "@/lib/bali-papers";
 import type { ConversationItem, Trip } from "@/lib/trip-state";
 
-export const FLIGHT_QUESTION_FIELDS = ["return_date", "flight_criterion", "flight_choice"] as const;
+export const FLIGHT_QUESTION_FIELDS = ["origin", "return_date", "flight_criterion", "flight_choice"] as const;
 export type FlightQuestionField = (typeof FLIGHT_QUESTION_FIELDS)[number];
 type FlightQuestion = Extract<ConversationItem, { kind: "question" }> & { field: FlightQuestionField };
 
@@ -26,7 +27,9 @@ export const FLIGHT_READY_PREFIX = "Your flight is found: ";
 export const FLIGHTS_RETRY_PROPOSAL = { action: "flights", text: "Shall I search your flights again?", accept_label: "Search again", decline_label: "Not now" } as const;
 export const FLIGHTS_UNREADABLE_MESSAGE = "I could not read the flights on the page. Look at the tab on the left and choose one yourself.";
 export const FLIGHTS_REREAD_MESSAGE = "I could not match the flights with the page, the agent is reading it again.";
-const CRITERION_QUESTION = "What matters most for your flights: the cheapest, the fastest, no stop if possible, or the best balance?";
+const ORIGIN_QUESTION = "Which city do you fly from?";
+const CRITERION_QUESTION = "What matters most for your flights: the cheapest, the fastest, no stop if possible, or the best compromise?";
+export const BALANCED_CRITERIA_MESSAGE = "Several criteria: I will balance price, duration and stops.";
 const ORDINALS = ["The first", "The second", "The third"];
 // What a traveller says to name a flight or a criterion, in the languages Gladia transcribes for us.
 const ORDINAL_WORDS = [
@@ -87,7 +90,11 @@ function withResult(trip: Trip, patch: Partial<FlightsRunResult>, run: Partial<A
 }
 
 const say = (trip: Trip, text: string) => push(trip, { kind: "agent", text });
-const retry = (trip: Trip) => push(trip, { kind: "proposal", ...FLIGHTS_RETRY_PROPOSAL, decision: null });
+// One retry proposal at a time: a second failure while the first one is still open does not ask twice.
+const retry = (trip: Trip) =>
+  trip.conversation.some((i) => i.kind === "proposal" && i.action === "flights" && i.decision === null)
+    ? trip
+    : push(trip, { kind: "proposal", ...FLIGHTS_RETRY_PROPOSAL, decision: null });
 
 function addDays(isoDate: string, days: number): string {
   const date = new Date(`${isoDate}T00:00:00Z`);
@@ -104,12 +111,30 @@ const question = (field: FlightQuestionField, text: string, options: { label: st
   kind: "question", from: "nami", field, question: text, options, input, answer: null,
 });
 
+// The departure city: asked first, Paris proposed (Clément, real run 2026-11-08: it was fixed to Paris).
+function askOrigin(trip: Trip): Trip {
+  return push(trip, question("origin", ORIGIN_QUESTION, [{ label: FLIGHTS_ORIGIN, value: FLIGHTS_ORIGIN }], "text"));
+}
+
+const FILLER_WORDS = new Set(["euh", "heu", "hum", "hmm", "um", "uh", "er", "bah", "ben", "alors", "well", "so"]);
+
+// A spoken city: the words after "from" / "de" when there are some, else the whole answer, if it looks like a name.
+export function spokenCity(text: string): string | null {
+  const cleaned = text.trim().replace(/[.!?]+$/g, "");
+  const after = cleaned.match(/\b(?:from|de|depuis|desde|von|da)\s+(?:l[ae]\s+|the\s+)?(.+)$/i);
+  const city = (after ? after[1] : cleaned).trim();
+  if (!city || city.split(/\s+/).length > 4 || !/\p{L}/u.test(city) || /\d/.test(city) || shortAnswer("proposal", city)) return null;
+  if (FILLER_WORDS.has(spokenWords(city))) return null;
+  return city.charAt(0).toUpperCase() + city.slice(1);
+}
+
 function askReturnDate(trip: Trip): Trip {
   const { departure_date, return_date } = trip.request;
+  const origin = trip.request.origin ?? FLIGHTS_ORIGIN;
   if (!departure_date) return say(trip, "I need your departure date first.");
   if (return_date) {
     return push(trip, question("return_date",
-      `You leave Paris on ${longDate(departure_date)} and come back on ${longDate(return_date)}. Shall I search with those dates?`,
+      `You leave ${origin} on ${longDate(departure_date)} and come back on ${longDate(return_date)}. Shall I search with those dates?`,
       [{ label: "Yes, those dates", value: return_date }], "text"));
   }
   const options = RETURN_OFFSETS_DAYS.map((days) => addDays(departure_date, days)).map((date) => ({ label: longDate(date), value: date }));
@@ -121,9 +146,10 @@ function askCriterion(trip: Trip): Trip {
   return push(trip, question("flight_criterion", CRITERION_QUESTION, options, null));
 }
 
-// "Yes" to the flights: the dates first, then the criterion, then the client starts the agent (startFlightsRun).
+// "Yes" to the flights: the departure city (unless already given), the dates, then the criterion, then the client
+// starts the agent (startFlightsRun).
 export function startFlightsFlow(trip: Trip): Trip {
-  return askReturnDate(trip);
+  return trip.request.origin ? askReturnDate(trip) : askOrigin(trip);
 }
 
 // The criterion the traveller chose, from the conversation: the last answered criterion question.
@@ -154,10 +180,16 @@ const saidWord = (said: string, word: string) =>
 const GENERIC_AIRLINE_WORDS = new Set(["air", "airways", "airlines", "airline", "lines", "fly", "jet"]);
 const airlineWords = (airline: string) => spokenWords(airline).split(" ").filter((w) => w.length >= 3 && !GENERIC_AIRLINE_WORDS.has(w));
 
-export function matchCriterion(text: string): FlightCriterion | null {
+// Every criterion named in the answer ("le moins cher et le plus rapide": two).
+export function matchCriteria(text: string): FlightCriterion[] {
   const said = spokenWords(text);
-  const hits = FlightCriterionSchema.options.filter((c) => CRITERION_WORDS[c].some((w) => saidWord(said, w)));
-  return hits.length === 1 ? hits[0] : null;
+  return FlightCriterionSchema.options.filter((c) => CRITERION_WORDS[c].some((w) => saidWord(said, w)));
+}
+
+// One criterion named: that one; several: the compromise ("best"); none: null.
+export function matchCriterion(text: string): FlightCriterion | null {
+  const hits = matchCriteria(text);
+  return hits.length === 0 ? null : hits.length === 1 ? hits[0] : "best";
 }
 
 // The flight named by an ordinal ("the second", "2"), by its airline ("Qatar"), or by a criterion ("the cheapest one":
@@ -181,6 +213,8 @@ export function openFlightQuestion(trip: Trip, field: FlightQuestionField): bool
 export function answerFlightQuestion(trip: Trip, item: FlightQuestion, value: string, label: string): Trip {
   const answered = answerItem(trip, item.id, label);
   switch (item.field) {
+    case "origin":
+      return askReturnDate({ ...answered, request: { ...answered.request, origin: value } });
     case "return_date":
       return askCriterion({ ...answered, request: { ...answered.request, return_date: value } });
     case "flight_criterion":
@@ -199,6 +233,12 @@ function askAgain(trip: Trip, item: FlightQuestion, text: string, reason = "Sorr
 // the criterion and the flight are matched here, on the words said. Nothing understood: the same question again.
 export function answerFlightQuestionWithText(trip: Trip, item: FlightQuestion, text: string, request: TripRequestDraft): Trip {
   switch (item.field) {
+    case "origin": {
+      const parsed = request.origin && request.origin !== trip.request.origin ? request.origin : null;
+      const origin = parsed ?? spokenCity(text);
+      if (!origin) return askAgain(trip, item, text);
+      return askReturnDate({ ...answerItem(trip, item.id, text), request: { ...request, origin } });
+    }
     case "return_date": {
       const changed = !!request.return_date && request.return_date !== trip.request.return_date;
       // "No" to the proposed dates, without a new one: the dates are asked, not kept.
@@ -211,7 +251,9 @@ export function answerFlightQuestionWithText(trip: Trip, item: FlightQuestion, t
     }
     case "flight_criterion": {
       const criterion = matchCriterion(text);
-      return criterion ? answerFlightQuestion(trip, item, criterion, CRITERION_LABELS[criterion]) : askAgain(trip, item, text);
+      if (!criterion) return askAgain(trip, item, text);
+      const told = matchCriteria(text).length > 1 ? say(trip, BALANCED_CRITERIA_MESSAGE) : trip;
+      return answerFlightQuestion(told, item, criterion, CRITERION_LABELS[criterion]);
     }
     case "flight_choice": {
       const flight = matchFlight(text, flightsResult(trip.agent_run)?.options ?? [], flightCriterion(trip));
@@ -222,13 +264,13 @@ export function answerFlightQuestionWithText(trip: Trip, item: FlightQuestion, t
   }
 }
 
-export type FlightsStartBody = { destination: string; departure_date: string; return_date: string; travellers: number; criterion: FlightCriterion };
+export type FlightsStartBody = { origin: string; destination: string; departure_date: string; return_date: string; travellers: number; criterion: FlightCriterion };
 
 // What the client sends to /api/flights/start, from the request; null while a date is missing.
 export function flightsStartBody(trip: Trip): FlightsStartBody | null {
-  const { destination, departure_date, return_date, travellers } = trip.request;
+  const { origin, destination, departure_date, return_date, travellers } = trip.request;
   if (!destination || !departure_date || !return_date) return null;
-  return { destination, departure_date, return_date, travellers: travellers ?? 1, criterion: flightCriterion(trip) };
+  return { origin: origin ?? FLIGHTS_ORIGIN, destination, departure_date, return_date, travellers: travellers ?? 1, criterion: flightCriterion(trip) };
 }
 
 export function startFlightsSession(trip: Trip, sessionId: string, url: string, now: Date): Trip {

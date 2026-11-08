@@ -135,6 +135,15 @@ const FLIGHTS_AFTER_VISA: NewConversationItem = {
   text: "Do you also want me to help you find your flights?",
 } as NewConversationItem;
 
+// One flight proposal at a time, and none once the flights are accepted, being searched or found: the arrival card's
+// report_ready, a declined card or a late paper message must not ask again (Clément, real run 2026-11-08).
+function proposeFlights(trip: Trip, proposal: NewConversationItem = FLIGHTS_PROPOSAL): Trip {
+  const engaged = trip.conversation.some((i) => i.kind === "proposal" && i.action === "flights" && i.decision !== "declined");
+  const accepted = trip.modules.some((m) => m.module === "flights" && m.state === "accepted");
+  if (engaged || accepted || trip.agent_run?.kind === "flights") return trip;
+  return push(trip, proposal);
+}
+
 // The second paper, once the visa is done (Nathan, 2026-11-07): the same way, in the same tab.
 const ARRIVAL_CARD_PROPOSAL: NewConversationItem = {
   kind: "proposal",
@@ -228,7 +237,7 @@ function advance(trip: Trip): Trip {
       { kind: "agent", text: papers.message },
     );
   }
-  return push({ ...trip, modules: suggestions }, { kind: "agent", text: papers.message }, FLIGHTS_PROPOSAL);
+  return proposeFlights(push({ ...trip, modules: suggestions }, { kind: "agent", text: papers.message }));
 }
 
 function toFormality(live: FormalitiesResult["formalities"][number]): Formality {
@@ -253,20 +262,19 @@ export function applyLivePapers(trip: Trip, result: FormalitiesResult | null): T
   const destination = trip.request.destination ?? result?.country_name ?? "your destination";
   const checked: Trip = { ...trip, papers_check: "done" };
   if (!result || result.mode === "unavailable") {
-    return push(
+    return proposeFlights(push(
       checked,
       {
         kind: "agent",
         text: `I could not check the entry papers for ${destination} live. Check diplomatie.gouv.fr before you leave.`,
       },
-      FLIGHTS_PROPOSAL,
-    );
+    ));
   }
   const formalities = result.formalities.map(toFormality);
   const required = result.formalities.filter((f) => f.required);
   if (required.length === 0) {
     const optional = result.formalities.map((f) => f.name);
-    return push(
+    return proposeFlights(push(
       { ...checked, formalities, modules: setModule(checked.modules, "papers", "none_needed") },
       {
         kind: "agent",
@@ -275,19 +283,17 @@ export function applyLivePapers(trip: Trip, result: FormalitiesResult | null): T
             ? `No mandatory entry paper for ${destination} on the official sites. Optional: ${optional.join(", ")}.`
             : `No entry paper needed for ${destination}: nothing found on the official sites. Your passport is enough.`,
       },
-      FLIGHTS_PROPOSAL,
-    );
+    ));
   }
   const one = required.length === 1;
-  return push(
+  return proposeFlights(push(
     { ...checked, formalities, modules: setModule(checked.modules, "papers", "not_supported_yet") },
     {
       kind: "agent",
       text: `For ${destination} you need ${required.length} entry paper${one ? "" : "s"}, found live on the official sites. I cannot fill ${one ? "it" : "them"} in for you yet: ${one ? "the" : "each"} official link is in your folder.`,
       list: required.map((f) => `${f.name}: ${f.official_cost}, on ${hostOf(f.official_url) ?? f.official_url}`),
     },
-    FLIGHTS_PROPOSAL,
-  );
+  ));
 }
 
 function baliFormalities(request: TripRequestDraft): Formality[] {
@@ -393,7 +399,7 @@ export function answerQuestion(trip: Trip, itemId: string, value: string, label:
   }
 
   if (!answered.agent_run || !isAgentActive(answered.agent_run)) return answered;
-  return push(
+  return proposeFlights(push(
     {
       ...answered,
       agent_run: {
@@ -410,8 +416,7 @@ export function answerQuestion(trip: Trip, itemId: string, value: string, label:
       kind: "agent",
       text: "Visa (e-VOA) pre-filled in Chrome. Check every field, then finish it yourself: payment of IDR 500,000 on the official site.",
     },
-    FLIGHTS_PROPOSAL,
-  );
+  ));
 }
 
 export function decideProposal(trip: Trip, itemId: string, accepted: boolean, now: Date): Trip {
@@ -468,7 +473,7 @@ export function decideProposal(trip: Trip, itemId: string, accepted: boolean, no
         },
       );
     case "create_arrival_card":
-      if (!accepted) return push(decided, { kind: "agent", text: "Okay, the arrival card can wait." }, FLIGHTS_AFTER_VISA);
+      if (!accepted) return proposeFlights(push(decided, { kind: "agent", text: "Okay, the arrival card can wait." }), FLIGHTS_AFTER_VISA);
       // Like the visa: a real trip starts a real H session (startVisaRun), the sample only records the choice.
       return trip.sample ? decided : trip;
     case "read_passport":
@@ -502,6 +507,8 @@ export function stopAgent(trip: Trip): Trip {
 // Live H session (ticket 05, part A). The passport number and birth date are masked before anything is stored.
 
 export function pushProposal(trip: Trip, action: ProposalAction, text: string, acceptLabel: string, declineLabel: string): Trip {
+  // The same proposal, still unanswered: not twice.
+  if (trip.conversation.some((i) => i.kind === "proposal" && i.action === action && i.text === text && i.decision === null)) return trip;
   return push(trip, { kind: "proposal", action, text, accept_label: acceptLabel, decline_label: declineLabel, decision: null });
 }
 
@@ -689,17 +696,16 @@ export function reportReady(trip: Trip, call: ToolRequest, secrets: readonly (st
     : [];
   const marked = markHandled(trip, call);
   const paperId = marked.agent_run!.paper_id ?? "evoa";
-  return push(
+  const ready = push(
     {
       ...withRun(closeAgentQuestions(marked, "Agent stopped"), { state: "interrupted", drained: true, pending_question: undefined, result: { ...marked.agent_run!.result, summary, filled_fields: filled } }),
       agent_steps: [...marked.agent_steps, "Nami stopped the agent before anything was sent, so you can check and send it"],
       formalities: marked.formalities.map((f) => (f.id === paperId ? { ...f, status: "pending_approval" } : f)),
     },
-    // After the visa, the arrival card; after the arrival card, the flights.
-    ...(paperId === "evoa"
-      ? [{ kind: "agent", text: VISA_READY_MESSAGE, list: filled } as NewConversationItem, ARRIVAL_CARD_PROPOSAL]
-      : [{ kind: "agent", text: ARRIVAL_CARD_READY_MESSAGE, list: filled } as NewConversationItem, FLIGHTS_AFTER_VISA]),
+    { kind: "agent", text: paperId === "evoa" ? VISA_READY_MESSAGE : ARRIVAL_CARD_READY_MESSAGE, list: filled },
   );
+  // After the visa, the arrival card; after the arrival card, the flights.
+  return paperId === "evoa" ? push(ready, ARRIVAL_CARD_PROPOSAL) : proposeFlights(ready, FLIGHTS_AFTER_VISA);
 }
 
 export function markToolHandled(trip: Trip, call: ToolRequest): Trip {

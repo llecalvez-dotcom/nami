@@ -31,6 +31,7 @@ export function isFlightsSession(sessionId: string): boolean {
 }
 
 export const FlightsStartSchema = z.object({
+  origin: z.string().trim().min(1).max(120).default(FLIGHTS_ORIGIN),
   destination: z.string().trim().min(1).max(120),
   departure_date: z.iso.date(),
   return_date: z.iso.date(),
@@ -42,9 +43,9 @@ export const FlightsStartSchema = z.object({
 export type FlightsStart = z.infer<typeof FlightsStartSchema>;
 
 // Google resolves the city names itself ("Bali", "Lisbonne"); the agent checks the fields once the page is open.
-export function googleFlightsUrl(input: Pick<FlightsStart, "destination" | "departure_date" | "return_date" | "travellers">): string {
+export function googleFlightsUrl(input: Pick<FlightsStart, "origin" | "destination" | "departure_date" | "return_date" | "travellers">): string {
   const adults = input.travellers === 1 ? "1 adult" : `${input.travellers} adults`;
-  const q = `Flights from ${FLIGHTS_ORIGIN} to ${input.destination} on ${input.departure_date} through ${input.return_date} for ${adults} economy`;
+  const q = `Flights from ${input.origin} to ${input.destination} on ${input.departure_date} through ${input.return_date} for ${adults} economy`;
   const params = new URLSearchParams({ q, hl: "fr", curr: "EUR" });
   return `https://www.google.com/travel/flights?${params.toString()}`;
 }
@@ -106,7 +107,7 @@ export function buildFlightsTask(input: FlightsStart): string {
   const adults = input.travellers === 1 ? "1 adult" : `${input.travellers} adults`;
   return [
     `Open exactly this URL: ${googleFlightsUrl(input)}`,
-    `It should show round trips from ${FLIGHTS_ORIGIN} to ${input.destination}, leaving ${input.departure_date} and returning ${input.return_date}, ${adults}, economy, prices in EUR.`,
+    `It should show round trips from ${input.origin} to ${input.destination}, leaving ${input.departure_date} and returning ${input.return_date}, ${adults}, economy, prices in EUR.`,
     "Take a screenshot and check the fields at the top of the page: round trip, departure city, destination, both dates, number of passengers. If a field is wrong or empty, fix it in the form on the page and search again.",
     "When the list of flights is shown, read every visible flight (scroll if needed, open \"Plus de vols\" / \"More flights\" if shown) and call report_flights with, for each one: its position in the list, the airline exactly as written, the total price in digits, the currency, the number of stops, the outbound duration in minutes, the departure and arrival times as displayed, and the layover airports.",
     "report_flights answers with the flight the traveller chose, or asks you to read the page again. Then click that outbound flight in the list, then the matching return flight, until Google Flights shows the booking options page for this trip.",

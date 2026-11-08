@@ -3,6 +3,7 @@ import type { FlightOption } from "@/lib/contracts";
 import type { ToolRequest } from "@/lib/h-agent";
 import {
   applyFlightsChanges,
+  BALANCED_CRITERIA_MESSAGE,
   FLIGHT_READY_PREFIX,
   FLIGHTS_SEARCHING_MESSAGE,
   flightCriterion,
@@ -18,11 +19,12 @@ import {
   openFlightQuestion,
   offerFlights,
   pendingFlightChoice,
+  spokenCity,
   startFlightsSession,
 } from "@/lib/flights/flow";
 import { agentOfficialUrl } from "@/lib/official-tab";
 import { paperInFocus, readyPaper, agentChecklist } from "@/lib/panel-focus";
-import { answerQuestion, answerQuestionWithText, applyAgentChanges, createTripFromRequest, decideProposal, needsPassportReconfirm, pushProposal, reportReady, stopAgent, type Trip } from "@/lib/trip-state";
+import { answerQuestion, answerQuestionWithText, applyAgentChanges, ARRIVAL_CARD_READY_MESSAGE, createTripFromRequest, decideProposal, needsPassportReconfirm, pushProposal, reportReady, stopAgent, type Trip } from "@/lib/trip-state";
 import { spokenShort } from "@/lib/voice/conversation-speech";
 import { matchOption } from "@/lib/voice/short-answers";
 
@@ -31,6 +33,7 @@ const REQUEST = {
   raw_text: "Je pars à Bali le 23 novembre pour dix jours",
   nationality: "FR",
   origin_country: "FR",
+  origin: "Paris" as string | null,
   destination: "Bali",
   country_iso2: "ID",
   departure_date: "2026-11-23",
@@ -67,6 +70,77 @@ function searching(request = REQUEST): Trip {
   trip = answerQuestion(trip, criterion.id, cheapest.value, cheapest.label);
   return startFlightsSession(trip, "s-flights", "https://www.google.com/travel/flights?q=x", NOW);
 }
+
+type Question = Extract<Trip["conversation"][number], { kind: "question" }>;
+const proposals = (trip: Trip) => trip.conversation.filter((i) => i.kind === "proposal" && i.action === "flights");
+
+describe("the departure city", () => {
+  it("is asked first when the request has none, Paris proposed; a tap keeps it and goes to the dates", () => {
+    const trip = decideProposal(proposed({ ...REQUEST, origin: null }), last(proposed()).id, true, NOW);
+    const item = last(trip) as Question;
+    expect(item).toMatchObject({ kind: "question", field: "origin", question: "Which city do you fly from?", input: "text" });
+    expect(item.options).toEqual([{ label: "Paris", value: "Paris" }]);
+    const dates = answerQuestion(trip, item.id, "Paris", "Paris");
+    expect(dates.request.origin).toBe("Paris");
+    expect(last(dates)).toMatchObject({ field: "return_date", question: expect.stringContaining("You leave Paris on Monday 23 November") });
+  });
+
+  it("is not asked when the traveller already said it; the dates then name that city, and the start body carries it", () => {
+    const trip = decideProposal(proposed({ ...REQUEST, origin: "Lyon" }), last(proposed()).id, true, NOW);
+    expect(last(trip)).toMatchObject({ field: "return_date", question: expect.stringContaining("You leave Lyon on") });
+    expect(flightsStartBody(searching({ ...REQUEST, origin: "Lyon" }))?.origin).toBe("Lyon");
+    expect(flightsStartBody(searching())?.origin).toBe("Paris");
+  });
+
+  it("a spoken city comes from the parsed request, else from the words said; nothing usable asks again", () => {
+    const trip = decideProposal(proposed({ ...REQUEST, origin: null }), last(proposed()).id, true, NOW);
+    const item = last(trip) as Question;
+    const parsed = answerQuestionWithText(trip, item.id, "je pars de Lyon", { ...REQUEST, origin: "Lyon" });
+    expect(parsed.request.origin).toBe("Lyon");
+    expect(last(parsed)).toMatchObject({ field: "return_date" });
+    const words = answerQuestionWithText(trip, item.id, "from Brussels please", { ...REQUEST, origin: null });
+    expect(words.request.origin).toBe("Brussels please");
+    const plain = answerQuestionWithText(trip, item.id, "marseille", { ...REQUEST, origin: null });
+    expect(plain.request.origin).toBe("Marseille");
+    const unclear = answerQuestionWithText(trip, item.id, "euh", { ...REQUEST, origin: null });
+    expect(agentTexts(unclear)).toContain("Sorry, I didn't catch that.");
+    expect(last(unclear)).toMatchObject({ field: "origin", answer: null });
+    expect(spokenCity("yes")).toBeNull();
+    expect(spokenCity("I fly from Nice.")).toBe("Nice");
+    expect(spokenCity("le 23 novembre")).toBeNull();
+  });
+});
+
+describe("one flight proposal only", () => {
+  const arrivalCardRun = (trip: Trip): Trip => ({
+    ...trip,
+    agent_run: { session_id: "s-card", kind: "paper", paper_id: "arrival_card", started_at: NOW.toISOString(), state: "running", next_index: 0, handled_tool_ids: [], drained: false },
+  });
+  const ready = (id: string): ToolRequest => ({ tool_name: "report_ready", args: { summary: "Arrival card filled" }, id });
+
+  it("the arrival card's report_ready proposes the flights once; a second call, a declined card or a late ready do not", () => {
+    const base = createTripFromRequest("t1", REQUEST, NOW);
+    const once = reportReady(arrivalCardRun(base), ready("call_a"), []);
+    expect(agentTexts(once)).toContain(ARRIVAL_CARD_READY_MESSAGE);
+    expect(proposals(once)).toHaveLength(1);
+    expect(proposals(reportReady({ ...once, agent_run: { ...once.agent_run!, drained: false } }, ready("call_b"), []))).toHaveLength(1);
+    const cardDeclined = pushProposal(once, "create_arrival_card", "Shall I fill in your arrival card too?", "Yes", "Not now");
+    expect(proposals(decideProposal(cardDeclined, last(cardDeclined).id, false, NOW))).toHaveLength(1);
+    expect(pushProposal(once, "flights", "Do you also want me to help you find your flights?", "Find my flight", "Not now")).toBe(once);
+  });
+
+  it("never proposes again once the flights are accepted, searched or found", () => {
+    const accepted = decideProposal(proposed(), last(proposed()).id, true, NOW);
+    expect(proposals(reportReady(arrivalCardRun(accepted), ready("call_c"), []))).toHaveLength(1);
+    const inSearch = searching();
+    expect(proposals(inSearch)).toHaveLength(1);
+    const cardDeclined = pushProposal(inSearch, "create_arrival_card", "Shall I fill in your arrival card too?", "Yes", "Not now");
+    expect(proposals(decideProposal(cardDeclined, last(cardDeclined).id, false, NOW))).toHaveLength(1);
+    // A declined proposal may come back later (the arrival card is done): it is the only case.
+    const declined = decideProposal(proposed(), last(proposed()).id, false, NOW);
+    expect(proposals(reportReady(arrivalCardRun(declined), ready("call_d"), []))).toHaveLength(2);
+  });
+});
 
 describe("yes to the flights", () => {
   it("confirms both dates when the return is known, as one question answered by yes or by a new date", () => {
@@ -107,7 +181,10 @@ describe("yes to the flights", () => {
     expect(criterion.options.map((o) => o.value)).toEqual(["cheapest", "fastest", "fewest_stops", "best"]);
     expect(matchOption("the cheapest", criterion.options)?.value).toBe("cheapest");
     expect(matchOption("no stop if possible", criterion.options)?.value).toBe("fewest_stops");
-    expect(matchOption("the best balance", criterion.options)?.value).toBe("best");
+    expect(matchOption("best compromise", criterion.options)?.value).toBe("best");
+    // "price" or "stops" said alone must not land on the compromise label (Devin Review on #96).
+    expect(matchOption("price", criterion.options)).toBeNull();
+    expect(matchOption("stops", criterion.options)).toBeNull();
     expect(spokenShort(criterion.question)).toBe(criterion.question);
   });
 
@@ -132,7 +209,7 @@ describe("yes to the flights", () => {
     trip = answerQuestion(trip, criterion.id, "fastest", "The fastest");
     expect(last(trip)).toMatchObject({ kind: "agent", text: FLIGHTS_SEARCHING_MESSAGE });
     expect(flightCriterion(trip)).toBe("fastest");
-    expect(flightsStartBody(trip)).toEqual({ destination: "Bali", departure_date: "2026-11-23", return_date: "2026-12-03", travellers: 2, criterion: "fastest" });
+    expect(flightsStartBody(trip)).toEqual({ origin: "Paris", destination: "Bali", departure_date: "2026-11-23", return_date: "2026-12-03", travellers: 2, criterion: "fastest" });
     expect(flightsStartBody({ ...trip, request: { ...trip.request, return_date: null } })).toBeNull();
   });
 
@@ -169,7 +246,15 @@ describe("yes to the flights", () => {
     expect(matchCriterion("sans escale si possible")).toBe("fewest_stops");
     expect(matchCriterion("le plus rapide")).toBe("fastest");
     expect(matchCriterion("the best balance")).toBe("best");
-    expect(matchCriterion("le moins cher et le plus rapide")).toBeNull();
+    // Two criteria at once: the compromise, and Nami says so.
+    expect(matchCriterion("le moins cher et le plus rapide")).toBe("best");
+    expect(matchCriterion("cheap and direct")).toBe("best");
+    expect(matchCriterion("the cheapest price")).toBe("cheapest");
+    const combined = answerQuestionWithText(unclear, again.id, "le moins cher et le plus rapide", REQUEST);
+    expect(flightCriterion(combined)).toBe("best");
+    expect(agentTexts(combined)).toContain(BALANCED_CRITERIA_MESSAGE);
+    expect(agentTexts(combined).at(-1)).toBe(FLIGHTS_SEARCHING_MESSAGE);
+    expect(combined.conversation.findLast((i) => i.kind === "question" && i.field === "flight_criterion")).toMatchObject({ answer: "Best compromise" });
   });
 
   it("longDate is deterministic and in English", () => {
