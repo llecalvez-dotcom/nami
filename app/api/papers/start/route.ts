@@ -3,6 +3,7 @@ import { createSession, getAvailableSessionSlots } from "@/lib/h-agent";
 import { documentFilePaths } from "@/lib/documents";
 import { bindSessionDocument } from "@/lib/agent-passport-upload";
 import { AgentPreflightError, preflightBrowser } from "@/lib/agent-preflight";
+import { openSearchTab } from "@/lib/agent-tab";
 import { freshBridgeBeforeSession, rememberBridgeForSession } from "@/lib/local-bridge";
 import {
   buildPilotTask,
@@ -78,7 +79,12 @@ async function start(request: Request): Promise<Response> {
     }
     // Bench: a bridge that already served a session holds a dead chromedriver; it is restarted first (lib/local-bridge.ts).
     // Not on a resumed retry: H returns the session already running, which still drives that bridge.
-    if (!(input.data.resume && input.data.idempotency_key)) await freshBridgeBeforeSession();
+    if (!(input.data.resume && input.data.idempotency_key)) {
+      // Nami opens the official page herself: the traveller sees it at once, and the agent's first screenshot is not
+      // Chrome's new tab page, after which H often never answered (8 Nov 2026, 12:12 and 12:35).
+      await openSearchTab(getBaliPaper(input.data.paper_id).official_url);
+      await freshBridgeBeforeSession();
+    }
     const session = await createSession({
       task: buildPilotTask(input.data, getBaliPaper(input.data.paper_id)),
       instructions: buildPilotInstructions(getBaliPaper(input.data.paper_id)),
