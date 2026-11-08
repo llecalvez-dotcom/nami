@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { GladiaError, transcribeWithGladia, transcribeWithLanguage } from "@/lib/gladia";
+import { GladiaError, languagesFromEnv, preRecordedBody, TRAVEL_VOCABULARY, transcribeWithGladia, transcribeWithLanguage, vocabularyFromEnv } from "@/lib/gladia";
 
 const audio = new File([new Uint8Array([1, 2, 3])], "voice.webm", { type: "audio/webm" });
 
@@ -19,7 +19,7 @@ const done = (text: string) => ({ status: "done", result: { transcription: { ful
 describe("transcribeWithGladia", () => {
   it("uploads, creates the job in fr and en, polls until done", async () => {
     const fetchMock = gladia([{ status: "queued" }, { status: "processing" }, done(" Je pars à Bali lundi. ")]);
-    const text = await transcribeWithGladia(audio, { apiKey: "k", fetch: fetchMock, pollIntervalMs: 1 });
+    const text = await transcribeWithGladia(audio, { apiKey: "k", fetch: fetchMock, pollIntervalMs: 1, languages: [], vocabulary: [] });
 
     expect(text).toBe("Je pars à Bali lundi.");
     const [uploadUrl, uploadInit] = fetchMock.mock.calls[0];
@@ -29,6 +29,42 @@ describe("transcribeWithGladia", () => {
     const createBody = JSON.parse(String(fetchMock.mock.calls[1][1]?.body));
     expect(createBody).toEqual({ audio_url: "https://api.gladia.io/file/abc" });
     expect(fetchMock).toHaveBeenCalledTimes(5);
+  });
+
+  it("sends the language list and the vocabulary when given", async () => {
+    const fetchMock = gladia([done("Je pars à Denpasar.")]);
+    await transcribeWithGladia(audio, { apiKey: "k", fetch: fetchMock, pollIntervalMs: 1, languages: ["fr", "en"], vocabulary: ["Denpasar"] });
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toEqual({
+      audio_url: "https://api.gladia.io/file/abc",
+      language_config: { languages: ["fr", "en"], code_switching: true },
+      custom_vocabulary: true,
+      custom_vocabulary_config: { vocabulary: ["Denpasar"], default_intensity: 0.5 },
+    });
+  });
+
+  it("retries the job once without the options when Gladia refuses them", async () => {
+    let creations = 0;
+    const fetchMock = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const path = String(url).replace("https://api.gladia.io/v2", "");
+      if (path === "/upload") return Response.json({ audio_url: "https://api.gladia.io/file/abc" });
+      if (path === "/pre-recorded" && init?.method === "POST") {
+        creations += 1;
+        return creations === 1 ? new Response("bad option", { status: 400 }) : Response.json({ id: "job-1" }, { status: 201 });
+      }
+      if (path === "/pre-recorded/job-1") return Response.json(done("Bali"));
+      return new Response("not found", { status: 404 });
+    });
+    const text = await transcribeWithGladia(audio, { apiKey: "k", fetch: fetchMock, pollIntervalMs: 1, languages: ["fr"], vocabulary: ["Bali"] });
+    expect(text).toBe("Bali");
+    expect(JSON.parse(String(fetchMock.mock.calls[2][1]?.body))).toEqual({ audio_url: "https://api.gladia.io/file/abc" });
+  });
+
+  it("does not retry a refused job that had no options", async () => {
+    const fetchMock = vi.fn(async (url: string | URL | Request) =>
+      String(url).endsWith("/upload") ? Response.json({ audio_url: "u" }) : new Response("bad", { status: 400 }),
+    );
+    await expect(transcribeWithGladia(audio, { apiKey: "k", fetch: fetchMock, languages: [], vocabulary: [] })).rejects.toMatchObject({ status: 400 });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("fails on an HTTP error", async () => {
@@ -67,7 +103,8 @@ describe("transcribeWithGladia", () => {
 describe("transcribeWithLanguage", () => {
   it("returns the language Gladia detected, without restricting it to French and English", async () => {
     const fetchMock = gladia([{ status: "done", result: { transcription: { full_transcript: "Voy a Bali el lunes.", languages: ["es"] } } }]);
-    expect(await transcribeWithLanguage(audio, { apiKey: "k", fetch: fetchMock, pollIntervalMs: 1 })).toEqual({ text: "Voy a Bali el lunes.", language: "es" });
+    expect(await transcribeWithLanguage(audio, { apiKey: "k", fetch: fetchMock, pollIntervalMs: 1, languages: [] })).toEqual({ text: "Voy a Bali el lunes.", language: "es" });
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).not.toHaveProperty("language_config");
   });
 
   it("returns a null language when Gladia gives none or an odd value", async () => {
@@ -75,5 +112,23 @@ describe("transcribeWithLanguage", () => {
       const fetchMock = gladia([{ status: "done", result: { transcription: { full_transcript: "Bali", languages } } }]);
       expect((await transcribeWithLanguage(audio, { apiKey: "k", fetch: fetchMock, pollIntervalMs: 1 })).language).toBeNull();
     }
+  });
+});
+
+describe("Gladia settings", () => {
+  it("reads GLADIA_LANGUAGES as a list of codes, empty when unset", () => {
+    expect(languagesFromEnv(undefined)).toEqual([]);
+    expect(languagesFromEnv("")).toEqual([]);
+    expect(languagesFromEnv(" FR, en ,not a code")).toEqual(["fr", "en"]);
+  });
+
+  it("uses the travel vocabulary unless GLADIA_VOCABULARY=off", () => {
+    expect(vocabularyFromEnv(undefined)).toEqual([...TRAVEL_VOCABULARY]);
+    expect(vocabularyFromEnv("off")).toEqual([]);
+    expect(TRAVEL_VOCABULARY).not.toContain("Nami");
+  });
+
+  it("keeps a single language without code switching", () => {
+    expect(preRecordedBody("u", ["fr"], [])).toEqual({ audio_url: "u", language_config: { languages: ["fr"], code_switching: false } });
   });
 });
