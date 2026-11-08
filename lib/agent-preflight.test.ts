@@ -175,13 +175,17 @@ describe("browser preflight", () => {
   });
 
   const stepsUrl = (id: string) => `https://agp.eu.hcompany.ai/api/v2/sessions/${id}/changes?from_index=0&wait_for_seconds=0`;
-  const hSays = (steps: number | null) => fetch.mockImplementation(async (url: string, init: RequestInit) => {
+  const hSays = (steps: number | null | "no-metrics") => fetch.mockImplementation(async (url: string, init: RequestInit) => {
     if (init.method === "DELETE") return new Response(null, { status: 204 });
-    if (url === stepsUrl("session-1")) return steps === null ? new Response(null, { status: 204 }) : Response.json({ status: "running", metrics: { steps } });
+    if (url === stepsUrl("session-1")) {
+      if (steps === null) return new Response(null, { status: 204 });
+      if (steps === "no-metrics") return Response.json({ status: "running", new_events: [{ type: "AgentEvent", data: { kind: "observation_event" } }] });
+      return Response.json({ status: "running", metrics: { steps } });
+    }
     return Response.json({ status: "running" });
   });
 
-  it.each([0, null])("gives up a session that never acted in FIRST_STALL_MS (H counts %s steps) and takes the browser, cancelling it best effort", async (steps) => {
+  it.each([0, null, "no-metrics"] as const)("gives up a session that never acted in FIRST_STALL_MS (H counts %s steps) and takes the browser, cancelling it best effort", async (steps) => {
     const now = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
     await started();
     now.mockReturnValue(1_000_000 + FIRST_STALL_MS);

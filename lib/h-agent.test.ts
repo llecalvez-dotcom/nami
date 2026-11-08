@@ -325,14 +325,16 @@ describe("a deadline on every call (bench 2026-11-08: POST /sessions pended for 
 });
 
 describe("getSessionSteps", () => {
-  it("reads metrics.steps without waiting, 204 meaning nothing happened, and rejects a malformed answer", async () => {
+  it("reads metrics.steps without waiting, 204 meaning nothing happened, and counts the actions when metrics are missing", async () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce(Response.json({ status: "running", metrics: { steps: 4 } }))
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
-      .mockResolvedValueOnce(Response.json({ status: "running", metrics: null }));
+      .mockResolvedValueOnce(Response.json({ status: "running", metrics: null, new_events: [{ type: "AgentEvent", data: { kind: "observation_event" } }] }))
+      .mockResolvedValueOnce(Response.json({ status: "running", new_events: [{ type: "AgentEvent", data: { kind: "policy_event" } }, { type: "AgentEvent", data: { kind: "policy_event" } }] }));
     await expect(getSessionSteps("s1", { fetch })).resolves.toBe(4);
     expect(String(fetch.mock.calls[0][0])).toContain("/sessions/s1/changes?from_index=0&wait_for_seconds=0");
     await expect(getSessionSteps("s1", { fetch })).resolves.toBe(0);
-    await expect(getSessionSteps("s1", { fetch })).rejects.toMatchObject({ status: 502 });
+    await expect(getSessionSteps("s1", { fetch })).resolves.toBe(0);
+    await expect(getSessionSteps("s1", { fetch })).resolves.toBe(2);
   });
 });

@@ -221,17 +221,19 @@ export async function getChanges(id: string, fromIndex: number, options: HClient
   };
 }
 
-// How many steps H counts for the session, asked without waiting (metrics.steps of the changes endpoint; a 204 means
-// nothing happened). Short deadline: this is a check before a new start, not a poll.
+// How many steps H counts for the session, asked without waiting: metrics.steps of the changes endpoint, or failing
+// that the agent's actions (policy_event) among all its events; a 204 means nothing happened. Short deadline: this is a
+// check before a new start, not a poll.
 export const STEPS_TIMEOUT_MS = 5_000;
 export async function getSessionSteps(id: string, options: HClientOptions = {}): Promise<number> {
   const query = new URLSearchParams({ from_index: "0", wait_for_seconds: "0" });
   const response = await call(`${sessionPath(id)}/changes?${query}`, { method: "GET", timeoutMs: STEPS_TIMEOUT_MS }, options);
   if (response.status === 204) return 0;
-  const body = (await response.json()) as { metrics?: { steps?: unknown } | null };
+  const body = (await response.json()) as { metrics?: { steps?: unknown } | null; new_events?: unknown };
   const steps = body.metrics?.steps;
-  if (typeof steps !== "number" || !Number.isFinite(steps)) throw new HAgentError("H session steps are unavailable", 502);
-  return steps;
+  if (typeof steps === "number" && Number.isFinite(steps)) return steps;
+  const events = Array.isArray(body.new_events) ? body.new_events as HEvent[] : [];
+  return events.filter((event) => event?.type === "AgentEvent" && event.data?.kind === "policy_event").length;
 }
 
 export async function sendToolResult(id: string, toolReq: ToolRequest, result: unknown, options: HClientOptions = {}): Promise<void> {
