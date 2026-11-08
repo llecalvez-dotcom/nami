@@ -52,18 +52,19 @@ const parse = (href) => {
 };
 
 // The tab a paper's mark brings back, or null when no tab of the site is left (only then is one opened): the tab
-// the agent worked on last for this site, then a tab of the site the paper is known to live on or of the exact
+// the agent worked on last for this site, then a tab of the site the paper is known to live on, then of the exact
 // site asked, then any tab of the same registered domain; ties go to the tab used last. Never a new tab otherwise.
+// When the paper's own site is known, a tab of another known official host is another paper's form: never it.
 export function pickTab(tabs, url, paper, agentTabs = {}) {
   const known = paperSites[paper];
   const paperSite = known && registeredDomain(known.split("/")[0]) === registeredDomain(url.hostname) ? known : null;
   const rank = (tab) => {
     const tabUrl = tab.id === undefined || !tab.url ? null : parse(tab.url);
-    if (!tabUrl) return 0;
-    const key = siteKey(tabUrl);
-    const site = key !== null && (key === paperSite || key === siteKey(url));
-    if (!site && !sameSite(tabUrl, url)) return 0;
-    return (site ? 2 : 1) + (agentTabs[key]?.id === tab.id ? 2 : 0);
+    const key = tabUrl ? siteKey(tabUrl) : null;
+    if (key === null) return 0;
+    if (paperSite !== null && key !== paperSite && officialHosts.has(tabUrl.hostname)) return 0;
+    const site = key === paperSite ? 3 : key === siteKey(url) ? 2 : sameSite(tabUrl, url) ? 1 : 0;
+    return site === 0 ? 0 : site + (agentTabs[key]?.id === tab.id ? 3 : 0);
   };
   return tabs
     .map((tab) => [rank(tab), tab])

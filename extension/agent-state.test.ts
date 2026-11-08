@@ -106,6 +106,25 @@ describe("the tab a mark brings back", () => {
     expect(pickTab(tabs, u("https://www.imigrasi.go.id/"), undefined, remembered)?.id).toBe(2);
     // The paper's known site never pulls a tab of another country's visa.
     expect(pickTab([tabs[0]], u("https://www.evisa.mofa.go.jp/"), "visa", remembered)).toBeNull();
+    // The visa tab closed: the arrival card's tab is another paper's, the site is reopened instead.
+    expect(pickTab([tabs[1]], u("https://molina.imigrasi.go.id/"), "visa", remembered)).toBeNull();
+    expect(pickTab([tabs[1]], u("https://molina.imigrasi.go.id/"), "visa")).toBeNull();
+    expect(pickTab([tabs[0]], u("https://www.imigrasi.go.id/"), "arrival_card")).toBeNull();
+  });
+
+  it("prefers the filled form on the paper's known site to a newer tab elsewhere on the domain, without memory", () => {
+    const tabs = [
+      { id: 1, url: "https://evisa.imigrasi.go.id/front/application/step-1", lastAccessed: 10 },
+      { id: 2, url: "https://www.imigrasi.go.id/", lastAccessed: 50 },
+      { id: 3, url: "https://molina.imigrasi.go.id/front/login", lastAccessed: 60 },
+    ];
+    expect(pickTab(tabs, u("https://molina.imigrasi.go.id/"), "visa")?.id).toBe(1);
+    expect(pickTab(tabs, u("https://www.imigrasi.go.id/"), "visa")?.id).toBe(1);
+    // www and a sibling subdomain of an unknown host are one site: the one used last.
+    expect(pickTab(tabs.slice(1), u("https://www.imigrasi.go.id/"), "visa")?.id).toBe(3);
+    // Without the paper, the exact site asked for, then the rest of the domain by last use.
+    expect(pickTab(tabs, u("https://molina.imigrasi.go.id/"), undefined)?.id).toBe(3);
+    expect(pickTab(tabs, u("https://imigrasi.go.id/"), undefined)?.id).toBe(3);
   });
 
   it("never brings back another official site, a Google search or Google Hotels for the flights", () => {
