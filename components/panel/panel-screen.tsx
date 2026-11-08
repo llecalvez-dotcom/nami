@@ -473,10 +473,8 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
       flow.current.passports = [document];
       return offerPassport();
     }
-    // The pending "Yes, use it" now has a photo to use.
+    // The pending "Yes, use it" now has a photo to use; "Go on without it" leaves it unused, like a found photo.
     flow.current.photos = [document];
-    flow.current.pickedPhotoId = document.id;
-    setPhotoDocumentId(document.id);
     setSeen((previous) => ({ ...previous, photo: document }));
   };
 
