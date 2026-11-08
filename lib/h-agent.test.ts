@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { browserSettings, agentName, agentSettings, cancelSession, CREATE_TIMEOUT_MS, createSession, createSessionBody, getAvailableSessionSlots, getChanges, getSessionStatus, H_DID_NOT_ANSWER, H_TIMEOUT_STATUS, HAgentError, REQUEST_TIMEOUT_MS, sendToolResult } from "@/lib/h-agent";
+import { browserSettings, agentName, agentSettings, cancelSession, CREATE_TIMEOUT_MS, createSession, createSessionBody, getAvailableSessionSlots, getChanges, getSessionStatus, getSessionSteps, H_DID_NOT_ANSWER, H_TIMEOUT_STATUS, HAgentError, REQUEST_TIMEOUT_MS, sendToolResult } from "@/lib/h-agent";
 import { PAPER_ANSWER_FORMAT } from "@/lib/agent-answer";
 
 const API = "https://agp.eu.hcompany.ai/api/v2";
@@ -321,5 +321,18 @@ describe("a deadline on every call (bench 2026-11-08: POST /sessions pended for 
     expect(settled).toBe(false);
     await vi.advanceTimersByTimeAsync(10_000);
     expect(await result).toMatchObject({ status: H_TIMEOUT_STATUS });
+  });
+});
+
+describe("getSessionSteps", () => {
+  it("reads metrics.steps without waiting, 204 meaning nothing happened, and rejects a malformed answer", async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json({ status: "running", metrics: { steps: 4 } }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(Response.json({ status: "running", metrics: null }));
+    await expect(getSessionSteps("s1", { fetch })).resolves.toBe(4);
+    expect(String(fetch.mock.calls[0][0])).toContain("/sessions/s1/changes?from_index=0&wait_for_seconds=0");
+    await expect(getSessionSteps("s1", { fetch })).resolves.toBe(0);
+    await expect(getSessionSteps("s1", { fetch })).rejects.toMatchObject({ status: 502 });
   });
 });
