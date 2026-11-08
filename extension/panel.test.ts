@@ -92,10 +92,11 @@ describe("bringing a paper's tab to the front", () => {
     expect(p.create).not.toHaveBeenCalled();
   });
 
-  it("brings back Google Flights, never a Google search, and reopens the page when its tab is gone", async () => {
+  it("brings back Google Flights, never a Google search or Google Hotels, and reopens the page when its tab is gone", async () => {
     const p = await panel();
     p.query.mockResolvedValue([
       { id: 1, windowId: 9, url: "https://www.google.com/search?q=bali", lastAccessed: 50 },
+      { id: 3, windowId: 9, url: "https://www.google.com/travel/hotels/Bali", lastAccessed: 40 },
       { id: 2, windowId: 9, url: "https://www.google.com/travel/flights/search?tfs=abc", lastAccessed: 10 },
     ]);
     await p.send(focus("https://www.google.com/travel/flights"));
@@ -104,6 +105,17 @@ describe("bringing a paper's tab to the front", () => {
     await p.send(focus("https://www.google.com/travel/flights"));
     expect(p.create).toHaveBeenCalledWith({ url: "https://www.google.com/travel/flights" });
     expect(p.frame.contentWindow.postMessage).toHaveBeenLastCalledWith({ type: "nami:focus-official:done", result: "opened" }, origin);
+  });
+
+  it("only brings an existing tab to the front when asked not to open one (session start)", async () => {
+    const p = await panel();
+    p.query.mockResolvedValue([{ id: 1, windowId: 9, url: "about:blank" }]);
+    await p.send({ ...focus("https://evisa.imigrasi.go.id/web/visa-selection"), open: false });
+    expect(p.create).not.toHaveBeenCalled();
+    expect(p.frame.contentWindow.postMessage).toHaveBeenLastCalledWith({ type: "nami:focus-official:done", result: "missing" }, origin);
+    p.query.mockResolvedValue([{ id: 2, windowId: 9, url: "https://evisa.imigrasi.go.id/front/login" }]);
+    await p.send({ ...focus("https://evisa.imigrasi.go.id/web/visa-selection"), open: false });
+    expect(p.update).toHaveBeenCalledWith(2, { active: true });
   });
 
   it("refuses anything but an https page", async () => {

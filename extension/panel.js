@@ -23,7 +23,7 @@ const match = (tabUrl, url) => {
   }
 };
 
-async function bringToFront(url) {
+async function bringToFront(url, open) {
   const tabs = await chrome.tabs.query({});
   // Several tabs on the site: prefer the exact page, then the one used last (the agent's). None left: open it again.
   const tab = tabs
@@ -34,6 +34,7 @@ async function bringToFront(url) {
     await chrome.windows.update(tab.windowId, { focused: true });
     return "focused";
   }
+  if (!open) return "missing";
   await chrome.tabs.create({ url: url.href });
   return "opened";
 }
@@ -44,7 +45,7 @@ window.addEventListener("message", async (event) => {
     if (typeof event.data.active === "boolean" && typeof event.data.step === "string") await relayAgentState(event.data);
     return;
   }
-  const { type, url } = event.data ?? {};
+  const { type, url, open } = event.data ?? {};
   if (type !== "nami:focus-official" || typeof url !== "string") return;
   let target;
   try {
@@ -53,6 +54,6 @@ window.addEventListener("message", async (event) => {
     return;
   }
   if (target.protocol !== "https:") return;
-  const result = await bringToFront(target).catch(() => "failed");
+  const result = await bringToFront(target, open !== false).catch(() => "failed");
   frame.contentWindow.postMessage({ type: "nami:focus-official:done", result }, origin);
 });

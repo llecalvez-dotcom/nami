@@ -364,13 +364,20 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
     onNeedPassport: () => setSearchRequest((request) => request + 1),
     // No tab is opened here: the agent drives the tab already open next to the panel. Opening the official site
     // before the agent reaches it would create a second official tab, and upload_file refuses to choose between two.
-    onStarted: (started) => {
-      saveTrip(pushAgentMessage(started, WATCH_MESSAGE));
-      // The traveller sees the agent arrive: the tab it works in comes to the front as the session starts.
-      const startedPaper = paperOfRun(started.agent_run);
-      if (startedPaper) void focusOfficialTab(paperUrl(started, startedPaper));
-    },
+    onStarted: (started) => saveTrip(pushAgentMessage(started, WATCH_MESSAGE)),
   });
+  // The traveller sees the agent arrive: its tab comes to the front once the agent is seen on the site ("On <host>"),
+  // never at the start (the only tab is still blank then, and opening one would double the agent's own tab). Sessions
+  // already running when the panel opens are left alone.
+  const seenOnSite = trip.agent_steps.some((step) => step.startsWith("On "));
+  const focusedSession = useRef<string | null>(run?.session_id ?? null);
+  useEffect(() => {
+    const runPaperSeen = paperOfRun(run);
+    if (!run || !runPaperSeen || !seenOnSite || focusedSession.current === run.session_id) return;
+    focusedSession.current = run.session_id;
+    const url = paperUrl(trip, runPaperSeen);
+    if (url) void focusOfficialTab(url);
+  }, [run, seenOnSite, trip]);
   const latest = () => getTrip(trip.id) ?? trip;
   const say = (text: string) => saveTrip(pushAgentMessage(latest(), text));
   const ask = (action: "read_passport" | "confirm_passport" | "use_photo" | "use_return_ticket", text: string, yes: string, no: string) =>
@@ -552,9 +559,10 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
   const status = agentStatusLine(run, trip.agent_steps);
   const has = (text: string) => trip.conversation.some((item) => item.kind === "agent" && item.text === text);
   const markState = (done: boolean, markPaper: Paper): Mark["state"] => (done ? "done" : agent?.paper === markPaper ? "running" : "todo");
-  const paperMark = (label: string, done: boolean, markPaper: Paper): Mark => ({
-    label, paper: markPaper, state: markState(done, markPaper), onOpen: () => void showOfficialSite(paperUrl(trip, markPaper)),
-  });
+  const paperMark = (label: string, done: boolean, markPaper: Paper): Mark => {
+    const url = paperUrl(trip, markPaper);
+    return { label, paper: markPaper, state: markState(done, markPaper), onOpen: url ? () => void showOfficialSite(url) : undefined };
+  };
   const marks: Mark[] = [
     { label: "Passport", state: passport !== null ? "done" : "todo", onOpen: passport !== null ? () => { setEditing(true); setManual(true); } : undefined },
     { label: "Photo", state: photoDocumentId !== null ? "done" : "todo" },
