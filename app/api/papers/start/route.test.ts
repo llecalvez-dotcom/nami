@@ -416,10 +416,10 @@ describe("POST /api/papers/start (route 5)", () => {
 
   it("is behind api-guard: low quota of H sessions per client", async () => {
     vi.stubEnv("NODE_ENV", "production");
-    for (let i = 0; i < 5; i += 1) expect((await start(BODY)).status).toBe(201);
+    for (let i = 0; i < 30; i += 1) expect((await start(BODY)).status).toBe(201);
     const response = await start(BODY);
     expect(response.status).toBe(429);
-    expect(fetch).toHaveBeenCalledTimes(10);
+    expect(fetch).toHaveBeenCalledTimes(60);
   });
 
   it("answers 429 when another H session runs", async () => {
