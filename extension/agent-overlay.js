@@ -91,13 +91,23 @@
       if (type === "input" || type === "focusin") highlight(event);
     }, true);
   }
-  chrome.runtime.onMessage.addListener((message, sender) => {
-    if (sender.id !== chrome.runtime.id || message?.type !== "nami:agent-state"
-      || typeof message.active !== "boolean" || typeof message.step !== "string") return;
+  const apply = (message) => {
+    if (message?.type !== "nami:agent-state" || typeof message.active !== "boolean" || typeof message.step !== "string") return;
     agentActive = message.active;
     if (!agentActive) cursor.style.opacity = "0";
     frame.hidden = label.hidden = !message.active;
     bubble.textContent = message.step.slice(0, 320).replace(/[–—]/g, ", ");
     bubble.hidden = !message.active || !message.step.trim();
+  };
+  chrome.runtime.onMessage.addListener((message, sender) => {
+    if (sender.id !== chrome.runtime.id) return;
+    apply(message);
+  });
+  // The panel relays a state only when it changes: a page that loads in between (next page of the form, tab brought
+  // back to the front) would show nothing until the next step. It asks for the current state instead.
+  const refresh = () => chrome.runtime.sendMessage({ type: "nami:agent-state:get" }).then(apply).catch(() => {});
+  refresh();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") refresh();
   });
 })();

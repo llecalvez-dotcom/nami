@@ -1,4 +1,7 @@
 import { awaitsAnswer } from "@/lib/voice/conversation-speech";
+import type { AgentRun } from "@/lib/contracts";
+import { flightsResult } from "@/lib/flights/flow";
+import { isTerminalStatus } from "@/lib/h-agent";
 import { ARRIVAL_CARD_READY_MESSAGE, VISA_READY_MESSAGE, type ConversationItem, type Trip } from "@/lib/trip-state";
 import { isFlightQuestion, isFlightReadyMessage } from "@/lib/flights/flow";
 
@@ -73,6 +76,64 @@ export function agentChecklist(paper: Paper, steps: readonly string[], finished:
 }
 
 export const CHECKLIST_LABELS = Object.values(MILESTONES).flatMap((list) => list.map((m) => m.label));
+
+// The paper a session works on.
+export function paperOfRun(run: AgentRun | null): Paper | null {
+  if (!run) return null;
+  if (run.kind === "flights") return "flights";
+  return run.paper_id === "arrival_card" ? "arrival_card" : "visa";
+}
+
+const OPENING: Record<Paper, string> = {
+  visa: "Nami is opening the e-VOA site",
+  arrival_card: "Nami is opening the arrival card site",
+  flights: "Nami is opening Google Flights",
+};
+// About how many steps each form takes the agent (visa measured at 19 on 2026-11-07).
+const FORM_STEPS: Record<Paper, number> = { visa: 20, arrival_card: 12, flights: 10 };
+
+export type AgentStatus = { text: string; progress?: string };
+
+// What the agent is doing, in one short line always shown in the panel (Clément, 2026-11-08: « aucune visualisation »).
+// The text is one of STATUS_TEXTS, so the panel can translate it; the progress is appended as is.
+export function agentStatusLine(run: AgentRun | null, steps: readonly string[]): AgentStatus | null {
+  const paper = paperOfRun(run);
+  if (!run || !paper) return null;
+  if (run.state === "completed") return { text: "Done" };
+  if (isTerminalStatus(run.state)) return { text: "Stopped" };
+  if (run.pending_question) return { text: "Waiting for you" };
+  if (run.state === "pending" || run.state === "queued" || !steps.some((step) => step.startsWith("On "))) return { text: OPENING[paper] };
+  if (paper === "flights") {
+    const result = flightsResult(run);
+    if (result?.ready) return { text: "Waiting for you" };
+    if (result?.chosen) return { text: "Opening the booking page" };
+    if (result?.options.length) return { text: "Waiting for you" };
+    if (result?.read) return { text: "Reading the flights" };
+    return { text: "Searching flights on Google Flights" };
+  }
+  const last = steps.at(-1) ?? "";
+  if (/\b(upload\w*|attach\w*|gave)\b/i.test(last)) {
+    if (/\bpassport\b/i.test(last)) return { text: "Uploading your passport" };
+    if (/\b(photo|picture)\b/i.test(last)) return { text: "Uploading your photo" };
+    if (/\bticket\b/i.test(last)) return { text: "Uploading your return ticket" };
+  }
+  const count = run.metrics?.steps ?? steps.length;
+  return { text: "Filling the form", progress: `${count}/~${FORM_STEPS[paper]}` };
+}
+
+export const STATUS_TEXTS = [
+  ...Object.values(OPENING),
+  "Filling the form",
+  "Uploading your passport",
+  "Uploading your photo",
+  "Uploading your return ticket",
+  "Searching flights on Google Flights",
+  "Reading the flights",
+  "Opening the booking page",
+  "Waiting for you",
+  "Done",
+  "Stopped",
+];
 
 // The longer the sentence, the smaller it is written: it must fit the side panel without scrolling.
 export function sentenceSize(text: string): "xl" | "lg" | "md" {

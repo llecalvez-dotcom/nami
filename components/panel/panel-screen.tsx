@@ -2,7 +2,7 @@
 
 import { assumedArrival } from "@/lib/planner";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Check, MessagesSquare, Plus, X } from "lucide-react";
 import { FocusStage, PAPER_COLORS, Sentence, STAGE_TEXTS, TypeInstead, VoiceHint, WaveMic, waveState, type AgentView, type StageVisual, type Translate } from "@/components/panel/focus-stage";
 import { Painting } from "@/components/panel/backdrop";
@@ -20,7 +20,8 @@ import { resetSpokenLanguage, useSpokenLanguage } from "@/lib/voice/language";
 import { requestTranslations, translated, useTranslatedConversation, useTranslationsVersion } from "@/lib/voice/translations";
 import type { DocumentExtraction, PassportFields } from "@/lib/contracts";
 import { bestFirst, foundPassportText, foundPhotoText, foundReturnTicketText, readSummary, type Reader } from "@/lib/panel-documents";
-import { agentChecklist, CHECKLIST_LABELS, focusItem, paperInFocus, readyPaper, sceneFor, type Paper } from "@/lib/panel-focus";
+import { agentChecklist, agentStatusLine, CHECKLIST_LABELS, focusItem, paperInFocus, paperOfRun, readyPaper, sceneFor, STATUS_TEXTS, type Paper } from "@/lib/panel-focus";
+import { focusOfficialTab, paperUrl, showOfficialSite } from "@/lib/official-tab";
 import { isFlightReadyMessage } from "@/lib/flights/flow";
 import { requestTripParse } from "@/lib/trip-parse-client";
 import {
@@ -91,6 +92,11 @@ export const PANEL_TEXTS = [
   "Opening the official site…",
   RECONFIRM_TEXT,
   ...DROP_TEXTS,
+  ...STATUS_TEXTS,
+  "done",
+  "running",
+  "to do",
+  "Open the tab",
 ];
 
 function useT(language: string): Translate {
@@ -163,37 +169,43 @@ function History({ items, t, onClose }: { items: ConversationItem[]; t: Translat
   );
 }
 
-type Mark = { label: string; done: boolean; paper?: Paper };
+type Mark = { label: string; state: "done" | "running" | "todo"; paper?: Paper; onOpen?: () => void };
 
-// The shore: what is already done, in the color of its paper.
-function Shore({ marks, t, onPassport }: { marks: Mark[]; t: Translate; onPassport?: () => void }) {
+const MARK_STATES: Record<Mark["state"], string> = { done: "done", running: "running", todo: "to do" };
+
+// The shore: what is already done, in the color of its paper. A paper's mark brings its tab back to the front
+// (Clément, 2026-11-08: finish the visa by hand after the agent stopped, from the panel).
+export function Shore({ marks, t }: { marks: Mark[]; t: Translate }) {
   return (
     <ul className="flex flex-wrap gap-1.5 px-5 pb-1">
       {marks.map((mark) => {
+        const done = mark.state === "done";
+        const color = PAPER_COLORS[mark.paper ?? "visa"];
         const content = (
           <>
             <span
               aria-hidden
-              className={cn("grid size-4 place-items-center rounded-full", mark.done ? "text-[var(--np-on-accent)]" : "ring-1 ring-[var(--np-line)] ring-inset")}
-              style={mark.done ? { background: PAPER_COLORS[mark.paper ?? "visa"] } : undefined}
+              className={cn("grid size-4 place-items-center rounded-full", done ? "text-[var(--np-on-accent)]" : "ring-1 ring-inset", mark.state === "running" ? "ring-[var(--mark)]" : "ring-[var(--np-line)]")}
+              style={{ "--mark": color, ...(done ? { background: color } : {}) } as CSSProperties}
             >
-              {mark.done ? <Check className="size-2.5" strokeWidth={3.5} /> : null}
+              {done ? <Check className="size-2.5" strokeWidth={3.5} /> : mark.state === "running" ? <span className="size-1.5 animate-pulse rounded-full bg-[var(--mark)]" /> : null}
             </span>
             {t(mark.label)}
           </>
         );
         const className = cn(
           "inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-[12px] font-medium",
-          mark.done ? "bg-[var(--np-fill)]" : "text-[var(--np-ink-soft)]",
+          done ? "bg-[var(--np-fill)]" : mark.state === "running" ? "text-[var(--np-ink)]" : "text-[var(--np-ink-soft)]",
         );
+        const state = `${t(mark.label)}: ${t(MARK_STATES[mark.state])}`;
         return (
           <li key={mark.label}>
-            {mark.label === "Passport" && mark.done && onPassport ? (
-              <button type="button" onClick={onPassport} className={cn(className, "np-press")}>
+            {mark.onOpen ? (
+              <button type="button" onClick={mark.onOpen} aria-label={`${state}. ${t("Open the tab")}`} title={t("Open the tab")} className={cn(className, "np-press cursor-pointer")}>
                 {content}
               </button>
             ) : (
-              <span className={className}>{content}</span>
+              <span className={className} aria-label={state}>{content}</span>
             )}
           </li>
         );
@@ -352,7 +364,12 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
     onNeedPassport: () => setSearchRequest((request) => request + 1),
     // No tab is opened here: the agent drives the tab already open next to the panel. Opening the official site
     // before the agent reaches it would create a second official tab, and upload_file refuses to choose between two.
-    onStarted: (started) => saveTrip(pushAgentMessage(started, WATCH_MESSAGE)),
+    onStarted: (started) => {
+      saveTrip(pushAgentMessage(started, WATCH_MESSAGE));
+      // The traveller sees the agent arrive: the tab it works in comes to the front as the session starts.
+      const startedPaper = paperOfRun(started.agent_run);
+      if (startedPaper) void focusOfficialTab(paperUrl(started, startedPaper));
+    },
   });
   const latest = () => getTrip(trip.id) ?? trip;
   const say = (text: string) => saveTrip(pushAgentMessage(latest(), text));
@@ -530,21 +547,26 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
           : focus.action === "use_photo" && seen.photo
             ? { kind: "photo", id: seen.photo.id }
             : null;
-  const runPaper: Paper = run?.kind === "flights" ? "flights" : run?.paper_id === "arrival_card" ? "arrival_card" : "visa";
+  const runPaper: Paper = paperOfRun(run) ?? "visa";
   const agent: AgentView | null = isAgentActive(run) ? { paper: runPaper, checklist: agentChecklist(runPaper, trip.agent_steps, false), step: t(lastStep) } : null;
+  const status = agentStatusLine(run, trip.agent_steps);
   const has = (text: string) => trip.conversation.some((item) => item.kind === "agent" && item.text === text);
+  const markState = (done: boolean, markPaper: Paper): Mark["state"] => (done ? "done" : agent?.paper === markPaper ? "running" : "todo");
+  const paperMark = (label: string, done: boolean, markPaper: Paper): Mark => ({
+    label, paper: markPaper, state: markState(done, markPaper), onOpen: () => void showOfficialSite(paperUrl(trip, markPaper)),
+  });
   const marks: Mark[] = [
-    { label: "Passport", done: passport !== null },
-    { label: "Photo", done: photoDocumentId !== null },
-    { label: "Visa", done: has(VISA_READY_MESSAGE), paper: "visa" },
-    { label: "Arrival card", done: has(ARRIVAL_CARD_READY_MESSAGE), paper: "arrival_card" },
-    { label: "Flight", done: trip.conversation.some((item) => item.kind === "agent" && isFlightReadyMessage(item.text)), paper: "flights" },
+    { label: "Passport", state: passport !== null ? "done" : "todo", onOpen: passport !== null ? () => { setEditing(true); setManual(true); } : undefined },
+    { label: "Photo", state: photoDocumentId !== null ? "done" : "todo" },
+    paperMark("Visa", has(VISA_READY_MESSAGE), "visa"),
+    paperMark("Arrival card", has(ARRIVAL_CARD_READY_MESSAGE), "arrival_card"),
+    paperMark("Flight", trip.conversation.some((item) => item.kind === "agent" && isFlightReadyMessage(item.text)), "flights"),
   ];
 
   const showCard = manual || reconfirm;
   const compact = passport !== null && !editing;
   const paper = agent?.paper ?? ready ?? paperInFocus(trip, focus);
-  const scene = sceneFor({ started: true, paper, visaReady: marks[2].done, cardReady: marks[3].done });
+  const scene = sceneFor({ started: true, paper, visaReady: marks[2].state === "done", cardReady: marks[3].state === "done" });
 
   return (
     <div className="nami-panel relative flex h-dvh flex-col" data-paper={paper} data-scene={scene}>
@@ -571,14 +593,14 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
           </IconButton>
         </div>
       </header>
-      <Shore
-        marks={marks}
-        t={t}
-        onPassport={() => {
-          setEditing(true);
-          setManual(true);
-        }}
-      />
+      <Shore marks={marks} t={t} />
+      {status ? (
+        // Always there while a session exists: what the agent is doing, even when the panel asks something else.
+        <p role="status" aria-live="polite" className="flex items-center gap-2 px-5 pb-1 text-[12px] text-[var(--np-ink-soft)]">
+          <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", agent ? "animate-pulse" : "")} style={{ background: PAPER_COLORS[runPaper] }} />
+          <span className="truncate">{t(status.text)}{status.progress ? ` (${status.progress})` : ""}</span>
+        </p>
+      ) : null}
       <FocusStage
         item={shownFocus}
         scene={scene}

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { SAMPLE_AGENT_RUN, SAMPLE_FORMALITIES } from "@/data/sample";
-import { agentOfficialUrl, FOCUS_OFFICIAL, showOfficialSite } from "@/lib/official-tab";
+import { agentOfficialUrl, focusOfficialTab, FOCUS_OFFICIAL, PAPER_HOME_URLS, paperUrl, showOfficialSite } from "@/lib/official-tab";
 
 describe("agentOfficialUrl", () => {
   it("points at the visa the paper agent fills in", () => {
@@ -13,6 +13,23 @@ describe("agentOfficialUrl", () => {
     expect(agentOfficialUrl({ agent_run: null, formalities: SAMPLE_FORMALITIES })).toBeNull();
     expect(agentOfficialUrl({ agent_run: { ...SAMPLE_AGENT_RUN, kind: "flights" }, formalities: SAMPLE_FORMALITIES })).toBeNull();
     expect(agentOfficialUrl({ agent_run: SAMPLE_AGENT_RUN, formalities: [] })).toBeNull();
+  });
+});
+
+describe("paperUrl", () => {
+  it("points each paper at its official form, the flights at the page the agent opened", () => {
+    const trip = { agent_run: null, formalities: SAMPLE_FORMALITIES };
+    expect(paperUrl(trip, "visa")).toBe(SAMPLE_FORMALITIES.find((f) => f.id === "evoa")?.official_url);
+    expect(paperUrl(trip, "arrival_card")).toBe(SAMPLE_FORMALITIES.find((f) => f.id === "arrival_card")?.official_url);
+    expect(paperUrl(trip, "flights")).toBe(PAPER_HOME_URLS.flights);
+    const flights = { ...SAMPLE_AGENT_RUN, kind: "flights" as const, result: { flights: { url: "https://www.google.com/travel/flights/search?x=1", options: [] } } };
+    expect(paperUrl({ agent_run: flights, formalities: [] }, "flights")).toBe("https://www.google.com/travel/flights/search?x=1");
+  });
+
+  it("falls back to the site's own page when the trip has no papers yet", () => {
+    expect(paperUrl({ agent_run: null, formalities: [] }, "visa")).toBe(PAPER_HOME_URLS.visa);
+    expect(paperUrl({ agent_run: null, formalities: [] }, "arrival_card")).toBe(PAPER_HOME_URLS.arrival_card);
+    expect(Object.values(PAPER_HOME_URLS).every((url) => url.startsWith("https://"))).toBe(true);
   });
 });
 
@@ -70,5 +87,18 @@ describe("showOfficialSite", () => {
     silent.timeout();
     await expect(b).resolves.toBe("opened");
     expect(silent.raw.open).toHaveBeenCalledOnce();
+  });
+});
+
+describe("focusOfficialTab", () => {
+  it("does nothing outside the side panel, and asks the panel inside it", async () => {
+    const plain = fakeHost(false);
+    expect(focusOfficialTab(URL_, plain.host)).toBeNull();
+    expect(plain.raw.open).not.toHaveBeenCalled();
+    const framed = fakeHost(true);
+    const done = focusOfficialTab(URL_, framed.host);
+    expect(framed.parent.postMessage).toHaveBeenCalledWith({ type: FOCUS_OFFICIAL, url: URL_ }, "*");
+    framed.reply({ type: `${FOCUS_OFFICIAL}:done`, result: "opened" });
+    await expect(done).resolves.toBe("opened");
   });
 });
