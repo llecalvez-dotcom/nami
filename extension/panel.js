@@ -8,7 +8,7 @@ const origin = await namiUrl();
 // Nami opens on its side panel screen (/panel); messages are still checked against its origin.
 frame.src = `${origin}/panel`;
 
-const PAPERS = new Set(["visa", "arrival_card", "flights"]);
+const PAPERS = new Set(["visa", "arrival_card", "flights", "hotels"]);
 
 // A tab of the site is brought to the front as it is (its URL is never changed: the form the agent filled in lives
 // there); a new tab opens only when none is left.

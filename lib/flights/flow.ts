@@ -34,7 +34,7 @@ export const BALANCED_CRITERIA_MESSAGE = "Several criteria: I will balance price
 // not an answer of the traveller.
 const AGENT_STOPPED_ANSWER = "Agent stopped";
 // What a traveller says to name a flight or a criterion, in the languages Gladia transcribes for us.
-const ORDINAL_WORDS = [
+export const ORDINAL_WORDS = [
   ["first", "1", "1st", "1er", "1ere", "premier", "premiere", "primero", "primera", "erste", "primo"],
   ["second", "2", "2nd", "2e", "2eme", "two", "deuxieme", "second", "seconde", "segundo", "segunda", "zweite", "secondo"],
   ["third", "3", "3rd", "3e", "3eme", "three", "troisieme", "tercero", "tercera", "dritte", "terzo"],
@@ -195,10 +195,10 @@ export function isChoiceQuestion(item: ConversationItem | undefined): boolean {
   return item?.kind === "question" && item.field === "flight_choice";
 }
 
-const spokenWords = (text: string) => normalizeText(text).replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+export const spokenWords = (text: string) => normalizeText(text).replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
 // "cheap" also covers "cheapest": a word of the list starts a word of what was said. A digit ("2") is a whole word,
 // so "200" is a price, not the second flight.
-const saidWord = (said: string, word: string) =>
+export const saidWord = (said: string, word: string) =>
   new RegExp(`(^|\\s)${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}${/^\d+$/.test(word) ? "(\\s|$)" : ""}`).test(said);
 
 // "Qatar" for "Qatar Airways", "France" for "Air France", "Garuda" for "KLM, Garuda Indonesia".
@@ -465,7 +465,7 @@ export function reportFlightsReady(trip: Trip, call: ToolRequest, secrets: reado
   const found = chosen ? describeFlight(chosen) : summary || "see the tab on the left";
   return push(
     { ...stopped, agent_steps: [...stopped.agent_steps, "Stopped on the booking page, nothing clicked"] },
-    // One item, so the panel's "ready" moment stays in focus; spoken short, the hotels line stays on the screen.
-    { kind: "agent", text: `${FLIGHT_READY_PREFIX}${found}, book it when you want, Nami never pays. Hotels are coming soon.` },
+    { kind: "agent", text: `${FLIGHT_READY_PREFIX}${found}, book it when you want, Nami never pays.` },
+    { kind: "proposal", action: "hotels", text: "Do you also want me to find you a hotel?", accept_label: "Find my hotel", decline_label: "Not now", decision: null },
   );
 }

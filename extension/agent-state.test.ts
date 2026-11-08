@@ -22,7 +22,8 @@ describe("the site of a page", () => {
     expect(siteKey(CARD)).toBe("allindonesia.imigrasi.go.id");
     expect(siteKey(u("https://www.google.com/travel/flights/search?tfs=abc"))).toBe("www.google.com/travel/flights");
     expect(siteKey(u("https://www.google.com/search?q=bali"))).toBeNull();
-    expect(siteKey(u("https://www.google.com/travel/hotels"))).toBeNull();
+    expect(siteKey(u("https://www.google.com/travel/hotels"))).toBe("www.google.com/travel/hotels");
+    expect(siteKey(u("https://www.google.com/travel/search?q=hotels"))).toBe("www.google.com/travel/search");
     expect(siteKey(u("http://evisa.imigrasi.go.id/"))).toBeNull();
     expect(siteKey(u("https://www.evisa.mofa.go.jp/index"))).toBe("mofa.go.jp");
   });

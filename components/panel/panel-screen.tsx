@@ -23,6 +23,7 @@ import { bestFirst, foundPassportText, foundPhotoText, foundReturnTicketText, re
 import { agentChecklist, agentStatusLine, type AgentStatus, CHECKLIST_LABELS, focusItem, paperInFocus, paperOfRun, readyPaper, REOPENED_TEXTS, sceneFor, STATUS_TEXTS, type Paper } from "@/lib/panel-focus";
 import { focusOfficialTab, paperUrl, showOfficialSite } from "@/lib/official-tab";
 import { isFlightReadyMessage } from "@/lib/flights/flow";
+import { isHotelReadyMessage } from "@/lib/hotels/flow";
 import { requestTripParse } from "@/lib/trip-parse-client";
 import {
   acceptProposal,
@@ -86,6 +87,7 @@ export const PANEL_TEXTS = [
   "Photo",
   "Visa",
   "Arrival card",
+  "Hotel",
   "Starting…",
   "Looking for your passport…",
   "Reading your passport…",
@@ -617,6 +619,7 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
     { label: "Photo", state: photoDocumentId !== null ? "done" : "todo" },
     paperMark("Visa", has(VISA_READY_MESSAGE), "visa"),
     paperMark("Flight", trip.conversation.some((item) => item.kind === "agent" && isFlightReadyMessage(item.text)), "flights"),
+    paperMark("Hotel", trip.conversation.some((item) => item.kind === "agent" && isHotelReadyMessage(item.text)), "hotels"),
   ];
 
   const showCard = manual || reconfirm;

@@ -1,4 +1,5 @@
 import { flightsResult } from "@/lib/flights/flow";
+import { hotelsResult } from "@/lib/hotels/flow";
 import type { Paper } from "@/lib/panel-focus";
 import type { Trip } from "@/lib/trip-state";
 
@@ -10,12 +11,14 @@ export const PAPER_HOME_URLS: Record<Paper, string> = {
   visa: "https://evisa.imigrasi.go.id/web/visa-selection",
   arrival_card: "https://allindonesia.imigrasi.go.id/arrival-card-submission/personal-information",
   flights: "https://www.google.com/travel/flights",
+  hotels: "https://www.google.com/travel/search",
 };
 
 // The page of a paper: the one the agent opened (flights), the official form found for the trip (elsewhere than Bali,
 // the visa is the required paper found live), or for Indonesia the site's own page. Null when nothing is known.
 export function paperUrl(trip: Pick<Trip, "agent_run" | "formalities" | "request">, paper: Paper): string | null {
   if (paper === "flights") return flightsResult(trip.agent_run)?.url ?? PAPER_HOME_URLS.flights;
+  if (paper === "hotels") return hotelsResult(trip.agent_run)?.url ?? PAPER_HOME_URLS.hotels;
   const exact = trip.formalities.find((f) => f.id === (paper === "visa" ? "evoa" : "arrival_card"));
   if (exact) return exact.official_url;
   if (paper === "visa") {
@@ -27,6 +30,7 @@ export function paperUrl(trip: Pick<Trip, "agent_run" | "formalities" | "request
 
 export function agentOfficialUrl(trip: Pick<Trip, "agent_run" | "formalities">): string | null {
   if (trip.agent_run?.kind === "flights") return flightsResult(trip.agent_run)?.url ?? null;
+  if (trip.agent_run?.kind === "hotels") return hotelsResult(trip.agent_run)?.url ?? null;
   if (trip.agent_run?.kind !== "paper") return null;
   const paper = trip.formalities.find((f) => f.id === "evoa") ?? trip.formalities.find((f) => f.required) ?? trip.formalities[0];
   return paper?.official_url ?? null;

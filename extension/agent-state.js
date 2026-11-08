@@ -1,17 +1,17 @@
 const officialHosts = new Set(["evisa.imigrasi.go.id", "allindonesia.imigrasi.go.id", "lovebali.baliprov.go.id"]);
 // Shared hosts hold unrelated tabs too: only this section of the site is the agent's.
-const sharedSections = { "www.google.com": "/travel/flights" };
+const sharedSections = { "www.google.com": ["/travel/flights", "/travel/search", "/travel/hotels"] };
+const sectionOf = (url) => sharedSections[url.hostname]?.find((section) => url.pathname.startsWith(section));
 // Where each paper is known to live (lib/official-tab.ts): the mark of a paper prefers a tab of that site when the
 // page asked for is elsewhere on the same registered domain (the visa found live at molina.imigrasi.go.id).
-const paperSites = { visa: "evisa.imigrasi.go.id", arrival_card: "allindonesia.imigrasi.go.id", flights: "www.google.com/travel/flights" };
+const paperSites = { visa: "evisa.imigrasi.go.id", arrival_card: "allindonesia.imigrasi.go.id", flights: "www.google.com/travel/flights", hotels: "www.google.com/travel/search" };
 // Second-level labels under which the registered domain is one label longer (imigrasi.go.id, gov.uk, com.au).
 const secondLevel = new Set(["ac", "co", "com", "edu", "gc", "go", "gob", "gouv", "gov", "mil", "ne", "net", "or", "org"]);
 
 export function isAgentPage(url) {
   if (url.protocol !== "https:") return false;
   if (officialHosts.has(url.hostname)) return true;
-  const section = sharedSections[url.hostname];
-  return section !== undefined && url.pathname.startsWith(section);
+  return sectionOf(url) !== undefined;
 }
 
 export function registeredDomain(hostname) {
@@ -26,8 +26,10 @@ export function registeredDomain(hostname) {
 export function siteKey(url) {
   if (url.protocol !== "https:") return null;
   if (officialHosts.has(url.hostname)) return url.hostname;
-  const section = sharedSections[url.hostname];
-  if (section !== undefined) return url.pathname.startsWith(section) ? `${url.hostname}${section}` : null;
+  if (sharedSections[url.hostname] !== undefined) {
+    const section = sectionOf(url);
+    return section ? `${url.hostname}${section}` : null;
+  }
   return registeredDomain(url.hostname);
 }
 
