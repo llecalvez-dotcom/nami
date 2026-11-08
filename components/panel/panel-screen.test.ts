@@ -2,8 +2,8 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { FocusStage, type AgentView } from "@/components/panel/focus-stage";
-import { agentSpeech, PANEL_TEXTS, WATCH_MESSAGE } from "@/components/panel/panel-screen";
-import { agentChecklist } from "@/lib/panel-focus";
+import { agentSpeech, PANEL_TEXTS, StatusLine, WATCH_MESSAGE } from "@/components/panel/panel-screen";
+import { agentChecklist, REOPENED_TEXTS } from "@/lib/panel-focus";
 import type { ConversationItem } from "@/lib/trip-state";
 
 const noop = () => {};
@@ -69,9 +69,29 @@ describe("the side panel shows one thing at a time", () => {
   it("has no dash in its fixed texts", () => {
     expect(PANEL_TEXTS.join(" ")).not.toMatch(/[–—]/);
     // The status line and the marks are translated like the rest.
-    for (const text of ["Filling the form", "Waiting for you", "Done", "running", "to do", "Open the tab"]) expect(PANEL_TEXTS).toContain(text);
+    for (const text of ["Filling the form", "Waiting for you", "Done", "running", "to do", "Open the tab", ...Object.values(REOPENED_TEXTS)]) expect(PANEL_TEXTS).toContain(text);
     expect(WATCH_MESSAGE).toMatch(/tab on the left/);
     expect(WATCH_MESSAGE).toMatch(/never click Pay/);
+  });
+});
+
+describe("the status line under the marks", () => {
+  const line = (props: Partial<Parameters<typeof StatusLine>[0]>) =>
+    renderToStaticMarkup(createElement(StatusLine, { status: null, reopened: null, paper: "visa", pulsing: false, t: (text: string) => text, ...props }));
+
+  it("shows what the agent is doing, with its progress", () => {
+    expect(line({ status: { text: "Filling the form", progress: "4/~20" }, pulsing: true })).toContain("Filling the form (4/~20)");
+    expect(line({})).toBe("");
+  });
+
+  it("says that a paper's tab was closed and the site reopened, even with no session, in the paper's color", () => {
+    const html = line({ reopened: "visa" });
+    expect(html).toContain("The visa tab was closed, I reopened the site");
+    expect(html).toContain('role="status"');
+    expect(line({ status: { text: "Filling the form", progress: "4/~20" }, reopened: "arrival_card", pulsing: true })).toContain("The arrival card tab was closed, I reopened the site");
+    expect(line({ status: { text: "Filling the form" }, reopened: "arrival_card", pulsing: true })).not.toContain("animate-pulse");
+    expect(line({ reopened: "flights" })).toContain("The Google Flights tab was closed, I reopened it");
+    for (const text of Object.values(REOPENED_TEXTS)) expect(text).not.toMatch(/[–—]/);
   });
 });
 

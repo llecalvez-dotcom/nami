@@ -26,11 +26,11 @@ Clic droit sur l'icône, **Options** :
 |---|---|
 | `manifest.json` | Manifest V3 : panneau latéral `panel.html`, permissions `sidePanel`, `storage`, `tabs` |
 | `background.js` | Clic sur l'icône = ouverture du panneau (`setPanelBehavior({ openPanelOnActionClick: true })`) |
-| `panel.html`, `panel.js` | L'`iframe` vers Nami (`allow="microphone; autoplay"`) ; remet l'onglet du site officiel au premier plan quand Nami le demande |
+| `panel.html`, `panel.js` | L'`iframe` vers Nami (`allow="microphone; autoplay"`) ; remet l'onglet du site officiel au premier plan quand Nami le demande (`nami:focus-official` avec l'URL du papier et son nom : n'importe quel onglet du même site, l'onglet de l'agent d'abord, jamais un nouvel onglet tant qu'un onglet du site existe, voir `docs/tests/2026-11-08-coche-onglet.md`) |
 | `options.html`, `options.js` | Adresse de Nami, autorisation du micro |
 | `settings.js` | Adresse par défaut et lecture de l'adresse enregistrée |
 | `agent-overlay.js` | Curseur, onde, contour du champ, cadre et bulle dans un Shadow DOM fermé, sans intercepter les gestes |
-| `agent-state.js` | Relais partagé vers les trois hôtes officiels, utilisé par le panneau et le service worker module |
+| `agent-state.js` | Relais partagé vers les trois hôtes officiels, utilisé par le panneau et le service worker module ; mémorise par site l'onglet où l'agent travaille (`chrome.storage.session`, `agentTabs`) ; `sameSite` et `pickTab`, le choix de l'onglet qu'une coche ramène |
 
 ## Voir l'agent travailler (ticket 13)
 

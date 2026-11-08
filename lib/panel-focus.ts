@@ -127,6 +127,14 @@ export function agentStatusLine(run: AgentRun | null, steps: readonly string[]):
   return { text: "Filling the form", progress: `${count}/~${FORM_STEPS[paper]}` };
 }
 
+// Said in the status line when a paper's tab was gone and its mark had to open the site again: the traveller lands
+// on the site's first page, not where the agent stopped (Clément, 2026-11-08).
+export const REOPENED_TEXTS: Record<Paper, string> = {
+  visa: "The visa tab was closed, I reopened the site",
+  arrival_card: "The arrival card tab was closed, I reopened the site",
+  flights: "The Google Flights tab was closed, I reopened it",
+};
+
 export const STATUS_TEXTS = [
   ...Object.values(OPENING),
   "Filling the form",
@@ -140,6 +148,7 @@ export const STATUS_TEXTS = [
   "Done",
   "Stopped",
   H_SLOW_STATUS,
+  ...Object.values(REOPENED_TEXTS),
 ];
 
 // The longer the sentence, the smaller it is written: it must fit the side panel without scrolling.

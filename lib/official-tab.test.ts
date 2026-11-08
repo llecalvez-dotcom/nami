@@ -73,10 +73,17 @@ describe("showOfficialSite", () => {
     expect(f.raw.open).toHaveBeenCalledWith(URL_, "_blank", "noopener");
   });
 
-  it("asks the side panel to bring the agent's tab to the front", async () => {
+  it("asks the side panel to bring the agent's tab to the front, naming the paper when known", async () => {
     const f = fakeHost(true);
     const done = showOfficialSite(URL_, f.host);
     expect(f.parent.postMessage).toHaveBeenCalledWith({ type: FOCUS_OFFICIAL, url: URL_ }, "*");
+    expect(f.parent.postMessage.mock.calls[0][0]).not.toHaveProperty("paper");
+    const named = fakeHost(true);
+    const namedDone = showOfficialSite(URL_, named.host, 1000, "visa");
+    expect(named.parent.postMessage).toHaveBeenCalledWith({ type: FOCUS_OFFICIAL, url: URL_, paper: "visa" }, "*");
+    named.reply({ type: `${FOCUS_OFFICIAL}:done`, result: "opened" });
+    await expect(namedDone).resolves.toBe("opened");
+    expect(named.raw.open).not.toHaveBeenCalled();
     f.reply({ type: "other" });
     f.reply({ type: `${FOCUS_OFFICIAL}:done`, result: "focused" }, {});
     f.reply({ type: `${FOCUS_OFFICIAL}:done`, result: "focused" });
@@ -105,8 +112,8 @@ describe("focusOfficialTab", () => {
     expect(focusOfficialTab(URL_, plain.host)).toBeNull();
     expect(plain.raw.open).not.toHaveBeenCalled();
     const framed = fakeHost(true);
-    const done = focusOfficialTab(URL_, framed.host);
-    expect(framed.parent.postMessage).toHaveBeenCalledWith({ type: FOCUS_OFFICIAL, url: URL_, open: false }, "*");
+    const done = focusOfficialTab(URL_, framed.host, 1000, "visa");
+    expect(framed.parent.postMessage).toHaveBeenCalledWith({ type: FOCUS_OFFICIAL, url: URL_, open: false, paper: "visa" }, "*");
     framed.reply({ type: `${FOCUS_OFFICIAL}:done`, result: "focused" });
     await expect(done).resolves.toBe("focused");
   });
