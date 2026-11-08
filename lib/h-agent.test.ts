@@ -116,6 +116,23 @@ describe("safe HTTP retries", () => {
 });
 
 describe("createSession", () => {
+  it("gives up when H sends the headers and never finishes the body (the start slot must not stay held)", async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal("fetch", vi.fn(async (_url: string, init: RequestInit) => new Response(new ReadableStream({
+        start(controller) {
+          controller.enqueue(new TextEncoder().encode('{"id":'));
+          init.signal?.addEventListener("abort", () => controller.error(new DOMException("aborted", "AbortError")));
+        },
+      }), { status: 201 })));
+      const result = createSession(INPUT).catch((e) => e);
+      await vi.advanceTimersByTimeAsync(CREATE_TIMEOUT_MS + 1);
+      expect(await result).toMatchObject({ status: 504 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("posts an inline agent on the local browser, with the tools and the caps", async () => {
     const fetch = mockFetch(() => Response.json({ id: "s-1", status: { status: "pending" } }, { status: 201 }));
     const session = await createSession(INPUT);

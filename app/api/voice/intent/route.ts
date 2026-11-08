@@ -14,8 +14,8 @@ export async function POST(request: Request) {
 
     const startedAt = Date.now();
     const intent = await interpretAnswer(input.data, completeJson());
-    const heard = input.data.transcript.length > 40 ? `${input.data.transcript.slice(0, 40)}…` : input.data.transcript;
-    console.log(`voice/intent "${heard}" → ${describeIntent(intent)} (${intent.confidence}) ${Date.now() - startedAt} ms`);
+    // The length only: a spoken correction may hold a passport number, and none goes in a log.
+    console.log(`voice/intent ${input.data.transcript.length} chars → ${describeIntent(intent)} (${intent.confidence}) ${Date.now() - startedAt} ms`);
     return Response.json(intent);
   } finally {
     lease.release();

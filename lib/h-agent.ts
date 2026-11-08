@@ -93,12 +93,16 @@ function settings(options: HClientOptions) {
 
 const isAbort = (error: unknown) => error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
 
-// One fetch bounded by a deadline (a plain timer, so a pending H is cut even if its socket stays open).
+// One fetch bounded by a deadline (a plain timer, so a pending H is cut even if its socket stays open). fetch resolves
+// on the headers: a success's body is read under the same deadline, else an H that stops mid-body holds the caller forever.
 async function fetchUntil(fetchImpl: typeof fetch, url: string, init: RequestInit, deadline: number): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), Math.max(0, deadline - Date.now()));
   try {
-    return await fetchImpl(url, { ...init, signal: controller.signal });
+    const response = await fetchImpl(url, { ...init, signal: controller.signal });
+    if (!response.ok) return response;
+    const body = await response.arrayBuffer();
+    return new Response(body.byteLength === 0 ? null : body, { status: response.status, headers: response.headers });
   } finally {
     clearTimeout(timer);
   }

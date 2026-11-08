@@ -7,7 +7,7 @@ import { flightsAnswered, flightsStartBody, FLIGHTS_RETRY_PROPOSAL, isChoiceQues
 import { googleFlightsUrl } from "@/lib/flights-agent";
 import type { PassportFields } from "@/lib/contracts";
 import { H_NOT_ANSWERING_MESSAGE } from "@/lib/agent-changes";
-import { createVisaStartAttempt, startWithBusyRetry } from "@/lib/paper-start-client";
+import { createVisaStartAttempt } from "@/lib/paper-start-client";
 import { missingPassportMessage } from "@/lib/passport-reminder";
 import { requestTripParse } from "@/lib/trip-parse-client";
 import {
@@ -59,14 +59,12 @@ async function startFlightsSessionRequest(trip: Trip, onBusy?: (message: string)
   const body = flightsStartBody(trip);
   if (!body) throw new Error("I need your departure and return dates to search flights.");
   const settings = readAgentSettings();
-  const response = await startWithBusyRetry(fetch, "/api/flights/start", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...body, local_session_id: settings.local_session_id.trim(), idempotency_key: crypto.randomUUID() }),
-  }, undefined, onBusy);
-  const json = (await response.json().catch(() => null)) as { session_id?: string; error?: string } | null;
-  if (!response.ok || !json?.session_id) throw new Error(json?.error ?? `Request failed (${response.status})`);
-  return { sessionId: json.session_id, url: googleFlightsUrl(body) };
+  // Same attempt logic as a paper: after an answer that came too late, a new click reuses the key, so H cannot open a second session.
+  const attempt = createVisaStartAttempt(
+    { ...body, local_session_id: settings.local_session_id.trim() },
+    { scope: `${trip.id}:flights`, onBusy, url: "/api/flights/start" },
+  );
+  return { sessionId: await attempt(), url: googleFlightsUrl(body) };
 }
 
 async function discover(url: string, pick: (json: Record<string, unknown>) => boolean): Promise<boolean> {

@@ -32,7 +32,13 @@ describe("POST /api/voice/intent", () => {
     const response = await call({ transcript: "ouais je suis chaud", language: "fr", question });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ kind: "accept", confidence: 0.9 });
-    expect(console.log).toHaveBeenCalledWith(expect.stringMatching(/^voice\/intent "ouais je suis chaud" → accept \(0\.9\) \d+ ms$/));
+    expect(console.log).toHaveBeenCalledWith(expect.stringMatching(/^voice\/intent 19 chars → accept \(0\.9\) \d+ ms$/));
+  });
+
+  it("never writes what the traveller said in the log (a spoken correction may hold a passport number)", async () => {
+    complete.mockResolvedValue(JSON.stringify({ intent: "decline", option_ids: "", confidence: "high" }));
+    await call({ transcript: "non le numero est 24AB12345", language: "fr", question });
+    expect(JSON.stringify(vi.mocked(console.log).mock.calls)).not.toContain("24AB12345");
   });
 
   it("answers the closed lists without the model", async () => {
