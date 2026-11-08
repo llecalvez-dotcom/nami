@@ -15,8 +15,8 @@ import {
 const START = { origin: "Paris", destination: "Bali", departure_date: "2026-11-23", return_date: "2026-12-03", travellers: 2, local_session_id: "local-42" };
 
 describe("FlightsStartSchema", () => {
-  it("takes the departure city given, Paris when none", () => {
-    expect(FlightsStartSchema.parse({ ...START, origin: undefined }).origin).toBe("Paris");
+  it("takes the departure city given, refuses a search without one (never Paris in the traveller's place)", () => {
+    expect(FlightsStartSchema.safeParse({ ...START, origin: undefined }).success).toBe(false);
     expect(FlightsStartSchema.parse({ ...START, origin: " Lyon " }).origin).toBe("Lyon");
     expect(googleFlightsUrl({ ...START, origin: "Lyon" })).toContain("q=Flights+from+Lyon+to+Bali+on+2026-11-23");
   });

@@ -15,6 +15,8 @@ export const FLIGHTS_MAX_STEPS = 40;
 export const FLIGHTS_MAX_TIME_S = 600;
 // For offDomainHost: www.google.com and consent.google.com both end with it.
 export const FLIGHTS_DOMAIN = "google.com";
+// Proposed as a button when the traveller named no departure city; never used in his place (P0, 2026-11-08: "I leave
+// from Lyon" searches from Lyon, and a search without a city is refused rather than quietly made from Paris).
 export const FLIGHTS_ORIGIN = "Paris";
 export const FLIGHTS_FORBIDDEN_BUTTONS = ["Réserver", "Book", "Continuer", "Continue", "Pay", "Payer", "Sign in", "Se connecter"] as const;
 
@@ -41,7 +43,7 @@ export function isFlightsGuardArmed(sessionId: string): boolean {
 }
 
 export const FlightsStartSchema = z.object({
-  origin: z.string().trim().min(1).max(120).default(FLIGHTS_ORIGIN),
+  origin: z.string().trim().min(1).max(120),
   destination: z.string().trim().min(1).max(120),
   departure_date: z.iso.date(),
   return_date: z.iso.date(),

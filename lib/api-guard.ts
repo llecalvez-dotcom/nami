@@ -12,6 +12,7 @@ export const API_LIMITS = {
   translate: 32 * 1024,
   say: 4 * 1024,
   intent: 16 * 1024,
+  transit: 4 * 1024,
 } as const;
 
 // Per client and per 10 min. Raised on 2026-11-08: an evening of bench tests chains the retries, and a slow H made the
@@ -34,6 +35,8 @@ const QUOTA_LIMITS = {
   say: 1200,
   // One call per spoken answer the closed word lists do not understand.
   intent: 200,
+  // One call per flight chosen with a stop abroad: the transit rules of that country for the traveller's passport.
+  transit: 60,
 } as const;
 
 export const BUSY_MESSAGE = "Busy, try again in a moment.";
@@ -58,6 +61,7 @@ const CONCURRENCY_LIMITS = {
   translate: 4,
   say: 2,
   intent: 4,
+  transit: 3,
 } as const;
 
 const WINDOW_MS = 10 * 60 * 1000;

@@ -97,3 +97,12 @@ describe("describeFlight", () => {
     expect(formatDuration(65)).toBe("1 h 05");
   });
 });
+
+describe("direct_only", () => {
+  it("keeps the direct flights only, cheapest first, and never a flight with a stop", () => {
+    const withDirect = [...FLIGHTS, { ...FLIGHTS[0], index: 7, stops: 0, price: 1200, layovers: [] }, { ...FLIGHTS[0], index: 8, stops: 0, price: 990, layovers: [] }];
+    expect(indexes(rankFlights(withDirect, "direct_only"))).toEqual([8, 7]);
+    expect(rankFlights(FLIGHTS, "direct_only")).toEqual([]);
+    expect(introduceFlights("direct_only", withDirect)).toBe("Direct flights only, as you asked, cheapest first.");
+  });
+});

@@ -47,9 +47,10 @@ describe("parseResultLabel", () => {
   });
 
   it("reads separate tickets, two airlines, two stops, a layover without an airport, an arrival two days later", () => {
+    expect(parseResultLabel(FR_CHINA_SOUTHERN, 1)?.self_transfer).toBe(true);
     expect(parseResultLabel(FR_CHINA_SOUTHERN, 1)).toMatchObject({ airline: "China Southern", price: 642, stops: 1, duration_min: 1745, arrive_at: "06:40+1", layovers: [{ airport: "Canton", duration_min: 650 }] });
     expect(parseResultLabel(EN_ITA_USD, 1)).toMatchObject({
-      airline: "ITA, Cathay Pacific", price: 1671, currency: "USD", stops: 2, duration_min: 2725, depart_at: "10:55 AM", arrive_at: "3:20 PM+2",
+      airline: "ITA, Cathay Pacific", price: 1671, currency: "USD", stops: 2, duration_min: 2725, depart_at: "10:55 AM", arrive_at: "3:20 PM+2", self_transfer: true,
       layovers: [{ airport: "Milan", duration_min: 1410 }, { airport: "Hong Kong", duration_min: 225 }],
     });
   });

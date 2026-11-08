@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { filePaths, readAgentSettings } from "@/components/trip/agent-settings";
 import { cancelAgent, rawToolReq, sendAgentAnswer, sendFlightChoice, sendHotelChoice } from "@/components/trip/use-agent-run";
-import { flightsAnswered, flightsStartBody, FLIGHTS_RETRY_PROPOSAL, isChoiceQuestion, isCriterionQuestion, openFlightQuestion, pendingFlightChoice, startFlightsSession } from "@/lib/flights/flow";
+import { flightsAnswered, flightsStartBody, FLIGHTS_RETRY_PROPOSAL, isChoiceQuestion, isCriterionQuestion, knownTransitChecks, openFlightQuestion, pendingFlightChoice, pendingTransitChecks, recordTransitChecks, startFlightsSession } from "@/lib/flights/flow";
+import { TransitCheckSchema, type TransitCheck, type TransitInput } from "@/lib/journey/transit";
 import { googleFlightsUrl } from "@/lib/flights-agent";
 import { googleHotelsUrl } from "@/lib/hotels-agent";
 import { hotelsAnswered, hotelsStartBody, HOTELS_RETRY_PROPOSAL, isHotelChoiceQuestion, isHotelCriterionQuestion, openHotelQuestion, pendingHotelChoice, startHotelsSession } from "@/lib/hotels/flow";
@@ -57,9 +58,25 @@ async function startVisaSession(
 }
 
 // Module Vol: the Google Flights session, from the request only (no passport, no name, no e-mail).
+async function fetchTransit(input: TransitInput): Promise<TransitCheck> {
+  const unverified = (error: string): TransitCheck => ({
+    city: input.city, country_iso2: input.country_iso2 === "ZZ" ? null : input.country_iso2, country: input.city, connection: input.connection, layover_min: input.layover_min,
+    status: "needs_verification", summary: `I could not check the transit rules for ${input.city} (${error}). Verify them on an official site before booking.`, sources: [], error,
+  });
+  if (input.country_iso2 === "ZZ") return unverified("unknown country");
+  try {
+    const response = await fetch("/api/transit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) });
+    if (!response.ok) return unverified(`search failed, ${response.status}`);
+    const parsed = TransitCheckSchema.safeParse(await response.json());
+    return parsed.success ? parsed.data : unverified("unreadable answer");
+  } catch (error) {
+    return unverified((error as Error).message);
+  }
+}
+
 async function startFlightsSessionRequest(trip: Trip, onBusy?: (message: string) => void): Promise<{ sessionId: string; url: string }> {
   const body = flightsStartBody(trip);
-  if (!body) throw new Error("I need your departure and return dates to search flights.");
+  if (!body) throw new Error("I need your departure city and your dates to search flights.");
   const settings = readAgentSettings();
   // Same attempt logic as a paper: after an answer that came too late, a new click reuses the key, so H cannot open a second session.
   const attempt = createVisaStartAttempt(
@@ -251,6 +268,19 @@ export function useTripActions({
     }
   };
 
+  // The transit rules of the stops abroad of the chosen flight: one /api/transit call per stop, official sites only;
+  // a failed call is "needs verification", never a guess (lib/journey/transit.ts).
+  const checkTransit = async () => {
+    const current = latest();
+    const pending = current ? pendingTransitChecks(current) : null;
+    if (!current || !pending) return;
+    const known = knownTransitChecks(current);
+    const checks = await Promise.all(pending.map((input) => known.find((k) => k.city === input.city) ?? fetchTransit(input)));
+    const now = latest() ?? current;
+    if (!pendingTransitChecks(now)) return;
+    update(recordTransitChecks(now, checks));
+  };
+
   const sendHotel = async () => {
     const current = latest();
     const choice = current ? pendingHotelChoice(current) : null;
@@ -266,6 +296,7 @@ export function useTripActions({
   const followFlights = (item: Trip["conversation"][number] | undefined, next: Trip) => {
     if (isCriterionQuestion(item) && !openFlightQuestion(next, "flight_criterion")) void startFlightsRun();
     if (isChoiceQuestion(item) && pendingFlightChoice(next)) void sendChoice();
+    if (isChoiceQuestion(item) && pendingTransitChecks(next)) void checkTransit();
     if (isHotelCriterionQuestion(item) && !openHotelQuestion(next, "hotel_criterion")) void startHotelsRun();
     if (isHotelChoiceQuestion(item) && pendingHotelChoice(next)) void sendHotel();
   };

@@ -13,9 +13,12 @@ import { FLIGHTS_ORIGIN } from "@/lib/flights-agent";
 import { shortAnswer } from "@/lib/voice/short-answers";
 import { assumedArrival, formalityWindows, isBali, nextDay } from "@/lib/planner";
 import { BALI_PAPERS } from "@/lib/bali-papers";
+import { knownTransit, TransitCheckSchema, transitMessage, transitStops, type TransitCheck, type TransitInput } from "@/lib/journey/transit";
 import type { ConversationItem, Trip } from "@/lib/trip-state";
 
-export const FLIGHT_QUESTION_FIELDS = ["origin", "return_date", "flight_criterion", "flight_choice"] as const;
+// flight_relax: no direct flight while the traveller asked for direct only; the constraint is kept, Nami asks before
+// showing the flights with a stop.
+export const FLIGHT_QUESTION_FIELDS = ["origin", "return_date", "flight_criterion", "flight_choice", "flight_relax"] as const;
 export type FlightQuestionField = (typeof FLIGHT_QUESTION_FIELDS)[number];
 type FlightQuestion = Extract<ConversationItem, { kind: "question" }> & { field: FlightQuestionField };
 
@@ -45,7 +48,17 @@ const CRITERION_WORDS: Record<FlightCriterion, string[]> = {
   fastest: ["fast", "fastest", "quick", "quickest", "short", "rapide", "rapido", "schnell", "veloce"],
   fewest_stops: ["direct", "no stop", "nonstop", "non stop", "without stop", "fewest", "sans escale", "escale", "directo", "ohne", "diretto"],
   best: ["best", "balance", "compromise", "meilleur", "compromis", "mejor", "beste", "migliore"],
+  direct_only: [],
 };
+// "Only direct flights", "vols directs uniquement", "pas d'escale": a direct word with an exclusive one is a hard
+// constraint (direct_only), not a preference (fewest_stops). "Sans escale si possible" stays a preference.
+const DIRECT_WORDS = CRITERION_WORDS.fewest_stops;
+const ONLY_WORDS = ["only", "nothing but", "strictly", "exclusively", "must be", "uniquement", "seulement", "exclusivement", "strictement", "obligatoirement", "imperativement", "que des", "rien que", "pas d escale", "aucune escale", "solo", "solamente", "unicamente", "nur", "ausschliesslich", "soltanto"];
+
+export function asksDirectOnly(text: string): boolean {
+  const said = spokenWords(text);
+  return DIRECT_WORDS.some((w) => saidWord(said, w)) && ONLY_WORDS.some((w) => saidWord(said, w));
+}
 const RETURN_OFFSETS_DAYS = [7, 10, 14];
 
 export function isFlightReadyMessage(text: string): boolean {
@@ -63,6 +76,8 @@ const FlightsRunResultSchema = z.object({
   ready: z.boolean().optional(),
   // The landing in request.arrival_at came from the chosen flight: cleared if the run ends without opening it.
   landing_from_flight: z.boolean().optional(),
+  // The transit rules of the stops abroad of the chosen flight, once checked (lib/journey/transit.ts).
+  transit: z.array(TransitCheckSchema).optional(),
 });
 export type FlightsRunResult = z.infer<typeof FlightsRunResultSchema>;
 
@@ -114,7 +129,8 @@ const question = (field: FlightQuestionField, text: string, options: { label: st
   kind: "question", from: "nami", field, question: text, options, input, answer: null,
 });
 
-// The departure city: asked first, Paris proposed (Clément, real run 2026-11-08: it was fixed to Paris).
+// The departure city: asked first when the traveller named none, Paris proposed as a tap (Clément, real run
+// 2026-11-08: it was fixed to Paris). A named city is kept as said, nothing is searched without one (flightsStartBody).
 function askOrigin(trip: Trip): Trip {
   return push(trip, question("origin", ORIGIN_QUESTION, [{ label: FLIGHTS_ORIGIN, value: FLIGHTS_ORIGIN }], "text"));
 }
@@ -133,19 +149,21 @@ export function spokenCity(text: string): string | null {
 
 function askReturnDate(trip: Trip): Trip {
   const { departure_date, return_date } = trip.request;
-  const origin = trip.request.origin ?? FLIGHTS_ORIGIN;
+  const leave = trip.request.origin ? `You leave ${trip.request.origin} on` : "You leave on";
   if (!departure_date) return say(trip, "I need your departure date first.");
   if (return_date) {
     return push(trip, question("return_date",
-      `You leave ${origin} on ${longDate(departure_date)} and come back on ${longDate(return_date)}. Shall I search with those dates?`,
+      `${leave} ${longDate(departure_date)} and come back on ${longDate(return_date)}. Shall I search with those dates?`,
       [{ label: "Yes, those dates", value: return_date }], "text"));
   }
   const options = RETURN_OFFSETS_DAYS.map((days) => addDays(departure_date, days)).map((date) => ({ label: longDate(date), value: date }));
   return push(trip, question("return_date", `You leave on ${longDate(departure_date)}. When do you want to come back?`, options, "text"));
 }
 
+// The four usual criteria; "Direct flights only" added when the trip was asked that way ("que des vols directs").
 function askCriterion(trip: Trip): Trip {
-  const options = FlightCriterionSchema.options.map((value) => ({ label: CRITERION_LABELS[value], value }));
+  const criteria = FlightCriterionSchema.options.filter((c) => c !== "direct_only" || asksDirectOnly(trip.request.raw_text));
+  const options = criteria.map((value) => ({ label: CRITERION_LABELS[value], value }));
   return push(trip, question("flight_criterion", CRITERION_QUESTION, options, null));
 }
 
@@ -179,7 +197,9 @@ export function answeredCriterion(trip: Trip): FlightCriterion | null {
   const answered = answeredQuestion(trip, "flight_criterion");
   if (!answered) return null;
   const option = answered.options.find((o) => o.label === answered.answer);
-  const parsed = FlightCriterionSchema.safeParse(option?.value);
+  // A criterion said, not tapped ("direct only" when the button was not there): its label was written as the answer.
+  const byLabel = FlightCriterionSchema.options.find((c) => CRITERION_LABELS[c] === answered.answer);
+  const parsed = FlightCriterionSchema.safeParse(option?.value ?? byLabel);
   return parsed.success ? parsed.data : null;
 }
 
@@ -208,6 +228,7 @@ const airlineWords = (airline: string) => spokenWords(airline).split(" ").filter
 
 // Every criterion named in the answer ("le moins cher et le plus rapide": two).
 export function matchCriteria(text: string): FlightCriterion[] {
+  if (asksDirectOnly(text)) return ["direct_only"];
   const said = spokenWords(text);
   return FlightCriterionSchema.options.filter((c) => CRITERION_WORDS[c].some((w) => saidWord(said, w)));
 }
@@ -254,7 +275,20 @@ export function answerFlightQuestion(trip: Trip, item: FlightQuestion, value: st
       return say(answered, FLIGHTS_SEARCHING_MESSAGE);
     case "flight_choice":
       return chooseFlight(answered, value);
+    case "flight_relax":
+      return value === "relax" ? offerWithStops(answered) : say(answered, DIRECT_ONLY_KEPT_MESSAGE);
   }
+}
+
+export const DIRECT_ONLY_KEPT_MESSAGE = "Understood, direct flights only: I open nothing. The Google Flights tab stays on the left, nothing is booked; say Stop agent to close it, or give me other dates.";
+
+// The traveller agreed to see the flights with a stop: the fewest stops first, never called direct.
+function offerWithStops(trip: Trip): Trip {
+  const options = flightsResult(trip.agent_run)?.options ?? [];
+  if (options.length === 0) return say(trip, FLIGHTS_UNREADABLE_MESSAGE);
+  const list = options.map((f) => describeFlight(f)).join("; then ");
+  const choices = options.map((f) => ({ label: flightLabel(f), value: String(f.index) }));
+  return push(trip, question("flight_choice", `None of these is direct, the fewest stops first: ${list}: which one shall I open?`, choices, null));
 }
 
 // The same question again, with the same options: for the choice, the report_flights call H waits on stays attached.
@@ -294,16 +328,23 @@ export function answerFlightQuestionWithText(trip: Trip, item: FlightQuestion, t
       const label = item.options.find((o) => o.value === String(flight.index))?.label ?? describeFlight(flight);
       return answerFlightQuestion(trip, item, String(flight.index), label);
     }
+    case "flight_relax": {
+      const short = shortAnswer("proposal", text);
+      if (!short) return askAgain(trip, item, text);
+      const option = item.options[short === "accept" ? 0 : 1];
+      return answerFlightQuestion(trip, item, option.value, option.label);
+    }
   }
 }
 
 export type FlightsStartBody = { origin: string; destination: string; departure_date: string; return_date: string; travellers: number; criterion: FlightCriterion };
 
-// What the client sends to /api/flights/start, from the request; null while a date is missing.
+// What the client sends to /api/flights/start, from the request; null while the departure city or a date is missing:
+// the search is never made from Paris in the traveller's place.
 export function flightsStartBody(trip: Trip): FlightsStartBody | null {
   const { origin, destination, departure_date, return_date, travellers } = trip.request;
-  if (!destination || !departure_date || !return_date) return null;
-  return { origin: origin ?? FLIGHTS_ORIGIN, destination, departure_date, return_date, travellers: travellers ?? 1, criterion: flightCriterion(trip) };
+  if (!origin || !destination || !departure_date || !return_date) return null;
+  return { origin, destination, departure_date, return_date, travellers: travellers ?? 1, criterion: flightCriterion(trip) };
 }
 
 export function startFlightsSession(trip: Trip, sessionId: string, url: string, now: Date): Trip {
@@ -334,11 +375,22 @@ export function offerFlights(trip: Trip, call: ToolRequest, flights: FlightOptio
   const ranked = rankFlights(flights, criterion);
   const marked = withResult(trip, { criterion, read: flights.length, options: ranked, tool_req: call }, { handled_tool_ids: [...(run.handled_tool_ids ?? []), toolCallKey(call)] });
   const withStep = { ...marked, agent_steps: [...marked.agent_steps, `Read ${flights.length} flights`] };
+  if (criterion === "direct_only" && ranked.length === 0 && flights.length > 0) return explainNoDirect(withStep, flights);
   if (ranked.length === 0) return say(withStep, FLIGHTS_UNREADABLE_MESSAGE);
   const intro = introduceFlights(criterion, flights).replace(/\.$/, "");
   const list = ranked.map((f) => describeFlight(f)).join("; then ");
   const options = ranked.map((f) => ({ label: flightLabel(f), value: String(f.index) }));
   return push(withStep, question("flight_choice", `${intro}: ${list}: which one shall I open?`, options, null));
+}
+
+// Direct only and nothing direct on the page: the constraint is said, not dropped. The flights with the fewest stops
+// are kept aside and shown only if the traveller says so (flight_relax).
+function explainNoDirect(trip: Trip, flights: FlightOption[]): Trip {
+  const kept = withResult(trip, { options: rankFlights(flights, "fewest_stops") });
+  const route = trip.request.origin && trip.request.destination ? ` from ${trip.request.origin} to ${trip.request.destination}` : "";
+  return push(kept, question("flight_relax",
+    `No direct flight${route} on those days: I read ${flights.length} flights, all with at least one stop. I keep your constraint. Do you want to see the ones with the fewest stops anyway?`,
+    [{ label: "Show them anyway", value: "relax" }, { label: "Keep direct only", value: "keep" }], null));
 }
 
 function chooseFlight(trip: Trip, value: string): Trip {
@@ -347,10 +399,40 @@ function chooseFlight(trip: Trip, value: string): Trip {
   if (!chosen) return say(trip, "I lost that flight. Look at the tab on the left and choose one yourself.");
   const landing = trip.request.arrival_at ? null : landingFromFlight(trip.request, chosen);
   const next = landing ? withLanding(withResult(trip, { chosen, landing_from_flight: true }), landing) : withResult(trip, { chosen });
+  const stops = transitStops(chosen, trip.request);
+  const transit = stops.length ? ` It stops in ${stops.map((s) => s.city).join(" and ")}: I'm checking the transit rules for your passport.` : "";
   return say(
     { ...next, agent_steps: [...next.agent_steps, `You chose ${chosen.airline}, ${formatPrice(chosen)}`] },
-    `I'm opening ${describeFlight(chosen)}, watch the tab on the left.`,
+    `I'm opening ${describeFlight(chosen)}, watch the tab on the left.${transit}`,
   );
+}
+
+// The passport Nami checks the transits for: the nationality given, else French like the papers (passportLabel).
+const passportOf = (trip: Trip) => trip.request.nationality ?? "FR";
+
+// The stops abroad of the chosen flight still to check: what the client sends to /api/transit, one call per stop.
+// Null once checked, or when the flight has no stop abroad.
+export function pendingTransitChecks(trip: Trip): TransitInput[] | null {
+  const result = flightsResult(trip.agent_run);
+  const { destination } = trip.request;
+  if (!result?.chosen || result.transit || !destination) return null;
+  const stops = transitStops(result.chosen, trip.request);
+  if (stops.length === 0) return null;
+  return stops.map((s) => ({ nationality: passportOf(trip), city: s.city, country_iso2: s.country_iso2 ?? "ZZ", connection: s.connection, layover_min: s.layover_min, destination }));
+}
+
+// The stops whose rules need no search (lib/journey/transit.ts knownTransit): settled here, without the API.
+export function knownTransitChecks(trip: Trip): TransitCheck[] {
+  const chosen = flightsResult(trip.agent_run)?.chosen;
+  if (!chosen) return [];
+  return transitStops(chosen, trip.request).flatMap((s) => knownTransit(s, passportOf(trip)) ?? []);
+}
+
+// What was found, said in one message: clear, a visa, or "not verified": the journey is never called ready otherwise.
+export function recordTransitChecks(trip: Trip, checks: TransitCheck[]): Trip {
+  if (!trip.agent_run || checks.length === 0) return trip;
+  const kept = withResult(trip, { transit: checks });
+  return say({ ...kept, agent_steps: [...kept.agent_steps, `Checked the transit in ${checks.map((c) => c.city).join(", ")}`] }, transitMessage(checks));
 }
 
 // Writes the landing into the request and recomputes the windows of the Bali papers from it (null: back to the
