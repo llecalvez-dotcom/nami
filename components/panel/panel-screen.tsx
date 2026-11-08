@@ -3,7 +3,7 @@
 import { assumedArrival } from "@/lib/planner";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { Check, MessagesSquare, Plus, X } from "lucide-react";
+import { AlertCircle, Check, MessagesSquare, Plus, X } from "lucide-react";
 import { FocusStage, PAPER_COLORS, Sentence, STAGE_TEXTS, TypeInstead, VoiceHint, WaveMic, waveState, type AgentView, type StageVisual, type Translate } from "@/components/panel/focus-stage";
 import { Painting } from "@/components/panel/backdrop";
 import { DocumentDrop, DROP_TEXTS } from "@/components/trip/document-drop";
@@ -39,6 +39,7 @@ import {
 } from "@/lib/trip-state";
 import { clearTrips, getTrip, saveTrip, useTrips } from "@/lib/trip-store";
 import { cn } from "@/lib/utils";
+import { EXPERT_CHECK_LABELS, expertChecks, type ExpertCheck } from "@/lib/expert-checks";
 
 const CURRENT_TRIP_KEY = "nami.panel.trip";
 export const WATCH_MESSAGE = "Watch the tab on the left: you will see every click. I never click Pay.";
@@ -96,6 +97,8 @@ export const PANEL_TEXTS = [
   RECONFIRM_TEXT,
   ...DROP_TEXTS,
   ...STATUS_TEXTS,
+  ...EXPERT_CHECK_LABELS,
+  "Checked by Nami",
   "done",
   "running",
   "to do",
@@ -186,6 +189,21 @@ export function StatusLine({ status, reopened, paper, pulsing, t }: { status: Ag
       <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", pulsing && !reopened ? "animate-pulse" : "")} style={{ background: PAPER_COLORS[reopened ?? paper] }} />
       <span className="truncate">{t(line.text)}{line.progress ? ` (${line.progress})` : ""}</span>
     </p>
+  );
+}
+
+// "Checked by Nami": the checks really run for this trip (lib/expert-checks.ts), one quiet line under the status.
+export function ExpertChecks({ checks, t }: { checks: ExpertCheck[]; t: Translate }) {
+  if (checks.length === 0) return null;
+  return (
+    <ul aria-label={t("Checked by Nami")} className="flex flex-wrap gap-x-3 gap-y-1 px-5 pb-1 text-[11px] text-[var(--np-ink-soft)]">
+      {checks.map((check) => (
+        <li key={check.id} className={cn("inline-flex items-center gap-1", check.state === "warn" ? "font-medium text-[var(--np-ink)]" : "")}>
+          {check.state === "warn" ? <AlertCircle aria-hidden className="size-3" strokeWidth={2.5} /> : <Check aria-hidden className="size-3" strokeWidth={3} />}
+          {t(check.label)}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -349,7 +367,7 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
   const run = trip.agent_run;
   const reconfirm = needsPassportReconfirm(run, passport !== null);
   useAgentRun(trip.id, run?.session_id ?? null, run !== null && !run.drained && !reconfirm, secrets);
-  usePapersCheck(trip);
+  const livePapers = usePapersCheck(trip);
 
   // Nami answers in the language the traveller speaks (detected by Gladia), the agent's steps included.
   const shownItems = useTranslatedConversation(trip.conversation, language);
@@ -622,6 +640,19 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
     paperMark("Hotel", trip.conversation.some((item) => item.kind === "agent" && isHotelReadyMessage(item.text)), "hotels"),
   ];
 
+  const checks = expertChecks({
+    live: livePapers?.state === "done" ? livePapers.result : null,
+    mrzVerified: seen.read?.verified ?? 0,
+    passportExpiry: passport?.expiry_date ?? null,
+    dates: { return_date: trip.request.return_date, arrival_at: assumedArrival(trip.request) },
+    countryIso2: trip.request.country_iso2 ?? null,
+    formalities: trip.formalities,
+    agentOnOfficialSite:
+      ((runPaper === "visa" || runPaper === "arrival_card") && run !== null && lastHostStep !== null) ||
+      has(VISA_READY_MESSAGE) ||
+      has(ARRIVAL_CARD_READY_MESSAGE),
+  });
+
   const showCard = manual || reconfirm;
   const compact = passport !== null && !editing;
   const paper = agent?.paper ?? ready ?? paperInFocus(trip, focus);
@@ -655,6 +686,7 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
       <Shore marks={marks} t={t} />
       {/* Always there while a session exists: what the agent is doing, even when the panel asks something else. */}
       <StatusLine status={status} reopened={reopened} paper={runPaper} pulsing={agent !== null} t={t} />
+      <ExpertChecks checks={checks} t={t} />
       <FocusStage
         item={shownFocus}
         scene={scene}
