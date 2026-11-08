@@ -3,6 +3,7 @@ import { createSession, getAvailableSessionSlots } from "@/lib/h-agent";
 import { documentFilePaths } from "@/lib/documents";
 import { bindSessionDocument } from "@/lib/agent-passport-upload";
 import { AgentPreflightError, preflightBrowser } from "@/lib/agent-preflight";
+import { freshBridgeBeforeSession, rememberBridgeForSession } from "@/lib/local-bridge";
 import {
   buildPilotTask,
   buildPilotInstructions,
@@ -75,6 +76,8 @@ async function start(request: Request): Promise<Response> {
         if (await getAvailableSessionSlots() <= 0) return fail(H_SLOTS_BUSY, 429);
       } catch {}
     }
+    // Bench: a bridge that already served a session holds a dead chromedriver; it is restarted first (lib/local-bridge.ts).
+    await freshBridgeBeforeSession();
     const session = await createSession({
       task: buildPilotTask(input.data, getBaliPaper(input.data.paper_id)),
       instructions: buildPilotInstructions(getBaliPaper(input.data.paper_id)),
@@ -85,6 +88,7 @@ async function start(request: Request): Promise<Response> {
       idempotencyKey: input.data.idempotency_key,
     });
     browser.commit(session.id, input.data.idempotency_key);
+    await rememberBridgeForSession();
     bindSessionPaper(session.id, input.data.paper_id);
     if (input.data.document_id) bindSessionDocument(session.id, documentPaths[0], photoPaths[0], ticketPaths[0]);
     return Response.json({ session_id: session.id, status: session.status }, { status: 201 });
