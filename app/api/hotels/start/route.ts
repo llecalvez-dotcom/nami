@@ -1,11 +1,11 @@
 import { API_LIMITS, guard, readJsonLimited } from "@/lib/api-guard";
 import { createSession, getAvailableSessionSlots } from "@/lib/h-agent";
 import { AgentPreflightError, preflightBrowser } from "@/lib/agent-preflight";
-import { ensureBlankAgentTab } from "@/lib/agent-tab";
+import { openSearchTab } from "@/lib/agent-tab";
 import { freshBridgeBeforeSession, rememberBridgeForSession } from "@/lib/local-bridge";
 import { fail, H_SLOTS_BUSY, hErrorResponse } from "@/lib/paper-agent";
 import { bindFlightsSession } from "@/lib/flights-agent";
-import { buildHotelsInstructions, buildHotelsTask, HOTELS_MAX_STEPS, HOTELS_MAX_TIME_S, HOTELS_TOOLS, HotelsStartSchema } from "@/lib/hotels-agent";
+import { buildHotelsInstructions, buildHotelsTask, googleHotelsUrl, HOTELS_MAX_STEPS, HOTELS_MAX_TIME_S, HOTELS_TOOLS, HotelsStartSchema } from "@/lib/hotels-agent";
 
 // Module Hôtel: starts the Google Hotels session in the traveller's Chrome. Same machinery as the flights.
 export async function POST(request: Request) {
@@ -34,7 +34,7 @@ async function start(request: Request): Promise<Response> {
     try {
       if (await getAvailableSessionSlots() <= 0) return fail(H_SLOTS_BUSY, 429);
     } catch {}
-    await ensureBlankAgentTab();
+    await openSearchTab(googleHotelsUrl(input.data));
     await freshBridgeBeforeSession();
     const session = await createSession({
       task: buildHotelsTask(input.data),

@@ -1,20 +1,23 @@
 import { z } from "zod";
 import { sendToolResult } from "@/lib/h-agent";
 import { fail, hErrorResponse, SESSION_ID } from "@/lib/paper-agent";
-import { FlightChoiceSchema, flightChoiceResult } from "@/lib/flights-agent";
+import { FlightOptionSchema } from "@/lib/contracts";
+import { FlightChoiceSchema, flightChoiceResult, returnFlightResult } from "@/lib/flights-agent";
 import { readFlightsPageText } from "@/lib/flights/page";
 import { enoughFlights, PAGE_UNREADABLE, readFlights, retryMessage } from "@/lib/flights/read";
+import { showOutboundFlight, showReturnFlight } from "@/lib/flights/show-row";
 
 const ToolReqSchema = z.object({
-  tool_name: z.literal("report_flights"),
+  tool_name: z.enum(["report_flights", "show_return_flight"]),
   args: z.record(z.string(), z.unknown()).default({}),
   id: z.string().min(1).nullable(),
 });
 
 // Two steps for one report_flights call. Without a choice: Nami reads the flights in the text of the Google Flights
 // tab (the agent usually reports none), falls back on the reported flights that are really there, and returns them
-// (H keeps waiting). With a choice: the traveller's flight goes back to H as the tool result.
-const BodySchema = z.object({ tool_req: ToolReqSchema, choice: FlightChoiceSchema.optional() });
+// (H keeps waiting). With a choice: the traveller's flight goes back to H as the tool result. show_return_flight comes
+// with the flight chosen (return_for): Nami finds its return on the page and tells H which row to click.
+const BodySchema = z.object({ tool_req: ToolReqSchema, choice: FlightChoiceSchema.optional(), return_for: FlightOptionSchema.optional() });
 
 export async function POST(request: Request, ctx: RouteContext<"/api/agent/[id]/flights">) {
   const { id } = await ctx.params;
@@ -22,8 +25,14 @@ export async function POST(request: Request, ctx: RouteContext<"/api/agent/[id]/
   const input = BodySchema.safeParse(await request.json().catch(() => null));
   if (!input.success) return fail("Invalid flights report.", 400);
   try {
+    if (input.data.tool_req.tool_name === "show_return_flight") {
+      const found = input.data.return_for ? await showReturnFlight(input.data.return_for.price) : "no_match";
+      await sendToolResult(id, input.data.tool_req, returnFlightResult(found));
+      return Response.json({ ok: true }, { status: 202 });
+    }
     if (input.data.choice) {
-      await sendToolResult(id, input.data.tool_req, flightChoiceResult(input.data.choice.flight));
+      const shown = await showOutboundFlight(input.data.choice.flight);
+      await sendToolResult(id, input.data.tool_req, flightChoiceResult(input.data.choice.flight, shown));
       return Response.json({ ok: true }, { status: 202 });
     }
     const pageText = await readFlightsPageText();

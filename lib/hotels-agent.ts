@@ -4,6 +4,7 @@ import { HotelCriterionSchema, HotelOptionSchema, type HotelCriterion, type Hote
 import type { ToolSpec } from "@/lib/h-agent";
 import { ASK_USER_TOOL, LOCAL_SESSION_ID, REPORT_READY_TOOL } from "@/lib/paper-agent";
 import { formatHotelPrice } from "@/lib/hotels/rank";
+import type { Shown } from "@/lib/flights/show-row";
 
 // Module Hôtel: like the flights, the agent opens Google Hotels in the traveller's Chrome and tells Nami when the list is
 // on screen; Nami reads the hotels herself (lib/hotels/extract.ts), and once the traveller has chosen one, the agent opens
@@ -71,8 +72,8 @@ const PAGE_ACTIONS: Record<HotelCriterion, string> = {
 
 export function buildHotelsTask(input: HotelsStart): string {
   return [
-    "Work in the blank tab, never in another one: the other tabs hold the traveller's forms and flight, so never navigate or close them. If the current tab is not about:blank, first call switch_tab_web to go to the about:blank tab.",
-    `Then, in that tab, open exactly this URL: ${googleHotelsUrl(input)}`,
+    "Google Hotels is normally already open with this search in the active tab: do not open it again. Work only in that tab: the other tabs hold the traveller's forms and flight, so never navigate or close them.",
+    `If the current tab is not Google Hotels, first call switch_tab_web to go to the Google Hotels tab, or to the about:blank tab if there is none. If that tab is about:blank, open exactly this URL: ${googleHotelsUrl(input)}`,
     "If the cookie consent page appears first, click \"Tout refuser\" or \"Reject all\".",
     PAGE_ACTIONS[input.criterion ?? "best"],
     "Then call wait_web for 2 seconds, scroll down the list of hotels once so the traveller sees it, and call report_hotels. Do not read the hotels: Nami reads them herself.",
@@ -81,8 +82,12 @@ export function buildHotelsTask(input: HotelsStart): string {
   ].join("\n");
 }
 
-export function hotelChoiceResult(hotel: HotelOption): string {
-  return `The traveller chose this hotel: ${hotel.name}, from ${formatHotelPrice(hotel)} a night, rated ${hotel.rating}/5. Click it in the list, by its name, then click its "Prices" tab, and call report_ready.`;
+// After a tool result the agent gets no new screenshot: when Nami has moved the page, it must look again before clicking.
+export function hotelChoiceResult(hotel: HotelOption, shown: Shown = "missing"): string {
+  const click = shown === "scrolled"
+    ? "Nami has just brought it to the middle of the screen: call wait_web for 1 second to see it, then click it, by its name"
+    : "Click it in the list, by its name";
+  return `The traveller chose this hotel: ${hotel.name}, from ${formatHotelPrice(hotel)} a night, rated ${hotel.rating}/5. ${click}, then click its "Prices" tab, and call report_ready.`;
 }
 
 export const HOTELS_RETRY = "Nami could not read enough hotels yet. Call wait_web for 2 seconds, then call report_hotels again. After two tries, call ask_user and tell the traveller to choose a hotel in the tab.";

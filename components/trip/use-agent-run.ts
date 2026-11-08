@@ -7,7 +7,7 @@ import { getTrip, saveTrip, subscribeTrips } from "@/lib/trip-store";
 import { agentStateMessage, postAgentState } from "@/lib/agent-overlay";
 import { toolCallKey } from "@/lib/agent-changes";
 import { applyAgentChanges, askUserFromAgent, markToolHandled, pushAgentMessage, reportReady, recordPassportUpload } from "@/lib/trip-state";
-import { FLIGHTS_REREAD_MESSAGE, FLIGHTS_UNREADABLE_MESSAGE, offerFlights } from "@/lib/flights/flow";
+import { FLIGHTS_REREAD_MESSAGE, FLIGHTS_UNREADABLE_MESSAGE, flightsResult, offerFlights } from "@/lib/flights/flow";
 import { HOTELS_REREAD_MESSAGE, HOTELS_UNREADABLE_MESSAGE, offerHotels } from "@/lib/hotels/flow";
 import type { FlightOption, HotelOption } from "@/lib/contracts";
 
@@ -71,6 +71,15 @@ export async function sendFlightChoice(sessionId: string, toolReq: ToolRequest, 
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tool_req: toolReq, choice: { flight } }),
+  });
+  if (!response.ok) throw new Error(await readError(response));
+}
+
+async function showReturnFlight(sessionId: string, toolReq: ToolRequest, chosen: FlightOption | undefined): Promise<void> {
+  const response = await fetch(`/api/agent/${encodeURIComponent(sessionId)}/flights`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tool_req: toolReq, return_for: chosen }),
   });
   if (!response.ok) throw new Error(await readError(response));
 }
@@ -144,6 +153,19 @@ export async function handleToolCall(tripId: string, sessionId: string, call: To
     if (report.retry) saveTrip(pushAgentMessage(markToolHandled(latest, call), FLIGHTS_REREAD_MESSAGE));
     else if (report.unreadable) saveTrip(pushAgentMessage(markToolHandled(latest, call), FLIGHTS_UNREADABLE_MESSAGE));
     else saveTrip(offerFlights(latest, call, report.flights));
+    return;
+  }
+  if (call.tool_name === "show_return_flight") {
+    try {
+      await showReturnFlight(sessionId, call, flightsResult(trip.agent_run)?.chosen);
+    } catch (error) {
+      const latest = getTrip(tripId);
+      if (latest) saveTrip(pushAgentMessage(latest, `Could not find the return flight, retrying: ${(error as Error).message}`));
+      await sleep(RETRY_MS);
+      return;
+    }
+    const latest = getTrip(tripId);
+    if (latest) saveTrip(markToolHandled(latest, call));
     return;
   }
   if (call.tool_name === "report_hotels") {

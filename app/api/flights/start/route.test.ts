@@ -49,7 +49,7 @@ describe("POST /api/flights/start", () => {
     const body = sentBody();
     expect(body.messages[0].message).toContain("https://www.google.com/travel/flights?q=Flights+from+Paris+to+Bali+on+2026-11-23+through+2026-12-03+for+2+adults+economy&hl=en&curr=EUR");
     expect(body.agent.instructions).toContain("Never sign in");
-    expect(body.agent.tools.map((t: { name: string }) => t.name)).toEqual(["ask_user", "report_ready", "report_flights"]);
+    expect(body.agent.tools.map((t: { name: string }) => t.name)).toEqual(["ask_user", "report_ready", "report_flights", "show_return_flight"]);
     expect(body.max_steps).toBe(40);
     expect(body.max_time_s).toBe(600);
     expect(body.agent.environments[0].session_id).toBe("local-42");
