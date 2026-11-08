@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { filePaths, readAgentSettings } from "@/components/trip/agent-settings";
-import { cancelAgent, rawToolReq, sendAgentAnswer, sendFlightChoice } from "@/components/trip/use-agent-run";
+import { cancelAgent, rawToolReq, sendAgentAnswer, sendFlightChoice, sendHotelChoice } from "@/components/trip/use-agent-run";
 import { flightsAnswered, flightsStartBody, FLIGHTS_RETRY_PROPOSAL, isChoiceQuestion, isCriterionQuestion, openFlightQuestion, pendingFlightChoice, startFlightsSession } from "@/lib/flights/flow";
 import { googleFlightsUrl } from "@/lib/flights-agent";
+import { googleHotelsUrl } from "@/lib/hotels-agent";
+import { hotelsAnswered, hotelsStartBody, HOTELS_RETRY_PROPOSAL, isHotelChoiceQuestion, isHotelCriterionQuestion, openHotelQuestion, pendingHotelChoice, startHotelsSession } from "@/lib/hotels/flow";
 import type { PassportFields } from "@/lib/contracts";
 import { H_NOT_ANSWERING_MESSAGE } from "@/lib/agent-changes";
 import { createVisaStartAttempt } from "@/lib/paper-start-client";
@@ -65,6 +67,17 @@ async function startFlightsSessionRequest(trip: Trip, onBusy?: (message: string)
     { scope: `${trip.id}:flights`, onBusy, url: "/api/flights/start" },
   );
   return { sessionId: await attempt(), url: googleFlightsUrl(body) };
+}
+
+// Module Hôtel: the Google Hotels session, from the request only.
+async function startHotelsSessionRequest(trip: Trip, onBusy?: (message: string) => void): Promise<{ sessionId: string; url: string }> {
+  const body = hotelsStartBody(trip);
+  if (!body) throw new Error("I need your dates to search hotels.");
+  const attempt = createVisaStartAttempt(
+    { ...body, local_session_id: readAgentSettings().local_session_id.trim() },
+    { scope: `${trip.id}:hotels`, onBusy, url: "/api/hotels/start" },
+  );
+  return { sessionId: await attempt(), url: googleHotelsUrl(body) };
 }
 
 async function discover(url: string, pick: (json: Record<string, unknown>) => boolean): Promise<boolean> {
@@ -168,6 +181,25 @@ export function useTripActions({
     }
   };
 
+  const startHotelsRun = async (automatic = false) => {
+    const current = latest();
+    if (!current || starting || current.sample || isAgentActive(current.agent_run)) return;
+    setStarting(true);
+    try {
+      const { sessionId, url } = await startHotelsSessionRequest(current, tellBusy);
+      const run = startHotelsSession(latest() ?? current, sessionId, url, new Date());
+      const started = automatic ? markAutoRestart(run, "done") : run;
+      update(started);
+      onStarted?.(started);
+    } catch (error) {
+      const now = latest() ?? current;
+      const told = pushAgentMessage(automatic ? markAutoRestart(now, "failed") : now, automatic ? H_NOT_ANSWERING_MESSAGE : (error as Error).message);
+      update(pushProposal(told, HOTELS_RETRY_PROPOSAL.action, HOTELS_RETRY_PROPOSAL.text, HOTELS_RETRY_PROPOSAL.accept_label, HOTELS_RETRY_PROPOSAL.decline_label));
+    } finally {
+      setStarting(false);
+    }
+  };
+
   // H opened the session and never acted (bench 2026-11-08): the same session starts again once, by itself, with the
   // same paper, documents, dates and criterion. Nothing is asked again; the status line says "H is slow, starting again".
   const dueRestart = trip?.agent_run?.auto_restart === "due" ? trip.agent_run.session_id : null;
@@ -180,6 +212,7 @@ export function useTripActions({
       if (!current || !run || run.session_id !== dueRestart || run.auto_restart !== "due" || current.sample) return;
       update(markAutoRestart(current, "taken"));
       if (run.kind === "flights") return void startFlightsRun(true);
+      if (run.kind === "hotels") return void startHotelsRun(true);
       const paperId = run.paper_id ?? "evoa";
       const action = paperId === "arrival_card" ? "create_arrival_card" : "create_visa";
       const item = current.conversation.findLast((i) => i.kind === "proposal" && i.action === action && i.decision === "accepted");
@@ -203,6 +236,7 @@ export function useTripActions({
     // "Search again" (or yes to the flights) with the city, the dates and the criterion already answered: no question
     // again, the Google Flights session starts now with the same parameters (lib/flights/flow.ts, startFlightsFlow).
     if (accepted && item?.kind === "proposal" && item.action === "flights" && flightsAnswered(next)) void startFlightsRun();
+    if (accepted && item?.kind === "proposal" && item.action === "hotels" && hotelsAnswered(next)) void startHotelsRun();
   };
 
   const sendChoice = async () => {
@@ -217,10 +251,23 @@ export function useTripActions({
     }
   };
 
+  const sendHotel = async () => {
+    const current = latest();
+    const choice = current ? pendingHotelChoice(current) : null;
+    if (!current?.agent_run || !choice) return;
+    try {
+      await sendHotelChoice(current.agent_run.session_id, choice.tool_req, choice.hotel);
+    } catch (error) {
+      update(pushAgentMessage(latest() ?? current, `Your choice could not be sent to the agent: ${(error as Error).message}`));
+    }
+  };
+
   // Spoken or tapped, the same follow-up: the search once the criterion is settled, the choice once a flight is.
   const followFlights = (item: Trip["conversation"][number] | undefined, next: Trip) => {
     if (isCriterionQuestion(item) && !openFlightQuestion(next, "flight_criterion")) void startFlightsRun();
     if (isChoiceQuestion(item) && pendingFlightChoice(next)) void sendChoice();
+    if (isHotelCriterionQuestion(item) && !openHotelQuestion(next, "hotel_criterion")) void startHotelsRun();
+    if (isHotelChoiceQuestion(item) && pendingHotelChoice(next)) void sendHotel();
   };
 
   const answer = (itemId: string, value: string, label: string) => {

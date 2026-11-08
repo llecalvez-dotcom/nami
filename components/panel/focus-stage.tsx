@@ -42,9 +42,9 @@ type Props = Handlers & {
   t: Translate;
 };
 
-const READY_TITLE: Record<Paper, string> = { visa: "Your visa is ready.", arrival_card: "Your arrival card is ready.", flights: "Your flight is found." };
-const AGENT_TITLE: Record<Paper, string> = { visa: "I'm filling in your visa.", arrival_card: "I'm filling in your arrival card.", flights: "I'm searching your flights." };
-export const PAPER_COLORS: Record<Paper, string> = { visa: "var(--np-lagoon)", arrival_card: "var(--np-coral)", flights: "var(--np-sky)" };
+const READY_TITLE: Record<Paper, string> = { visa: "Your visa is ready.", arrival_card: "Your arrival card is ready.", flights: "Your flight is found.", hotels: "Your hotel is found." };
+const AGENT_TITLE: Record<Paper, string> = { visa: "I'm filling in your visa.", arrival_card: "I'm filling in your arrival card.", flights: "I'm searching your flights.", hotels: "I'm searching your hotels." };
+export const PAPER_COLORS: Record<Paper, string> = { visa: "var(--np-lagoon)", arrival_card: "var(--np-coral)", flights: "var(--np-sky)", hotels: "var(--np-coral)" };
 
 export const STAGE_TEXTS = [
   "Nami",
@@ -185,7 +185,7 @@ function Wall(props: Props) {
           {t("Nami")}
         </p>
         <Sentence text={t(READY_TITLE[ready])} size="xl" />
-        <Secondary>{t(ready === "flights" ? "Book it in the tab when you want, Nami never pays." : "Check it in the tab, then send it yourself.")}</Secondary>
+        <Secondary>{t(ready === "flights" || ready === "hotels" ? "Book it in the tab when you want, Nami never pays." : "Check it in the tab, then send it yourself.")}</Secondary>
         <p className="mt-6 border-t border-[var(--np-line)] pt-5 text-[17px] leading-snug font-medium">{sentenceOf(item)}</p>
       </>
     );

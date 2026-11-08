@@ -8,7 +8,8 @@ import { agentStateMessage, postAgentState } from "@/lib/agent-overlay";
 import { toolCallKey } from "@/lib/agent-changes";
 import { applyAgentChanges, askUserFromAgent, markToolHandled, pushAgentMessage, reportReady, recordPassportUpload } from "@/lib/trip-state";
 import { FLIGHTS_REREAD_MESSAGE, FLIGHTS_UNREADABLE_MESSAGE, offerFlights } from "@/lib/flights/flow";
-import type { FlightOption } from "@/lib/contracts";
+import { HOTELS_REREAD_MESSAGE, HOTELS_UNREADABLE_MESSAGE, offerHotels } from "@/lib/hotels/flow";
+import type { FlightOption, HotelOption } from "@/lib/contracts";
 
 type Secrets = readonly (string | null | undefined)[];
 const MAX_FAILURES = 5;
@@ -74,6 +75,22 @@ export async function sendFlightChoice(sessionId: string, toolReq: ToolRequest, 
   if (!response.ok) throw new Error(await readError(response));
 }
 
+type HotelsReport = { hotels: HotelOption[]; retry?: boolean; unreadable?: boolean };
+
+async function postHotels(sessionId: string, body: unknown): Promise<Response> {
+  const response = await fetch(`/api/agent/${encodeURIComponent(sessionId)}/hotels`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  return response;
+}
+
+export async function sendHotelChoice(sessionId: string, toolReq: ToolRequest, hotel: HotelOption): Promise<void> {
+  await postHotels(sessionId, { tool_req: toolReq, choice: { hotel } });
+}
+
 export async function cancelAgent(sessionId: string): Promise<void> {
   const response = await fetch(`/api/agent/${encodeURIComponent(sessionId)}/cancel`, { method: "POST" });
   if (!response.ok) throw new Error(await readError(response));
@@ -127,6 +144,23 @@ export async function handleToolCall(tripId: string, sessionId: string, call: To
     if (report.retry) saveTrip(pushAgentMessage(markToolHandled(latest, call), FLIGHTS_REREAD_MESSAGE));
     else if (report.unreadable) saveTrip(pushAgentMessage(markToolHandled(latest, call), FLIGHTS_UNREADABLE_MESSAGE));
     else saveTrip(offerFlights(latest, call, report.flights));
+    return;
+  }
+  if (call.tool_name === "report_hotels") {
+    let report: HotelsReport;
+    try {
+      report = (await (await postHotels(sessionId, { tool_req: call })).json()) as HotelsReport;
+    } catch (error) {
+      const latest = getTrip(tripId);
+      if (latest) saveTrip(pushAgentMessage(latest, `Could not read the hotels, retrying: ${(error as Error).message}`));
+      await sleep(RETRY_MS);
+      return;
+    }
+    const latest = getTrip(tripId);
+    if (!latest) return;
+    if (report.retry) saveTrip(pushAgentMessage(markToolHandled(latest, call), HOTELS_REREAD_MESSAGE));
+    else if (report.unreadable) saveTrip(pushAgentMessage(markToolHandled(latest, call), HOTELS_UNREADABLE_MESSAGE));
+    else saveTrip(offerHotels(latest, call, report.hotels));
     return;
   }
   if (call.tool_name === "pick_option" || call.tool_name === "fill_field") {

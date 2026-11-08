@@ -126,7 +126,7 @@ export type AgentQuestion = z.infer<typeof AgentQuestionSchema>;
 
 export const AgentRunSchema = z.object({
   session_id: z.string().min(1),
-  kind: z.enum(["paper", "flights"]),
+  kind: z.enum(["paper", "flights", "hotels"]),
   // Which official form the agent fills (absent on runs saved before the arrival card: the e-VOA).
   paper_id: z.enum(["evoa", "arrival_card"]).optional(),
   started_at: IsoDateTime,
@@ -196,3 +196,19 @@ export const FlightOptionSchema = z.object({
   index: z.number().int().positive(),
 });
 export type FlightOption = z.infer<typeof FlightOptionSchema>;
+
+export const HotelCriterionSchema = z.enum(["cheapest", "best_rated", "best"]);
+export type HotelCriterion = z.infer<typeof HotelCriterionSchema>;
+
+export const HotelOptionSchema = z.object({
+  // Position among the hotels read on the page (1 = first).
+  index: z.number().int().positive(),
+  name: z.string().trim().min(1).max(200),
+  // For one night, as Google Hotels shows it.
+  price: z.number().finite().nonnegative(),
+  currency: z.string().trim().min(1).max(8),
+  rating: z.number().min(0).max(5),
+  reviews: z.number().int().nonnegative(),
+  stars: z.number().int().min(1).max(5).nullable(),
+});
+export type HotelOption = z.infer<typeof HotelOptionSchema>;

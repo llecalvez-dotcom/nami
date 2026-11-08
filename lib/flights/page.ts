@@ -30,14 +30,14 @@ async function listTabs(urls: string[]): Promise<CdpTab[]> {
 }
 
 // null when no Google Flights tab is open or Chrome does not answer: the caller treats the page as unreadable.
-export async function readFlightsPageText(urls = cdpUrls(), timeoutMs = 6000): Promise<string | null> {
+export async function readFlightsPageText(urls = cdpUrls(), timeoutMs = 6000, section = "/travel/flights"): Promise<string | null> {
   let tabs: CdpTab[];
   try {
     tabs = await listTabs(urls);
   } catch {
     return null;
   }
-  const tab = tabs.find((t) => t.type === "page" && t.webSocketDebuggerUrl && onFlightsDomain(t.url) && t.url.includes("/travel/flights"));
+  const tab = tabs.find((t) => t.type === "page" && t.webSocketDebuggerUrl && onFlightsDomain(t.url) && t.url.includes(section));
   if (!tab?.webSocketDebuggerUrl) return null;
   const ws = new WebSocket(tab.webSocketDebuggerUrl);
   return new Promise<string | null>((resolve) => {

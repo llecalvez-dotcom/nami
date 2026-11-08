@@ -458,14 +458,15 @@ describe("the flights session", () => {
     expect(kept.request.arrival_at).toBe(REQUEST.arrival_at);
   });
 
-  it("report_ready ends the run on the booking page with the final message, no proposal", () => {
+  it("report_ready ends the run on the booking page with the final message, then offers a hotel", () => {
     let trip = offerFlights(searching(), REPORT, FLIGHTS);
     const item = last(trip) as Extract<Trip["conversation"][number], { kind: "question" }>;
     trip = answerQuestion(trip, item.id, "2", item.options[0].label);
     trip = reportReady(trip, { tool_name: "report_ready", args: { summary: "Scoot 646 €", filled_fields: [] }, id: "call_2" }, []);
     expect(trip.agent_run).toMatchObject({ state: "interrupted", drained: true });
     const texts = agentTexts(trip);
-    expect(texts.at(-1)).toBe(`${FLIGHT_READY_PREFIX}Scoot at 646 euros, one stop, 22 h 05, book it when you want, Nami never pays. Hotels are coming soon.`);
+    expect(texts.at(-1)).toBe(`${FLIGHT_READY_PREFIX}Scoot at 646 euros, one stop, 22 h 05, book it when you want, Nami never pays.`);
+    expect(last(trip)).toMatchObject({ kind: "proposal", action: "hotels", decision: null });
     expect(spokenShort(texts.at(-1)!)).toBe("Your flight is found: Scoot at 646 euros, one stop, 22 h 05, book it when you want, Nami never pays.");
     expect(isFlightReadyMessage(texts.at(-1)!)).toBe(true);
     expect(readyPaper(trip.conversation, last(trip))).toBe("flights");
