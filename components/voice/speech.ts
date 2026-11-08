@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
+import { autoListenEnabled, listenAfterSpeech } from "@/lib/voice/auto-listen";
 import { alreadyHeard, awaitsAnswer, speechPlan } from "@/lib/voice/conversation-speech";
 import { createSpeechQueue, type SpeechEngine, type SpeechQueue } from "@/lib/voice/speech-queue";
 import type { ConversationItem } from "@/lib/trip-state";
@@ -150,7 +151,8 @@ export function useMuted(): boolean {
 // Reads aloud every new item from Nami or the agent, one at a time, in order. What counts as already heard when the page
 // opens is decided on the whole conversation (`all`): the translated items arrive later, and a reload of the panel
 // re-read old messages aloud (measured 2026-11-07, voices heard with no Nami page in sight).
-export function useConversationSpeech(items: ConversationItem[], all: ConversationItem[] = items) {
+// onlyFocus: the side panel, where only the sentence on the screen is said (speechPlan).
+export function useConversationSpeech(items: ConversationItem[], all: ConversationItem[] = items, onlyFocus = false) {
   const heard = useRef<Set<string> | null>(null);
   const awaiting = useRef<Set<string>>(new Set());
 
@@ -165,12 +167,12 @@ export function useConversationSpeech(items: ConversationItem[], all: Conversati
   useEffect(() => {
     const speech = getQueue();
     heard.current ??= alreadyHeard(all);
-    const plan = speechPlan(items, heard.current, awaiting.current);
+    const plan = speechPlan(items, heard.current, awaiting.current, onlyFocus);
     if (plan.interrupted) speech?.clear();
     for (const { id, text } of plan.toRead) speech?.enqueue(id, text);
     items.forEach((item) => heard.current!.add(item.id));
     awaiting.current = new Set(items.filter(awaitsAnswer).map((item) => item.id));
-  }, [items, all]);
+  }, [items, all, onlyFocus]);
 }
 
 // True while Nami is saying something aloud (the side panel's wave follows it).
@@ -182,5 +184,11 @@ export function useSpeaking(): boolean {
   );
 }
 
-// The microphone never opens by itself (Clément, 2026-11-08, real test: it heard the speakers, Gladia transcribed
-// noise and Nami switched language). It opens on a click or a tap only: see WaveMic and MicButton.
+// Opens the microphone of the side panel's card once Nami has finished reading it (lib/voice/auto-listen.ts).
+export function useListenAfterSpeech(itemId: string, start: (mode: "auto") => void | Promise<void>) {
+  useEffect(() => {
+    const speech = getQueue();
+    if (!speech || !autoListenEnabled()) return;
+    return listenAfterSpeech(speech, itemId, start);
+  }, [itemId, start]);
+}

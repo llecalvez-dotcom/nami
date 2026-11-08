@@ -42,12 +42,20 @@ export function alreadyHeard(items: ConversationItem[]): Set<string> {
   return new Set(items.slice(0, last + 1).map((item) => item.id));
 }
 
+// The first item still waiting for an answer, or the last item from Nami or the agent: the one sentence the side panel shows.
+export function focusItem(items: readonly ConversationItem[]): ConversationItem | null {
+  return items.find(awaitsAnswer) ?? items.findLast((item) => item.kind !== "user") ?? null;
+}
+
 // Items to read now, in order, and whether the queue must be cleared first (an item being read was just answered).
-export function speechPlan(items: ConversationItem[], heard: Set<string>, awaiting: Set<string>) {
+// onlyFocus (side panel, Nathan 2026-11-08: « à l'oral c'est plus long qu'à l'écrit »): only the sentence on the screen is
+// said, and one that has just left the screen is cut.
+export function speechPlan(items: ConversationItem[], heard: Set<string>, awaiting: Set<string>, onlyFocus = false) {
   const interrupted = items.some((item) => awaiting.has(item.id) && !awaitsAnswer(item));
+  const focus = onlyFocus ? focusItem(items) : null;
   const toRead = items
-    .filter((item) => !heard.has(item.id))
+    .filter((item) => !heard.has(item.id) && (!onlyFocus || item === focus))
     .map((item) => ({ id: item.id, text: speechText(item) }))
     .filter((entry): entry is { id: string; text: string } => entry.text !== null);
-  return { interrupted, toRead };
+  return { interrupted: interrupted || (onlyFocus && toRead.length > 0), toRead };
 }

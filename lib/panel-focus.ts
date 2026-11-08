@@ -1,4 +1,4 @@
-import { awaitsAnswer } from "@/lib/voice/conversation-speech";
+import { focusItem } from "@/lib/voice/conversation-speech";
 import type { AgentRun } from "@/lib/contracts";
 import { flightsResult } from "@/lib/flights/flow";
 import { isTerminalStatus } from "@/lib/h-agent";
@@ -11,10 +11,7 @@ import { isFlightQuestion, isFlightReadyMessage } from "@/lib/flights/flow";
 // "flights" is the third one: the flight search (ticket 18), evening sky.
 export type Paper = "visa" | "arrival_card" | "flights";
 
-// The first item still waiting for an answer, or the last item from Nami or the agent.
-export function focusItem(items: readonly ConversationItem[]): ConversationItem | null {
-  return items.find(awaitsAnswer) ?? items.findLast((item) => item.kind !== "user") ?? null;
-}
+export { focusItem };
 
 // The paper just made ready by the agent, when the item in focus is what comes right after it.
 export function readyPaper(items: readonly ConversationItem[], focus: ConversationItem | null): Paper | null {

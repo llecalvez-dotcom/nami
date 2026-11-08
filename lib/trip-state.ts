@@ -144,16 +144,6 @@ function proposeFlights(trip: Trip, proposal: NewConversationItem = FLIGHTS_PROP
   return push(trip, proposal);
 }
 
-// The second paper, once the visa is done (Nathan, 2026-11-07): the same way, in the same tab.
-const ARRIVAL_CARD_PROPOSAL: NewConversationItem = {
-  kind: "proposal",
-  action: "create_arrival_card",
-  text: "Next, your All Indonesia arrival card: it is required to enter Bali. Shall I fill it in too? I stop before anything is sent.",
-  accept_label: "Fill in my arrival card",
-  decline_label: "Not now",
-  decision: null,
-};
-
 // After a run that did not reach its end, the same paper is proposed again: on 2026-11-07 the arrival card never opened
 // because the local browser bridge was restarting, and the only way back was to redo the whole trip.
 function retryProposal(paperId: "evoa" | "arrival_card"): NewConversationItem {
@@ -719,8 +709,8 @@ export function reportReady(trip: Trip, call: ToolRequest, secrets: readonly (st
     },
     { kind: "agent", text: paperId === "evoa" ? VISA_READY_MESSAGE : ARRIVAL_CARD_READY_MESSAGE, list: filled },
   );
-  // After the visa, the arrival card; after the arrival card, the flights.
-  return paperId === "evoa" ? push(ready, ARRIVAL_CARD_PROPOSAL) : proposeFlights(ready, FLIGHTS_AFTER_VISA);
+  // After the visa, straight to the flights: Nami no longer offers the arrival card (Nathan, 2026-11-08).
+  return proposeFlights(ready, FLIGHTS_AFTER_VISA);
 }
 
 export function markToolHandled(trip: Trip, call: ToolRequest): Trip {

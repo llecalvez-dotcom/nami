@@ -351,7 +351,7 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
 
   // Nami answers in the language the traveller speaks (detected by Gladia), the agent's steps included.
   const shownItems = useTranslatedConversation(trip.conversation, language);
-  useConversationSpeech(shownItems, trip.conversation);
+  useConversationSpeech(shownItems, trip.conversation, true);
   const translationsVersion = useTranslationsVersion();
   // The agent's steps already there when the panel opens are not read again.
   const spokenStep = useRef({ index: trip.agent_steps.length - 1, at: 0 });
@@ -616,14 +616,13 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
     { label: "Passport", state: passport !== null ? "done" : "todo", onOpen: passport !== null ? () => { setEditing(true); setManual(true); } : undefined },
     { label: "Photo", state: photoDocumentId !== null ? "done" : "todo" },
     paperMark("Visa", has(VISA_READY_MESSAGE), "visa"),
-    paperMark("Arrival card", has(ARRIVAL_CARD_READY_MESSAGE), "arrival_card"),
     paperMark("Flight", trip.conversation.some((item) => item.kind === "agent" && isFlightReadyMessage(item.text)), "flights"),
   ];
 
   const showCard = manual || reconfirm;
   const compact = passport !== null && !editing;
   const paper = agent?.paper ?? ready ?? paperInFocus(trip, focus);
-  const scene = sceneFor({ started: true, paper, visaReady: marks[2].state === "done", cardReady: marks[3].state === "done" });
+  const scene = sceneFor({ started: true, paper, visaReady: marks[2].state === "done", cardReady: has(ARRIVAL_CARD_READY_MESSAGE) });
 
   return (
     <div className="nami-panel relative flex h-dvh flex-col" data-paper={paper} data-scene={scene}>

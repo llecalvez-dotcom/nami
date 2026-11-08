@@ -1,4 +1,5 @@
 export const SILENCE_MS = 1500;
+export const NO_SPEECH_MS = 8_000;
 
 export function rms(samples: Float32Array): number {
   let sum = 0;
@@ -14,7 +15,7 @@ export function createSilenceDetector({ silenceMs = SILENCE_MS, minLevel = 0.015
   let floor: number | null = null;
   let heard = false;
   let quietSince: number | null = null;
-  return (level: number, now: number): boolean => {
+  const detector = (level: number, now: number): boolean => {
     floor = floor === null || level < floor ? level : floor + (level - floor) * 0.01;
     if (level > Math.max(minLevel, floor * ratio)) {
       heard = true;
@@ -24,5 +25,17 @@ export function createSilenceDetector({ silenceMs = SILENCE_MS, minLevel = 0.015
     if (!heard) return false;
     quietSince ??= now;
     return now - quietSince >= silenceMs;
+  };
+  return Object.assign(detector, { heard: () => heard });
+}
+
+// A microphone that opened by itself: "nothing" when nobody has spoken for noSpeechMs, so it closes without transcribing.
+export function createAutoListenWatcher(noSpeechMs = NO_SPEECH_MS, options: Options = {}) {
+  const silent = createSilenceDetector(options);
+  let startedAt: number | null = null;
+  return (level: number, now: number): "listening" | "silence" | "nothing" => {
+    startedAt ??= now;
+    if (silent(level, now)) return "silence";
+    return !silent.heard() && now - startedAt >= noSpeechMs ? "nothing" : "listening";
   };
 }
