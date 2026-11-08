@@ -7,13 +7,28 @@ export const H_AGENTS_API = "https://agp.eu.hcompany.ai/api/v2";
 const DEFAULT_AGENT_NAME = "nami-paper-agent";
 const REQUEST_TIMEOUT_MS = 30_000;
 export const CHANGES_WAIT_S = 20;
-const AGENT_MODELS = ["holo4-27b", "holo4-35b-a3b", "holo3-1-35b-a3b", "holo3-122b-a10b"] as const;
+// holo3-122b-a10b is left out: H's models page lists it as the only model without tools, and the agent needs ours.
+const AGENT_MODELS = ["holo4-27b", "holo4-35b-a3b", "holo3-1-35b-a3b"] as const;
 const AGENT_REASONING = ["disabled", "low", "medium", "xhigh"] as const;
 
 export function agentSettings(env: Record<string, string | undefined> = process.env) {
   return {
     model: AGENT_MODELS.find((model) => model === env.NAMI_AGENT_MODEL) ?? "holo4-27b",
     reasoning_effort: AGENT_REASONING.find((effort) => effort === env.NAMI_AGENT_REASONING) ?? "medium",
+  };
+}
+
+// settle_s: H waits this long after each browser action before the next screenshot (H's default 1, range 0 to 10).
+// markdown: the page's text sent with each screenshot. Measured on the e-VOA on 2026-11-08 (bench runs, report_ready
+// after the session start): settle 2 s 85 s; 1 s 66 to 73 s (3 of 3); 0.5 s 60 to 65 s (3 of 3), kept. Without the
+// page's text: 62 and 65 s, no gain, so the text stays (it helps read PRANCIS).
+export const DEFAULT_SETTLE_S = 0.5;
+
+export function browserSettings(env: Record<string, string | undefined> = process.env) {
+  const settle = Number(env.NAMI_AGENT_SETTLE_S);
+  return {
+    settle_s: env.NAMI_AGENT_SETTLE_S && Number.isFinite(settle) && settle >= 0 && settle <= 10 ? settle : DEFAULT_SETTLE_S,
+    markdown: env.NAMI_AGENT_MARKDOWN !== "off",
   };
 }
 
@@ -128,7 +143,7 @@ export function createSessionBody(input: CreateSessionInput) {
       instructions: input.instructions,
       // "web" on "user_device", attached to the session_id printed by `holo local browser` (your-browser).
       environments: [
-        { id: "browser", kind: "web", host: "user_device", session_id: input.localBrowserSessionId, settle_s: 2, mode: { type: "visual", markdown: true } },
+        (({ settle_s, markdown }) => ({ id: "browser", kind: "web", host: "user_device", session_id: input.localBrowserSessionId, settle_s, mode: { type: "visual", markdown } }))(browserSettings()),
       ],
       tools: input.tools,
       answer_format: PAPER_ANSWER_FORMAT,

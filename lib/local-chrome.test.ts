@@ -62,13 +62,13 @@ const evoaArrivalBlock = () => {
 
 
 describe("pickOption", () => {
-  it("returns screenshot-only guidance from the actual selection expression without resetting the selection", () => {
+  it("tells the agent to go on with the next list, without a new look, from the actual selection expression", () => {
     const select = { name: "selectCountry", disabled: false, value: "", options: [{ text: "FRANCE", value: "FR" }],
       getAttribute: () => null, closest: () => null, dispatchEvent: vi.fn() };
     vi.stubGlobal("document", { querySelectorAll: () => [select] });
     vi.stubGlobal("window", {});
     const result = eval(pickExpression("selectCountry", "FRANCE"));
-    expect(result).toBe("Picked FRANCE in selectCountry. The page already shows it. Do not reload or refresh the page or navigate away; take a screenshot and continue with the next field.");
+    expect(result).toBe("Picked FRANCE in selectCountry. The page already shows it. Do not reload or refresh the page or navigate away; continue with the next field (pick_option also works on lists that are not on screen). To look at the page, use wait_web with 1 second, never refresh_web.");
     expect(select.value).toBe("FR");
     expect(select.dispatchEvent.mock.calls.map(([event]) => event.type)).toEqual(["input", "change"]);
   });
@@ -92,11 +92,16 @@ describe("pickOption", () => {
     expect(events[1]).toMatchObject({ type: "select2:select", params: { data: { id: "FR" } } });
   });
 
-  it("gives screenshot-only guidance in the tool descriptions", () => {
+  it("never lets a tool description ask for a reload or a screenshot, and names wait_web to look after fill_field", () => {
     for (const tool of [PICK_OPTION_TOOL, UPLOAD_FILE_TOOL, FILL_FIELD_TOOL]) {
-      expect(tool.description).toMatch(/do not reload or refresh the page or navigate away/i);
-      expect(tool.description).toContain("take a screenshot");
+      expect(tool.description).toMatch(/do not reload or refresh the page or navigate away|without reloading or refreshing the page or navigating away/i);
       expect(tool.description).not.toContain("fresh look");
+    }
+    expect(FILL_FIELD_TOOL.description).toContain("look at the page with wait_web (1 second)");
+    expect(PICK_OPTION_TOOL.description).toContain("even when the list is not on screen");
+    expect(UPLOAD_FILE_TOOL.description).toContain("do what the result says next");
+    for (const tool of [PICK_OPTION_TOOL, UPLOAD_FILE_TOOL, FILL_FIELD_TOOL]) {
+      expect(tool.description).not.toContain("take a screenshot");
     }
   });
 
@@ -209,7 +214,7 @@ describe("fillField", () => {
     const result = await eval(fillExpression("Postal Code", "80361", 0));
     expect(postal.value).toBe("80361");
     expect(postal.dispatchEvent.mock.calls.map(([event]) => (event as { type: string }).type)).toEqual(["input", "change", "keyup"]);
-    expect(result).toBe("Filled postal code with 80361. The page then filled: province: BALI; city: KABUPATEN BADUNG. Do not reload or refresh the page or navigate away; take a screenshot and continue with the next field.");
+    expect(result).toBe("Filled postal code with 80361. The page then filled: province: BALI; city: KABUPATEN BADUNG. Do not reload or refresh the page or navigate away; look at the page with wait_web (1 second) and continue with the next field.");
   });
 
   it("goes through jQuery when the page has it, keyup included", async () => {

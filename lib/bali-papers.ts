@@ -19,6 +19,9 @@ export type BaliPaper = {
   stop_condition: string;
   // Path through the official menus, checked by hand; added to the task right after its first line.
   route_hint?: string;
+  // What the agent does right after Nami uploaded a file, told in the upload_file result so it needs no extra look.
+  // wait_for_text: Nami waits (a few seconds at most) until the page shows this text before answering.
+  after_upload?: Partial<Record<"passport" | "photo" | "return_ticket", { wait_for_text?: string; next: string }>>;
   observed_on: string;
   source_urls: string[];
 };
@@ -46,7 +49,16 @@ export const BALI_PAPERS: readonly BaliPaper[] = [
     // Decision of 2026-11-07, 21 h: the demo stops before any data is sent to the government.
     stop_condition: "Stop on step 1 of the application form, once the passport and the photo are uploaded or the page refuses them: never click Next there, because the next steps send the traveller's data to the government.",
     route_hint:
-      "The e-VOA is applied for on this visa selection page: do not look for another page or site. Pick, in this order: the passport country (for example FRANCE), then General, Family, or Social, then Tourism, Family Visit, and Transit, then B1 - Tourist (Visa On Arrival). The length of stay (30 Days) fills itself. Then click Detail & Apply: a window with the visa conditions opens; click Apply in it to reach the application form. When pick_option answers that an option is picked, it is: do not reopen that menu to pick it by hand, go to the next one. On the form, step 1 asks for the passport and the profile photo: use upload_file for each. After the passport upload the site shows its reading in a window with Reupload and Ok at the bottom: scroll_web does not move that window, press Page Down to reach Ok. The site fills some fields from the passport and shows countries in Indonesian: for a French passport, Passport/Country/Region and Issuing Country show PRANCIS, which is France; that is correct, leave it. For any other passport, check that both fields match the passport's country. If the site puts the whole name in First Name, set First Name to the given names and Last Name to every word of the passport surname (for example LE CALVEZ, not CALVEZ). Address in Indonesia: write the Postal Code with fill_field (field Postal Code), not by typing: the page then fills Province, City, District and Village; if they stay empty on the screenshot, call ask_user. Port of Entry Mode is Airport; for Bali, Port of Entry is listed as NGURAH RAI AIRPORT: pick it with pick_option (field Port of Entry). Return Ticket is a required PDF: call upload_file with purpose return_ticket; if Nami has no return ticket, call ask_user and never upload another file there.",
+      "The e-VOA is applied for on this visa selection page: do not look for another page or site. Pick, in this order, one after the other with pick_option and without scrolling (pick_option works on lists that are not on screen; the fourth list appears below once the third is picked): the passport country (for example FRANCE), then General, Family, or Social, then Tourism, Family Visit, and Transit, then B1 - Tourist (Visa On Arrival). The length of stay (30 Days) fills itself. Then press Page Down once (never refresh_web): Detail & Apply is then on screen; click it: a window with the visa conditions opens; click Apply in it to reach the application form. When pick_option answers that an option is picked, it is: do not reopen that menu to pick it by hand, go to the next one. On the form, step 1 asks for the passport and the profile photo: use upload_file for each. After the passport upload the site shows its reading in a window with Reupload and Ok at the bottom: scroll_web does not move that window, press Page Down to reach Ok. The site fills some fields from the passport and shows countries in Indonesian: for a French passport, Passport/Country/Region and Issuing Country show PRANCIS, which is France; that is correct, leave it. For any other passport, check that both fields match the passport's country. If the site puts the whole name in First Name, set First Name to the given names and Last Name to every word of the passport surname (for example LE CALVEZ, not CALVEZ). Address in Indonesia: write the Postal Code with fill_field (field Postal Code), not by typing: the page then fills Province, City, District and Village; if they stay empty on the screenshot, call ask_user. Port of Entry Mode is Airport; for Bali, Port of Entry is listed as NGURAH RAI AIRPORT: pick it with pick_option (field Port of Entry). Return Ticket is a required PDF: call upload_file with purpose return_ticket; if Nami has no return ticket, call ask_user and never upload another file there.",
+    after_upload: {
+      passport: {
+        wait_for_text: "Reupload",
+        next: "The site has read the passport and shows its reading in a window with Reupload and Ok at the bottom: press Page Down to reach Ok, then click Ok.",
+      },
+      photo: {
+        next: "If the passport reading was confirmed with Ok, step 1 is done: call report_ready now, without clicking anything else.",
+      },
+    },
     observed_on: OBSERVED_ON,
     source_urls: ["https://evisa.imigrasi.go.id/web/visa-selection", "https://evisa.imigrasi.go.id"],
   },

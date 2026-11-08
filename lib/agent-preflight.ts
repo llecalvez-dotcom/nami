@@ -1,6 +1,7 @@
 import { agentChromePort, connectChrome, type CdpConnection } from "@/lib/chrome-cdp";
 import { getBaliPaper } from "@/lib/bali-papers";
 import { getSessionStatus, isTerminalStatus } from "@/lib/h-agent";
+import { isAbandoned } from "@/lib/agent-stall";
 
 type ActiveSession = { browserId: string; sessionId: string; idempotencyKey?: string };
 type Store = { active: Map<number, ActiveSession>; pending: Set<string> };
@@ -34,6 +35,11 @@ export async function preflightBrowser(browserId: string, connect: (port: number
     for (const [activePort, entry] of current.active) {
       if (activePort !== port && entry.browserId !== browserId) continue;
       if (resumeKey && entry.idempotencyKey === resumeKey && activePort === port && entry.browserId === browserId) continue;
+      // A stalled session given up by Nami no longer holds the browser: the new session takes it over.
+      if (isAbandoned(entry.sessionId)) {
+        current.active.delete(activePort);
+        continue;
+      }
       let status: string;
       try {
         status = await getSessionStatus(entry.sessionId);

@@ -1,7 +1,25 @@
 import { z } from "zod";
 import { sendToolResult } from "@/lib/h-agent";
-import { fail, hErrorResponse, SESSION_ID, UPLOAD_PURPOSES } from "@/lib/paper-agent";
+import { fail, hErrorResponse, SESSION_ID, sessionPaper, UPLOAD_PURPOSES, type UploadPurpose } from "@/lib/paper-agent";
 import { uploadSessionDocument } from "@/lib/agent-passport-upload";
+import { getBaliPaper } from "@/lib/bali-papers";
+import { localChromeEnabled, waitForPageText } from "@/lib/local-chrome";
+
+const STAY = "Do not reload or refresh the page or navigate away.";
+const UPLOADED_DEFAULT = "uploaded. Do not reload or refresh the page or navigate away; take a screenshot to verify the file is shown, then continue with the next field.";
+
+// The result of a successful upload tells the agent its next move (2026-11-08): no extra look at the page, which cost
+// a wait and a step per file. When the paper names the text the page shows once it has read the file, Nami waits for it.
+async function uploadedResult(sessionId: string, purpose: UploadPurpose): Promise<string> {
+  const paper = getBaliPaper(sessionPaper(sessionId));
+  const after = paper.after_upload?.[purpose];
+  if (!after) return UPLOADED_DEFAULT;
+  if (after.wait_for_text && localChromeEnabled()) {
+    const seen = await waitForPageText(after.wait_for_text, [paper.domain]);
+    if (!seen) return `uploaded, but the page has not reacted yet. ${STAY} Wait 2 seconds with wait_web, then look at the page and continue.`;
+  }
+  return `uploaded. ${after.next} ${STAY}`;
+}
 
 const AnswerSchema = z.object({
   tool_req: z.object({
@@ -27,7 +45,7 @@ export async function POST(request: Request, ctx: RouteContext<"/api/agent/[id]/
       ? await uploadSessionDocument(id, input.data.tool_req)
       : undefined;
     const result = uploadResult === "uploaded"
-      ? "uploaded. Do not reload or refresh the page or navigate away; take a screenshot to verify the file is shown, then continue with the next field."
+      ? await uploadedResult(id, input.data.tool_req.args.purpose as UploadPurpose)
       : uploadResult ?? input.data.result;
     await sendToolResult(id, input.data.tool_req, result);
     return Response.json({ ok: true, ...(uploadResult ? { upload_result: uploadResult } : {}) }, { status: 202 });
