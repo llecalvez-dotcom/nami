@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Check, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MicButton, VoiceStatusLine } from "@/components/voice/mic-button";
-import { useConversationSpeech, useListenAfterSpeech } from "@/components/voice/speech";
+import { useConversationSpeech } from "@/components/voice/speech";
 import { useVoiceInput, type VoiceInput } from "@/components/voice/use-voice-input";
 import { VoiceAnswer } from "@/components/voice/voice-answer";
 import { cn } from "@/lib/utils";
@@ -36,11 +36,9 @@ function AgentLabel({ from }: { from: "nami" | "agent_h" }) {
 
 const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
-// The card's microphone, opened by itself once Nami has read the card aloud.
-function useCardVoice(itemId: string, onTranscript: (text: string) => void): VoiceInput {
-  const voice = useVoiceInput(onTranscript);
-  useListenAfterSpeech(itemId, voice.start);
-  return voice;
+// The card's microphone: opened by a click only, never by itself.
+function useCardVoice(onTranscript: (text: string) => void): VoiceInput {
+  return useVoiceInput(onTranscript);
 }
 
 function TextAnswer({ onSubmit, mic }: { onSubmit: (value: string) => Promise<void>; mic?: React.ReactNode }) {
@@ -160,7 +158,7 @@ function OpenQuestion({
 }: { item: Extract<ConversationItem, { kind: "question" }> } & Pick<Handlers, "onAnswer" | "onAnswerText">) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const voice = useCardVoice(item.id, async (text) => {
+  const voice = useCardVoice(async (text) => {
     // A spoken "yes" in any language picks the only option of a proposed answer ("Yes, that's right").
     const option = matchOption(text, item.options)
       ?? (item.options.length === 1 && shortAnswer("proposal", text) === "accept" ? item.options[0] : null);
@@ -233,7 +231,7 @@ function ProposalCard({ item, onDecide }: { item: Extract<ConversationItem, { ki
 
 function ProposalChoice({ item, onDecide }: { item: Extract<ConversationItem, { kind: "proposal" }> } & Pick<Handlers, "onDecide">) {
   const [unclear, setUnclear] = useState<string | null>(null);
-  const voice = useCardVoice(item.id, (text) => {
+  const voice = useCardVoice((text) => {
     const answer = shortAnswer("proposal", text);
     if (answer) return onDecide(item.id, answer === "accept");
     setUnclear(text);

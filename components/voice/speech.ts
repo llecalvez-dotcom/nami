@@ -182,7 +182,5 @@ export function useSpeaking(): boolean {
   );
 }
 
-// Opens the microphone of a card once Nami has finished reading that card aloud.
-export function useListenAfterSpeech(itemId: string, start: () => void | Promise<void>) {
-  useEffect(() => getQueue()?.onSpoken((id) => id === itemId && void start()), [itemId, start]);
-}
+// The microphone never opens by itself (Clément, 2026-11-08, real test: it heard the speakers, Gladia transcribed
+// noise and Nami switched language). It opens on a click or a tap only: see WaveMic and MicButton.

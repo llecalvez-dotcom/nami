@@ -298,6 +298,8 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
     read: { fields: PassportFields; documentId: string; verified: number } | null;
     photos: Found[];
     photoDocumentId?: string;
+    // The photo picked in the card when none was found by voice.
+    pickedPhotoId?: string;
     tickets: Found[];
   }>({ visaItem: null, passports: [], reader: null, offered: null, read: null, photos: [], tickets: [] });
   const secrets = useMemo(() => [passport?.passport_number, passport?.birth_date], [passport]);
@@ -444,8 +446,11 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
     flow.current.photos = photos;
     const photo = photos[0];
     setSeen((previous) => ({ ...previous, photo }));
-    if (photo) ask("use_photo", foundPhotoText(photo), "Yes, use it", "No");
-    else void lookForReturnTicket();
+    if (photo) return ask("use_photo", foundPhotoText(photo), "Yes, use it", "No");
+    // Same fallback as the passport: the card is shown with its photo search; the proposal resumes the path either way.
+    say("I could not find your ID photo on this computer. Add it to your documents and pick it below, or go on without it: the official site will ask for it.");
+    setManual(true);
+    ask("use_photo", "Do you have your ID photo ready?", "Yes, use it", "Go on without it");
   };
 
   const decide = (itemId: string, accepted: boolean) => {
@@ -462,7 +467,10 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
       actions.decide(itemId, accepted);
       if (item.action === "read_passport") return void (accepted ? readPassport() : offerPassport());
       if (item.action === "confirm_passport") return accepted ? void confirmPassport() : fallBackToCard("Check the fields below, then confirm them.");
-      if (item.action === "use_photo") return void lookForReturnTicket(accepted ? flow.current.photos[0]?.id : undefined);
+      if (item.action === "use_photo") {
+        if (!flow.current.photos[0]) setManual(false);
+        return void lookForReturnTicket(accepted ? (flow.current.photos[0]?.id ?? flow.current.pickedPhotoId) : undefined);
+      }
       return startAgent(accepted ? flow.current.tickets[0]?.id : undefined);
     }
     actions.decide(itemId, accepted);
@@ -581,7 +589,13 @@ function TripView({ trip, onNewTrip, t, language }: { trip: Trip; onNewTrip: () 
             />
             {documentId ? (
               <div className="mt-4">
-                <PhotoCard demo onConfirm={setPhotoDocumentId} />
+                <PhotoCard
+                  demo
+                  onConfirm={(id) => {
+                    flow.current.pickedPhotoId = id ?? undefined;
+                    setPhotoDocumentId(id);
+                  }}
+                />
               </div>
             ) : null}
             {documentId ? (
