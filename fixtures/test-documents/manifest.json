@@ -1,0 +1,56 @@
+[
+  {
+    "case": "French passport: Bali e-VOA and China",
+    "passport": "passport-fr-camille-test.jpg",
+    "photo": "photo-fr-camille-test.jpg",
+    "expected": {
+      "surname": "TESTEUR",
+      "given_names": "CAMILLE",
+      "nationality": "FRA",
+      "passport_number": "TST000001",
+      "sex": "F",
+      "birth_date": "1990-03-15",
+      "expiry_date": "2032-01-15"
+    },
+    "mrz": [
+      "P<FRATESTEUR<<CAMILLE<<<<<<<<<<<<<<<<<<<<<<<",
+      "TST0000017FRA9003152F3201152<<<<<<<<<<<<<<06"
+    ]
+  },
+  {
+    "case": "Chadian passport: Schengen tourist visa for France",
+    "passport": "passport-td-ahmat-test.jpg",
+    "photo": "photo-td-ahmat-test.jpg",
+    "expected": {
+      "surname": "TESTEUR",
+      "given_names": "AHMAT",
+      "nationality": "TCD",
+      "passport_number": "TST000002",
+      "sex": "M",
+      "birth_date": "1988-07-02",
+      "expiry_date": "2030-06-30"
+    },
+    "mrz": [
+      "P<TCDTESTEUR<<AHMAT<<<<<<<<<<<<<<<<<<<<<<<<<",
+      "TST0000028TCD8807021M3006302<<<<<<<<<<<<<<06"
+    ]
+  },
+  {
+    "case": "Passport expiring too soon (6-month rule must warn)",
+    "passport": "passport-uto-short-validity.jpg",
+    "photo": "photo-uto-short-validity.jpg",
+    "expected": {
+      "surname": "SPECIMEN",
+      "given_names": "ALEX",
+      "nationality": "UTO",
+      "passport_number": "TST000003",
+      "sex": "X",
+      "birth_date": "1985-11-20",
+      "expiry_date": "2027-01-05"
+    },
+    "mrz": [
+      "P<UTOSPECIMEN<<ALEX<<<<<<<<<<<<<<<<<<<<<<<<<",
+      "TST0000039UTO8511205X2701057<<<<<<<<<<<<<<02"
+    ]
+  }
+]
