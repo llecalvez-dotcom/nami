@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { readdir, realpath, stat } from "node:fs/promises";
-import { extname, isAbsolute, join, relative, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, sep } from "node:path";
 
 export type FoundDocument = {
   id: string;
@@ -22,7 +22,8 @@ const PHOTO_TYPES = new Set([".jpg", ".jpeg", ".png"]);
 // The e-VOA return ticket field accepts application/pdf only: an image is never offered there.
 const RETURN_TICKET_TYPES = new Set([".pdf"]);
 const TYPES_BY_KIND: Record<DocumentKind, Set<string>> = { passport: TYPES, photo: PHOTO_TYPES, return_ticket: RETURN_TICKET_TYPES };
-const MAX_BYTES = 10 * 1024 * 1024;
+export const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
+const MAX_BYTES = MAX_DOCUMENT_BYTES;
 
 export function isDocumentKind(value: string | null): value is DocumentKind {
   return DOCUMENT_KINDS.includes(value as DocumentKind);
@@ -90,11 +91,30 @@ export async function findDocuments(kind: DocumentKind = "passport"): Promise<Fo
     }
   }
   await scan(root, 0);
-  return candidates.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name)).slice(0, 5).map(({ path, ...file }) => {
+  // Best score first, then the newest: a file just sent stays in the five shown.
+  return candidates.sort((a, b) => b.score - a.score || b.modified_at.localeCompare(a.modified_at) || a.name.localeCompare(b.name)).slice(0, 5).map(({ path, ...file }) => {
     const id = randomBytes(24).toString("hex");
     current.set(id, { root, path, kind });
     return { id, ...file };
   });
+}
+
+// A file just written in the documents folder (the upload zone) gets its token right away, without a new search:
+// the next search finds it like any other file of the folder.
+export async function registerDocument(path: string, kind: DocumentKind): Promise<FoundDocument | null> {
+  if (!documentsEnabled()) return null;
+  const root = await realpath(process.env.NAMI_DOCUMENTS_DIR!);
+  const resolved = await realpath(path);
+  if (!inside(root, resolved) || !TYPES_BY_KIND[kind].has(extname(resolved).toLowerCase())) return null;
+  const info = await stat(resolved);
+  if (!info.isFile() || info.size > MAX_BYTES) return null;
+  const name = basename(resolved);
+  const id = randomBytes(24).toString("hex");
+  store().set(id, { root, path: resolved, kind });
+  return {
+    id, name, folder: relative(root, dirname(resolved)) || ".",
+    size_bytes: info.size, modified_at: info.mtime.toISOString(), score: scoreName(name, kind),
+  };
 }
 
 export function allowedDocumentType(path: string, kind: DocumentKind): boolean {

@@ -6,6 +6,8 @@ export const API_LIMITS = {
   access: 1024,
   papers: 16 * 1024,
   documents: 1024,
+  // One passport, photo or return ticket file, written in NAMI_DOCUMENTS_DIR: same size cap as the files found there.
+  upload: 10 * 1024 * 1024 + 64 * 1024,
   screen: 1024,
   translate: 32 * 1024,
   say: 4 * 1024,
@@ -21,6 +23,7 @@ const QUOTA_LIMITS = {
   // flights) plus retries hit the former 5 on the bench (2026-11-08).
   papers: 30,
   documents: 100,
+  upload: 20,
   screen: 180,
   // One call per new message of Nami or step of the agent, in the traveller's language.
   translate: 200,
@@ -36,6 +39,7 @@ const CONCURRENCY_LIMITS = {
   access: 2,
   papers: 1,
   documents: 4,
+  upload: 2,
   screen: 2,
   translate: 4,
   say: 2,
@@ -73,7 +77,7 @@ function clientKey(request: Request, route: ApiRoute): string {
 
 export function guard(request: Request, route: ApiRoute, now: () => number = Date.now): GuardResult {
   const contentLength = request.headers.get("content-length");
-  if (contentLength === null && (route === "extract" || route === "transcribe")) {
+  if (contentLength === null && (route === "extract" || route === "transcribe" || route === "upload")) {
     return Response.json({ error: "Length required." }, { status: 411 });
   }
   if (contentLength !== null && (!/^\d+$/.test(contentLength) || Number(contentLength) > API_LIMITS[route])) return tooLarge();
@@ -125,8 +129,21 @@ export function guard(request: Request, route: ApiRoute, now: () => number = Dat
 }
 
 export async function readJsonLimited(request: Request, maxBytes: number): Promise<{ value: unknown } | Response> {
+  const read = await readBodyLimited(request, maxBytes);
+  if (read instanceof Response) return read;
+  if (read.bytes === null) return { value: null };
+  const text = new TextDecoder().decode(read.bytes);
+  try {
+    return { value: JSON.parse(text) as unknown };
+  } catch {
+    return { value: null };
+  }
+}
+
+// The whole body, or 413 past maxBytes whatever the Content-Length header said; null when there is no readable body.
+export async function readBodyLimited(request: Request, maxBytes: number): Promise<{ bytes: Uint8Array<ArrayBuffer> | null } | Response> {
   const stream = request.body;
-  if (!stream) return { value: null };
+  if (!stream) return { bytes: null };
 
   const reader = stream.getReader();
   const chunks: Uint8Array[] = [];
@@ -152,7 +169,7 @@ export async function readJsonLimited(request: Request, maxBytes: number): Promi
     } catch {
       // Ignore stream cancellation errors; the request body is unusable.
     }
-    return { value: null };
+    return { bytes: null };
   } finally {
     reader.releaseLock();
   }
@@ -163,12 +180,7 @@ export async function readJsonLimited(request: Request, maxBytes: number): Promi
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  const text = new TextDecoder().decode(bytes);
-  try {
-    return { value: JSON.parse(text) as unknown };
-  } catch {
-    return { value: null };
-  }
+  return { bytes };
 }
 
 export function resetGuards(): void {
