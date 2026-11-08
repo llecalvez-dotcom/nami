@@ -6,6 +6,7 @@ import { POST as fill } from "@/app/api/agent/[id]/fill/route";
 import { uploadSessionDocument } from "@/lib/agent-passport-upload";
 import { fillField, waitForPageText } from "@/lib/local-chrome";
 import { FIRST_STALL_MS, resetAgentStall } from "@/lib/agent-stall";
+import { bindFlightsSession } from "@/lib/flights-agent";
 
 vi.mock("@/lib/agent-passport-upload", () => ({ uploadSessionDocument: vi.fn() }));
 vi.mock("@/lib/local-chrome", async (importOriginal) => ({ ...(await importOriginal<typeof import("@/lib/local-chrome")>()), fillField: vi.fn(), waitForPageText: vi.fn() }));
@@ -224,6 +225,28 @@ describe("GET /api/agent/[id]/changes (route 6)", () => {
     await get("s-1");
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(fetch.mock.calls.every((c) => (c[1] as RequestInit | undefined)?.method !== "DELETE")).toBe(true);
+  });
+
+  it("arms the guard of a flights session only once Google Flights was seen: the arrival card tab still open at start is not a leave", async () => {
+    bindFlightsSession("f-1");
+    fetch.mockResolvedValueOnce(batch("running", ["https://allindonesia.imigrasi.go.id/arrival-card-submission/personal-information"]));
+    expect((await (await get("f-1")).json()).left_official_site).toBeUndefined();
+    // The arrival tab and Google in the same poll: the older arrival event is not a leave.
+    fetch.mockResolvedValueOnce(batch("running", ["https://allindonesia.imigrasi.go.id/arrival-card-submission/x", "https://www.google.com/travel/flights?q=x"], 1));
+    expect((await (await get("f-1")).json()).left_official_site).toBeUndefined();
+    expect(fetch).toHaveBeenCalledTimes(2);
+    fetch.mockResolvedValueOnce(batch("running", ["https://www.qatarairways.com/book"], 2));
+    fetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    expect((await (await get("f-1")).json()).left_official_site).toBe("www.qatarairways.com");
+    expect(call(3)[1].method).toBe("DELETE");
+  });
+
+  it("cuts a flights session that browses elsewhere than the official tabs before reaching Google", async () => {
+    bindFlightsSession("f-2");
+    fetch.mockResolvedValueOnce(batch("running", ["https://evisa.imigrasi.go.id/web/visa-selection", "https://www.kayak.fr/flights"]));
+    fetch.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    expect((await (await get("f-2")).json()).left_official_site).toBe("www.kayak.fr");
+    expect(call(1)[1].method).toBe("DELETE");
   });
 
   it("ignores empty browser tabs and a search engine home page, but cancels on any search, other browser pages and local files", async () => {
