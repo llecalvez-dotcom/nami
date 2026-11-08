@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agentChecklist, agentStatusLine, focusItem, paperOfRun, readyPaper, sceneFor, sentenceSize, STATUS_TEXTS } from "@/lib/panel-focus";
+import { agentChecklist, agentStatusLine, focusItem, H_SLOW_STATUS, paperOfRun, readyPaper, sceneFor, sentenceSize, STATUS_TEXTS } from "@/lib/panel-focus";
 import type { AgentRun } from "@/lib/contracts";
 import { ARRIVAL_CARD_READY_MESSAGE, VISA_READY_MESSAGE, type ConversationItem } from "@/lib/trip-state";
 
@@ -91,6 +91,16 @@ describe("the line that always says what the agent does", () => {
     expect(agentStatusLine(run(), steps)).toEqual({ text: "Filling the form", progress: "4/~20" });
     expect(agentStatusLine(run({ metrics: { steps: 7, total_cost: null } }), steps)).toEqual({ text: "Filling the form", progress: "7/~20" });
     expect(agentStatusLine(run({ paper_id: "arrival_card" }), steps)).toEqual({ text: "Filling the form", progress: "4/~12" });
+  });
+
+  it("says H is slow while the session starts again by itself, until the new one is seen on the site", () => {
+    expect(agentStatusLine(run({ state: "failed", auto_restart: "due" }), ["The agent stopped answering"])).toEqual({ text: H_SLOW_STATUS });
+    expect(agentStatusLine(run({ state: "failed", auto_restart: "taken" }), [])).toEqual({ text: H_SLOW_STATUS });
+    expect(agentStatusLine(run({ state: "pending", auto_restart: "done" }), ["Session created on your local Chrome"])).toEqual({ text: H_SLOW_STATUS });
+    expect(agentStatusLine(run({ auto_restart: "done" }), ["On evisa.imigrasi.go.id", "Choosing FRANCE"])).toEqual({ text: "Filling the form", progress: "2/~20" });
+    expect(agentStatusLine(run({ state: "failed", auto_restart: "failed" }), [])).toEqual({ text: "Stopped" });
+    expect(STATUS_TEXTS).toContain(H_SLOW_STATUS);
+    expect(H_SLOW_STATUS).not.toMatch(/[\u2013\u2014]/);
   });
 
   it("says which file goes up, and when the agent waits for the traveller", () => {

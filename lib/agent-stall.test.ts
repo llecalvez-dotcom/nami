@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { abandonSession, FIRST_STALL_MS, isAbandoned, resetAgentStall, STALL_MS, trackProgress } from "@/lib/agent-stall";
+import {
+  abandonSession, abandonedBeforeAction, FIRST_STALL_MS, hasActed, isAbandoned, isReleased, releaseSession, resetAgentStall, STALL_MS, trackProgress,
+} from "@/lib/agent-stall";
 import type { HChanges } from "@/lib/h-agent";
 
 const changes = (kinds: string[], extra: Partial<HChanges> = {}): HChanges => ({
@@ -14,15 +16,25 @@ const changes = (kinds: string[], extra: Partial<HChanges> = {}): HChanges => ({
 afterEach(() => resetAgentStall());
 
 describe("stalled H sessions (2026-11-08: the model never answered the first screenshot)", () => {
-  it("gives up sooner when the first screenshot gets no answer (nothing done yet)", () => {
+  it("gives up when the first screenshot gets no answer in FIRST_STALL_MS (45 s: a slow H starts in 30 s)", () => {
+    expect(FIRST_STALL_MS).toBe(45_000);
     expect(trackProgress("s", changes(["message_event", "observation_event"]), 0)).toBe(false);
     expect(trackProgress("s", null, FIRST_STALL_MS - 1)).toBe(false);
     expect(trackProgress("s", null, FIRST_STALL_MS)).toBe(true);
   });
 
+  it("is not a stall when the first action comes after 44 s", () => {
+    trackProgress("s", changes(["observation_event"]), 0);
+    expect(trackProgress("s", null, 44_000)).toBe(false);
+    expect(trackProgress("s", changes(["policy_event", "tool_result"]), 44_000)).toBe(false);
+    expect(hasActed("s")).toBe(true);
+    expect(trackProgress("s", null, 44_000 + STALL_MS - 1)).toBe(false);
+    expect(trackProgress("s", null, 44_000 + STALL_MS)).toBe(true);
+  });
+
   it("waits STALL_MS once the agent has acted", () => {
     trackProgress("s", changes(["observation_event", "policy_event", "tool_result", "observation_event"]), 0);
-    expect(trackProgress("s", null, FIRST_STALL_MS)).toBe(false);
+    expect(trackProgress("s", null, STALL_MS - 1)).toBe(false);
     expect(trackProgress("s", null, STALL_MS)).toBe(true);
   });
 
@@ -48,9 +60,23 @@ describe("stalled H sessions (2026-11-08: the model never answered the first scr
     expect(trackProgress("d", changes([], { status: "completed" }), STALL_MS)).toBe(false);
   });
 
-  it("remembers the sessions it gave up", () => {
+  it("remembers the sessions it gave up, and whether they had acted (restart only those that had not)", () => {
     expect(isAbandoned("s")).toBe(false);
+    expect(hasActed("s")).toBe(false);
+    trackProgress("s", changes(["observation_event"]), 0);
     abandonSession("s");
     expect(isAbandoned("s")).toBe(true);
+    expect(isReleased("s")).toBe(true);
+    expect(abandonedBeforeAction("s")).toBe(true);
+    trackProgress("a", changes(["observation_event", "policy_event", "tool_result"]), 0);
+    abandonSession("a");
+    expect(abandonedBeforeAction("a")).toBe(false);
+    expect(abandonedBeforeAction("never")).toBe(false);
+  });
+
+  it("remembers the sessions the traveller stopped: released, not abandoned (no stall reported to the panel)", () => {
+    releaseSession("c");
+    expect(isReleased("c")).toBe(true);
+    expect(isAbandoned("c")).toBe(false);
   });
 });

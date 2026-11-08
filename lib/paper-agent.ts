@@ -2,7 +2,7 @@ import { z } from "zod";
 import { buildPaperInstructions, buildPaperTask } from "@/lib/agent-task";
 import { getBaliPaper, type BaliPaper } from "@/lib/bali-papers";
 import { PassportFieldsSchema, TripRequestSchema, type PassportFields, type TripRequest } from "@/lib/contracts";
-import { HAgentError, type ToolSpec } from "@/lib/h-agent";
+import { H_DID_NOT_ANSWER, H_TIMEOUT_STATUS, HAgentError, type ToolSpec } from "@/lib/h-agent";
 
 export const PAPER_MAX_TIME_S = 900;
 export const PAPER_MAX_STEPS = 80;
@@ -175,6 +175,11 @@ export function hErrorResponse(error: unknown): Response {
   if (error instanceof HAgentError) {
     if (error.status === 503) return fail("The H agent is not configured on this server (HAI_API_KEY).", 503);
     if (error.status === 429) return fail(H_SLOTS_BUSY, 429);
+    // The deadline of lib/h-agent.ts: the status says the cause is H, the panel offers to try again.
+    if (error.status === H_TIMEOUT_STATUS) {
+      console.error(`h-agent: ${error.message}`);
+      return Response.json({ error: H_DID_NOT_ANSWER, transient: true }, { status: 503, headers: { "Retry-After": "5" } });
+    }
     if (error.status === 404) return fail("This agent session was not found on H.", 404);
     if (error.status === 409) return fail("This agent session has already finished.", 409);
     if (error.status === 422 || error.status === 400) return fail("H refused the session settings.", 502);

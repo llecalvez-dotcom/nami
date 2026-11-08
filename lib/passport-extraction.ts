@@ -2,6 +2,8 @@ import {
   ACCEPTED_IMAGE_TYPES,
   extractPassport,
   MAX_IMAGE_BYTES,
+  PassportReadError,
+  providerDidNotAnswer,
   TripDatesSchema,
   type PassportImage,
   type PassportReader,
@@ -23,6 +25,9 @@ export function passportImageError(size: number, type: string): Response | null 
   return null;
 }
 
+// The provider was slow or down twice in a row: the document is fine, the traveller just tries again (503, not 502).
+export const READER_UNAVAILABLE_STATUS = 503;
+
 export async function extractPassportImage(image: unknown, tripDates: unknown, reader: PassportReader): Promise<Response> {
   if (!(image instanceof Blob)) return fail("No image received.", 400);
   const imageError = passportImageError(image.size, image.type);
@@ -35,7 +40,10 @@ export async function extractPassportImage(image: unknown, tripDates: unknown, r
   };
   try {
     return Response.json(await extractPassport(passport, trip.data, reader), { headers });
-  } catch {
+  } catch (error) {
+    if (error instanceof PassportReadError && error.transient) {
+      return Response.json({ error: providerDidNotAnswer(reader), transient: true }, { status: READER_UNAVAILABLE_STATUS, headers: { ...headers, "Retry-After": "5" } });
+    }
     return fail("The passport could not be read. Try a sharper photo, or type the fields.", 502);
   }
 }

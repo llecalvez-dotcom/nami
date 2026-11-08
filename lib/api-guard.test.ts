@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { API_LIMITS, guard, quotaEntryCount, readJsonLimited, resetGuards } from "@/lib/api-guard";
+import { API_LIMITS, guard, quotaEntryCount, readJsonLimited, resetGuards, tooManyRequests } from "@/lib/api-guard";
 
 const request = (headers: HeadersInit = {}) => new Request("http://localhost/api/test", { headers });
 
@@ -83,14 +83,15 @@ describe("api guard quotas", () => {
     expect(statuses.slice(50)).toEqual(Array(10).fill(429));
   });
 
-  it("rolls a fixed-window quota over after ten minutes", () => {
+  it("rolls a fixed-window quota over after ten minutes", async () => {
     let timestamp = 1000;
     const sameClient = request({ cookie: "nami_access=client-token" });
-    for (let count = 0; count < 30; count++) lease(guard(sameClient, "parse", () => timestamp)).release();
+    for (let count = 0; count < 60; count++) lease(guard(sameClient, "parse", () => timestamp)).release();
     const blocked = guard(sameClient, "parse", () => timestamp);
     expect(blocked).toBeInstanceOf(Response);
     expect((blocked as Response).status).toBe(429);
     expect((blocked as Response).headers.get("Retry-After")).toBe("600");
+    expect(await (blocked as Response).json()).toEqual({ error: "Too many requests. Try again in 10 minutes." });
 
     timestamp += 10 * 60 * 1000;
     lease(guard(sameClient, "parse", () => timestamp)).release();
@@ -99,7 +100,7 @@ describe("api guard quotas", () => {
   it("uses the access cookie before the forwarded IP for client identity", () => {
     const fromCookie = request({ cookie: "nami_access=client-token", "x-forwarded-for": "203.0.113.1, 10.0.0.1" });
     const fromIp = request({ "x-forwarded-for": "203.0.113.1, 10.0.0.1" });
-    for (let count = 0; count < 20; count++) lease(guard(fromCookie, "formalities")).release();
+    for (let count = 0; count < 60; count++) lease(guard(fromCookie, "formalities")).release();
 
     const blockedCookieClient = guard(fromCookie, "formalities");
     const separateIpClient = guard(fromIp, "formalities");
@@ -130,7 +131,7 @@ describe("api guard concurrency", () => {
     const busy = guard(requestWithCookie, "extract");
     expect(busy).toBeInstanceOf(Response);
     expect((busy as Response).status).toBe(429);
-    await expect((busy as Response).json()).resolves.toEqual({ error: "Busy, try again in a moment." });
+    await expect((busy as Response).json()).resolves.toEqual({ error: "Busy, try again in a moment.", busy: true });
 
     expect(() => {
       try {
@@ -140,5 +141,22 @@ describe("api guard concurrency", () => {
       }
     }).toThrow("simulated route failure");
     lease(guard(requestWithCookie, "extract")).release();
+  });
+});
+
+describe("quotas raised for an evening of retries (2026-11-08)", () => {
+  it.each([["formalities", 60], ["extract", 30], ["parse", 60], ["say", 1200], ["transcribe", 120]] as const)(
+    "allows %s calls per 10 min: %s", (route, limit) => {
+      const client = request({ cookie: `nami_access=${route}-client`, "content-length": "100" });
+      for (let count = 0; count < limit; count++) lease(guard(client, route)).release();
+      const blocked = guard(client, route);
+      expect(blocked).toBeInstanceOf(Response);
+      expect((blocked as Response).status).toBe(429);
+    },
+  );
+
+  it("says the delay in seconds when short", () => {
+    expect(tooManyRequests(45)).toBe("Too many requests. Try again in 45 seconds.");
+    expect(tooManyRequests(300)).toBe("Too many requests. Try again in 5 minutes.");
   });
 });

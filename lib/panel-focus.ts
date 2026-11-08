@@ -94,15 +94,21 @@ const FORM_STEPS: Record<Paper, number> = { visa: 20, arrival_card: 12, flights:
 
 export type AgentStatus = { text: string; progress?: string };
 
+// H never started the session: Nami starts it again by itself, and the line says so until the new session is seen on a site.
+export const H_SLOW_STATUS = "H is slow, starting again";
+
 // What the agent is doing, in one short line always shown in the panel (Clément, 2026-11-08: « aucune visualisation »).
 // The text is one of STATUS_TEXTS, so the panel can translate it; the progress is appended as is.
 export function agentStatusLine(run: AgentRun | null, steps: readonly string[]): AgentStatus | null {
   const paper = paperOfRun(run);
   if (!run || !paper) return null;
+  if (run.auto_restart === "due" || run.auto_restart === "taken") return { text: H_SLOW_STATUS };
   if (run.state === "completed") return { text: "Done" };
   if (isTerminalStatus(run.state)) return { text: "Stopped" };
   if (run.pending_question) return { text: "Waiting for you" };
-  if (run.state === "pending" || run.state === "queued" || !steps.some((step) => step.startsWith("On "))) return { text: OPENING[paper] };
+  const opening = run.state === "pending" || run.state === "queued" || !steps.some((step) => step.startsWith("On "));
+  if (opening && run.auto_restart === "done") return { text: H_SLOW_STATUS };
+  if (opening) return { text: OPENING[paper] };
   if (paper === "flights") {
     const result = flightsResult(run);
     if (result?.ready) return { text: "Waiting for you" };
@@ -133,6 +139,7 @@ export const STATUS_TEXTS = [
   "Waiting for you",
   "Done",
   "Stopped",
+  H_SLOW_STATUS,
 ];
 
 // The longer the sentence, the smaller it is written: it must fit the side panel without scrolling.

@@ -22,9 +22,10 @@ import {
   spokenCity,
   startFlightsSession,
 } from "@/lib/flights/flow";
+import { H_NOT_ANSWERING_MESSAGE, H_SLOW_RESTART_MESSAGE, type AgentChanges } from "@/lib/agent-changes";
 import { agentOfficialUrl } from "@/lib/official-tab";
 import { paperInFocus, readyPaper, agentChecklist } from "@/lib/panel-focus";
-import { answerQuestion, answerQuestionWithText, applyAgentChanges, ARRIVAL_CARD_READY_MESSAGE, createTripFromRequest, decideProposal, needsPassportReconfirm, pushProposal, reportReady, stopAgent, type Trip } from "@/lib/trip-state";
+import { answerQuestion, answerQuestionWithText, applyAgentChanges, ARRIVAL_CARD_READY_MESSAGE, createTripFromRequest, decideProposal, markAutoRestart, needsPassportReconfirm, pushProposal, reportReady, stopAgent, type Trip } from "@/lib/trip-state";
 import { spokenShort } from "@/lib/voice/conversation-speech";
 import { matchOption } from "@/lib/voice/short-answers";
 
@@ -420,5 +421,41 @@ describe("the flights session", () => {
     const withRunning = { ...trip, agent_run: { ...trip.agent_run!, state: "running" as const } };
     const stopped = stopAgent(withRunning);
     expect(stopped.conversation.find((i) => i.kind === "question" && i.field === "flight_choice")).toMatchObject({ answer: "Agent stopped" });
+  });
+});
+
+describe("H never opened Google Flights: one automatic restart with the same search", () => {
+  const stalled = (before: boolean): AgentChanges => ({
+    no_change: false, status: "failed", next_index: 1, steps: ["The agent stopped answering"], pending_tool_calls: [], answer: null, outcome: null,
+    error_code: "stalled", stalled_before_action: before, metrics: null,
+  });
+  const questions = (trip: Trip) => trip.conversation.filter((i) => i.kind === "question" && i.answer === null);
+  const openRetries = (trip: Trip) => proposals(trip).filter((p) => p.kind === "proposal" && p.decision === null);
+
+  it("says H is slow and marks the restart due, asking neither the dates nor the departure city nor the criterion again", () => {
+    const base = searching();
+    const { trip } = applyFlightsChanges(base, stalled(true), []);
+    expect(trip.agent_run).toMatchObject({ kind: "flights", state: "failed", auto_restart: "due" });
+    expect(agentTexts(trip).at(-1)).toBe(H_SLOW_RESTART_MESSAGE);
+    expect(openRetries(trip)).toEqual([]);
+    expect(questions(trip)).toEqual([]);
+    expect(flightsStartBody(trip)).toEqual(flightsStartBody(base));
+  });
+
+  it("after the one restart, a new stall proposes the single Shall I search again", () => {
+    const due = applyFlightsChanges(searching(), stalled(true), []).trip;
+    const restarted = markAutoRestart(startFlightsSession(markAutoRestart(due, "taken"), "s-flights-2", "https://www.google.com/travel/flights?q=x", NOW), "done");
+    expect(restarted.agent_run).toMatchObject({ session_id: "s-flights-2", state: "pending", auto_restart: "done" });
+    const second = applyFlightsChanges(restarted, stalled(true), []).trip;
+    expect(agentTexts(second).at(-1)).toBe(H_NOT_ANSWERING_MESSAGE);
+    expect(openRetries(second)).toHaveLength(1);
+    expect(openRetries(applyFlightsChanges(second, stalled(true), []).trip)).toHaveLength(1);
+  });
+
+  it("a stall after the agent acted is not restarted by itself", () => {
+    const { trip } = applyFlightsChanges(searching(), stalled(false), []);
+    expect(trip.agent_run?.auto_restart).toBeUndefined();
+    expect(agentTexts(trip).at(-1)).toBe(H_NOT_ANSWERING_MESSAGE);
+    expect(openRetries(trip)).toHaveLength(1);
   });
 });

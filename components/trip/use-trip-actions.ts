@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { filePaths, readAgentSettings } from "@/components/trip/agent-settings";
 import { cancelAgent, rawToolReq, sendAgentAnswer, sendFlightChoice } from "@/components/trip/use-agent-run";
 import { flightsStartBody, FLIGHTS_RETRY_PROPOSAL, isChoiceQuestion, isCriterionQuestion, openFlightQuestion, pendingFlightChoice, startFlightsSession } from "@/lib/flights/flow";
 import { googleFlightsUrl } from "@/lib/flights-agent";
 import type { PassportFields } from "@/lib/contracts";
-import { createVisaStartAttempt } from "@/lib/paper-start-client";
+import { H_NOT_ANSWERING_MESSAGE } from "@/lib/agent-changes";
+import { createVisaStartAttempt, startWithBusyRetry } from "@/lib/paper-start-client";
 import { missingPassportMessage } from "@/lib/passport-reminder";
 import { requestTripParse } from "@/lib/trip-parse-client";
 import {
@@ -14,7 +15,9 @@ import {
   answerQuestion,
   answerQuestionWithText,
   decideProposal,
+  giveUpAutoRestart,
   isAgentActive,
+  markAutoRestart,
   pushAgentMessage,
   pushProposal,
   reopenAgentQuestion,
@@ -34,6 +37,7 @@ async function startVisaSession(
   photoDocumentId: string | null,
   paperId: "evoa" | "arrival_card" = "evoa",
   returnTicketDocumentId: string | null = null,
+  onBusy?: (message: string) => void,
 ): Promise<string> {
   const settings = readAgentSettings();
   const attempt = createVisaStartAttempt({
@@ -46,20 +50,20 @@ async function startVisaSession(
     // The server binds the photo to the session together with the passport document only.
     ...(documentId && photoDocumentId ? { photo_document_id: photoDocumentId } : {}),
     ...(documentId && returnTicketDocumentId ? { return_ticket_document_id: returnTicketDocumentId } : {}),
-  }, { scope: trip.id });
+  }, { scope: trip.id, onBusy });
   return attempt();
 }
 
 // Module Vol: the Google Flights session, from the request only (no passport, no name, no e-mail).
-async function startFlightsSessionRequest(trip: Trip): Promise<{ sessionId: string; url: string }> {
+async function startFlightsSessionRequest(trip: Trip, onBusy?: (message: string) => void): Promise<{ sessionId: string; url: string }> {
   const body = flightsStartBody(trip);
   if (!body) throw new Error("I need your departure and return dates to search flights.");
   const settings = readAgentSettings();
-  const response = await fetch("/api/flights/start", {
+  const response = await startWithBusyRetry(fetch, "/api/flights/start", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...body, local_session_id: settings.local_session_id.trim(), idempotency_key: crypto.randomUUID() }),
-  });
+  }, undefined, onBusy);
   const json = (await response.json().catch(() => null)) as { session_id?: string; error?: string } | null;
   if (!response.ok || !json?.session_id) throw new Error(json?.error ?? `Request failed (${response.status})`);
   return { sessionId: json.session_id, url: googleFlightsUrl(body) };
@@ -96,18 +100,28 @@ export function useTripActions({
   const [starting, setStarting] = useState(false);
   const update = (next: Trip) => saveTrip(next);
   const latest = () => (trip ? getTrip(trip.id) ?? trip : null);
+  // A start still waiting for a slow H (the server says "busy"): told once, in the conversation and aloud.
+  const tellBusy = (message: string) => {
+    const current = latest();
+    if (!current) return;
+    const lastMessage = current.conversation.findLast((item) => item.kind === "agent");
+    if (lastMessage?.text !== message) update(pushAgentMessage(current, message));
+  };
 
   // confirmed: what the side panel confirmed in this very event, before the next render carries it.
   // paperId: the e-VOA, or the arrival card that comes after it (same passport, same tab).
+  // automatic: the one restart after H never started the session; a failure then says so and proposes a manual retry.
   const createVisa = async (
     itemId: string,
     confirmed?: { passport: PassportFields; documentId: string | null; photoDocumentId?: string | null; returnTicketDocumentId?: string | null },
     paperId: "evoa" | "arrival_card" = "evoa",
+    automatic = false,
   ) => {
     const current = latest();
     const fields = confirmed?.passport ?? passport;
     const passportDocument = confirmed ? confirmed.documentId : documentId;
     if (starting || !current) return;
+    if (!fields && automatic) return update(giveUpAutoRestart(current, paperId));
     if (!fields) {
       const documentsAvailable = await discover("/api/documents/find", (json) => json.enabled === true);
       const readerAvailable = await discover("/api/documents/extract", (json) => json.reader === "h" || json.reader === "anthropic");
@@ -121,13 +135,15 @@ export function useTripActions({
     setStarting(true);
     try {
       const sessionId = await startVisaSession(
-        current, fields, passportDocument, confirmed?.photoDocumentId ?? photoDocumentId, paperId, confirmed?.returnTicketDocumentId ?? returnTicketDocumentId,
+        current, fields, passportDocument, confirmed?.photoDocumentId ?? photoDocumentId, paperId, confirmed?.returnTicketDocumentId ?? returnTicketDocumentId, tellBusy,
       );
-      const started = startVisaRun(latest() ?? current, itemId, sessionId, new Date(), passportDocument !== null);
+      const run = startVisaRun(latest() ?? current, itemId, sessionId, new Date(), passportDocument !== null, automatic);
+      const started = automatic ? markAutoRestart(run, "done") : run;
       update(started);
       onStarted?.(started);
     } catch (error) {
-      update(pushAgentMessage(latest() ?? current, (error as Error).message));
+      const now = latest() ?? current;
+      update(automatic ? giveUpAutoRestart(now, paperId) : pushAgentMessage(now, (error as Error).message));
     } finally {
       setStarting(false);
     }
@@ -145,22 +161,47 @@ export function useTripActions({
   };
 
   // After the criterion, the flight search starts; after the choice, it goes to the agent that waits for it.
-  const startFlightsRun = async () => {
+  // automatic: the one restart after H never opened Google Flights, with the same dates, origin and criterion.
+  const startFlightsRun = async (automatic = false) => {
     const current = latest();
     if (!current || starting || current.sample || isAgentActive(current.agent_run)) return;
     setStarting(true);
     try {
-      const { sessionId, url } = await startFlightsSessionRequest(current);
-      const started = startFlightsSession(latest() ?? current, sessionId, url, new Date());
+      const { sessionId, url } = await startFlightsSessionRequest(current, tellBusy);
+      const run = startFlightsSession(latest() ?? current, sessionId, url, new Date());
+      const started = automatic ? markAutoRestart(run, "done") : run;
       update(started);
       onStarted?.(started);
     } catch (error) {
       const now = latest() ?? current;
-      update(pushProposal(pushAgentMessage(now, (error as Error).message), FLIGHTS_RETRY_PROPOSAL.action, FLIGHTS_RETRY_PROPOSAL.text, FLIGHTS_RETRY_PROPOSAL.accept_label, FLIGHTS_RETRY_PROPOSAL.decline_label));
+      const told = pushAgentMessage(automatic ? markAutoRestart(now, "failed") : now, automatic ? H_NOT_ANSWERING_MESSAGE : (error as Error).message);
+      update(pushProposal(told, FLIGHTS_RETRY_PROPOSAL.action, FLIGHTS_RETRY_PROPOSAL.text, FLIGHTS_RETRY_PROPOSAL.accept_label, FLIGHTS_RETRY_PROPOSAL.decline_label));
     } finally {
       setStarting(false);
     }
   };
+
+  // H opened the session and never acted (bench 2026-11-08): the same session starts again once, by itself, with the
+  // same paper, documents, dates and criterion. Nothing is asked again; the status line says "H is slow, starting again".
+  const dueRestart = trip?.agent_run?.auto_restart === "due" ? trip.agent_run.session_id : null;
+  useEffect(() => {
+    if (!dueRestart || starting) return;
+    // On the next tick: the start sets state, which an effect must not do synchronously.
+    const timer = setTimeout(() => {
+      const current = latest();
+      const run = current?.agent_run;
+      if (!current || !run || run.session_id !== dueRestart || run.auto_restart !== "due" || current.sample) return;
+      update(markAutoRestart(current, "taken"));
+      if (run.kind === "flights") return void startFlightsRun(true);
+      const paperId = run.paper_id ?? "evoa";
+      const action = paperId === "arrival_card" ? "create_arrival_card" : "create_visa";
+      const item = current.conversation.findLast((i) => i.kind === "proposal" && i.action === action && i.decision === "accepted");
+      if (item) void createVisa(item.id, undefined, paperId, true);
+      else update(giveUpAutoRestart(getTrip(current.id) ?? current, paperId));
+    }, 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dueRestart, starting]);
 
   const sendChoice = async () => {
     const current = latest();

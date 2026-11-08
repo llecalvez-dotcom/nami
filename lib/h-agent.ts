@@ -5,7 +5,12 @@ import { PAPER_ANSWER_FORMAT } from "@/lib/agent-answer";
 
 export const H_AGENTS_API = "https://agp.eu.hcompany.ai/api/v2";
 const DEFAULT_AGENT_NAME = "nami-paper-agent";
-const REQUEST_TIMEOUT_MS = 30_000;
+// Bench 2026-11-08: with a sick H, POST /sessions pended for minutes and every later start got "Busy" from the
+// concurrency guard. Each call has a deadline (retries included): the slot is freed and the panel told.
+export const CREATE_TIMEOUT_MS = 30_000;
+export const REQUEST_TIMEOUT_MS = 20_000;
+export const H_DID_NOT_ANSWER = "H did not answer. Try again in a moment.";
+export const H_TIMEOUT_STATUS = 504;
 export const CHANGES_WAIT_S = 20;
 // holo3-122b-a10b is left out: H's models page lists it as the only model without tools, and the agent needs ours.
 const AGENT_MODELS = ["holo4-27b", "holo4-35b-a3b", "holo3-1-35b-a3b"] as const;
@@ -86,27 +91,49 @@ function settings(options: HClientOptions) {
   return { apiKey, fetchImpl: options.fetch ?? fetch, baseUrl: options.baseUrl ?? H_AGENTS_API };
 }
 
+const isAbort = (error: unknown) => error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
+
+// One fetch bounded by a deadline (a plain timer, so a pending H is cut even if its socket stays open).
+async function fetchUntil(fetchImpl: typeof fetch, url: string, init: RequestInit, deadline: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Math.max(0, deadline - Date.now()));
+  try {
+    return await fetchImpl(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // The response body is never forwarded: a 422 may echo the request, which holds the passport.
 async function call(path: string, init: RequestInit & { timeoutMs?: number }, options: HClientOptions): Promise<Response> {
   const { apiKey, fetchImpl, baseUrl } = settings(options);
   const { timeoutMs = REQUEST_TIMEOUT_MS, ...rest } = init;
   const method = rest.method ?? "GET";
+  const route = `${method} ${path.split("?")[0]}`;
   const retryable = method === "GET" || method === "DELETE"
     || (method === "POST" && path === "/sessions" && Boolean(new Headers(rest.headers).get("Idempotency-Key")));
+  const deadline = Date.now() + timeoutMs;
   for (let retry = 0; ; retry++) {
-    const response = await fetchImpl(`${baseUrl}${path}`, {
-      ...rest,
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", ...rest.headers },
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    let response: Response;
+    try {
+      response = await fetchUntil(fetchImpl, `${baseUrl}${path}`, {
+        ...rest,
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json", ...rest.headers },
+      }, deadline);
+    } catch (error) {
+      if (isAbort(error)) throw new HAgentError(`${H_DID_NOT_ANSWER} (${timeoutMs / 1000} s on ${route})`, H_TIMEOUT_STATUS);
+      throw error;
+    }
     if (response.ok) return response;
     await response.body?.cancel().catch(() => {});
     if (retryable && retry < 2 && (response.status === 408 || response.status === 429 || (response.status >= 500 && response.status < 600))) {
+      const delay = retryDelay(response.headers.get("Retry-After"), retry);
+      if (Date.now() + delay >= deadline) throw new HAgentError(`${H_DID_NOT_ANSWER} (${timeoutMs / 1000} s on ${route})`, H_TIMEOUT_STATUS);
       const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
-      await sleep(retryDelay(response.headers.get("Retry-After"), retry));
+      await sleep(delay);
       continue;
     }
-    throw new HAgentError(`H Agents API answered ${response.status} on ${init.method ?? "GET"} ${path.split("?")[0]}`, response.status);
+    throw new HAgentError(`H Agents API answered ${response.status} on ${route}`, response.status);
   }
 }
 
@@ -157,7 +184,7 @@ export function createSessionBody(input: CreateSessionInput) {
 
 export async function createSession(input: CreateSessionInput, options: HClientOptions = {}): Promise<{ id: string; status: string | null }> {
   const response = await call("/sessions", {
-    method: "POST", body: JSON.stringify(createSessionBody(input)),
+    method: "POST", body: JSON.stringify(createSessionBody(input)), timeoutMs: CREATE_TIMEOUT_MS,
     ...(input.idempotencyKey ? { headers: { "Idempotency-Key": input.idempotencyKey } } : {}),
   }, options);
   const body = (await response.json()) as { id?: string; status?: { status?: string } };

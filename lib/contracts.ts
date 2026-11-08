@@ -142,6 +142,9 @@ export const AgentRunSchema = z.object({
   drained: z.boolean().optional(),
   // Last state reported by H itself: a local stop waits for H to confirm it.
   h_status: AgentStateSchema.optional(),
+  // H never acted and the session was given up: "due" asks the panel to start the same one again, "taken" while it
+  // does, "failed" if that start failed; "done" marks the new run as the one automatic restart (no second one).
+  auto_restart: z.enum(["due", "taken", "failed", "done"]).optional(),
 });
 export type AgentRun = z.infer<typeof AgentRunSchema>;
 

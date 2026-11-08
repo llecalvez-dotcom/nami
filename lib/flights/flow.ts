@@ -3,7 +3,7 @@
 // branches here when a question or a run belongs to the flights.
 
 import { z } from "zod";
-import { freshToolCalls, redact, toolCallKey, type AgentChanges } from "@/lib/agent-changes";
+import { freshToolCalls, H_NOT_ANSWERING_MESSAGE, H_SLOW_RESTART_MESSAGE, redact, toolCallKey, wantsAutoRestart, type AgentChanges } from "@/lib/agent-changes";
 import { AgentStateSchema, FlightCriterionSchema, FlightOptionSchema, type AgentRun, type FlightCriterion, type FlightOption, type TripRequestDraft } from "@/lib/contracts";
 import { isTerminalStatus, type ToolRequest } from "@/lib/h-agent";
 import { CRITERION_LABELS, describeFlight, formatPrice, introduceFlights, rankFlights } from "@/lib/flights/rank";
@@ -389,7 +389,12 @@ export function applyFlightsChanges(trip: Trip, changes: AgentChanges, secrets: 
 
   if (terminal && !wasTerminal) {
     next = closeFlightQuestions({ ...next, agent_run: { ...next.agent_run!, pending_question: undefined } }, "Agent stopped");
-    if (changes.left_official_site) {
+    // H never opened Google Flights: the same search starts again by itself (same dates, origin and criterion), once.
+    if (wantsAutoRestart(run, changes)) {
+      next = say({ ...next, agent_run: { ...next.agent_run!, auto_restart: "due" } }, H_SLOW_RESTART_MESSAGE);
+    } else if (changes.error_code === "stalled") {
+      next = retry(say(next, H_NOT_ANSWERING_MESSAGE));
+    } else if (changes.left_official_site) {
       const host = redact(changes.left_official_site, secrets);
       next = retry(say(next, `Agent stopped: it left Google Flights (${host}). Nothing was booked.${changes.cancel_failed ? " Run holo local stop in a terminal to stop it." : ""}`));
     } else if (state === "timed_out") {

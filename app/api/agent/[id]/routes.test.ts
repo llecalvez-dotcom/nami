@@ -5,7 +5,7 @@ import { GET as changes } from "@/app/api/agent/[id]/changes/route";
 import { POST as fill } from "@/app/api/agent/[id]/fill/route";
 import { uploadSessionDocument } from "@/lib/agent-passport-upload";
 import { fillField, waitForPageText } from "@/lib/local-chrome";
-import { FIRST_STALL_MS, resetAgentStall } from "@/lib/agent-stall";
+import { FIRST_STALL_MS, isReleased, resetAgentStall, STALL_MS } from "@/lib/agent-stall";
 import { bindFlightsSession } from "@/lib/flights-agent";
 
 vi.mock("@/lib/agent-passport-upload", () => ({ uploadSessionDocument: vi.fn() }));
@@ -155,12 +155,32 @@ describe("GET /api/agent/[id]/changes (route 6)", () => {
     now.mockReturnValue(1_000_000 + FIRST_STALL_MS);
     fetch.mockResolvedValueOnce(new Response(null, { status: 204 })).mockResolvedValueOnce(new Response(null, { status: 204 }));
     const body = await (await get("stall-1", "1")).json();
-    expect(body).toMatchObject({ status: "failed", error_code: "stalled", steps: ["The agent stopped answering"] });
+    expect(body).toMatchObject({ status: "failed", error_code: "stalled", stalled_before_action: true, steps: ["The agent stopped answering"] });
     expect(call(2)[0]).toBe(`${API}/sessions/stall-1`);
     expect(call(2)[1].method).toBe("DELETE");
     const after = await (await get("stall-1", "1")).json();
-    expect(after).toMatchObject({ no_change: true, status: "failed", error_code: "stalled" });
+    expect(after).toMatchObject({ no_change: true, status: "failed", error_code: "stalled", stalled_before_action: true });
     expect(fetch).toHaveBeenCalledTimes(3);
+    expect(isReleased("stall-1")).toBe(true);
+    now.mockRestore();
+  });
+
+  it("reports a stall after the agent acted as not restartable (fields may be filled)", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(1_000_000);
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    fetch.mockResolvedValueOnce(Response.json({
+      status: "running", first_index: 0,
+      new_events: [
+        { type: "AgentEvent", data: { kind: "observation_event", metadata: { url: "https://evisa.imigrasi.go.id/" } } },
+        { type: "AgentEvent", data: { kind: "policy_event", action: { type: "click" } } },
+        { type: "AgentEvent", data: { kind: "observation_event", metadata: { url: "https://evisa.imigrasi.go.id/" } } },
+      ],
+    }));
+    expect((await (await get("stall-2")).json()).status).toBe("running");
+    now.mockReturnValue(1_000_000 + STALL_MS);
+    fetch.mockResolvedValue(new Response(null, { status: 204 }));
+    const body = await (await get("stall-2", "3")).json();
+    expect(body).toMatchObject({ status: "failed", error_code: "stalled", stalled_before_action: false });
     now.mockRestore();
   });
 
@@ -329,5 +349,7 @@ describe("POST /api/agent/[id]/cancel (route 8)", () => {
     expect(response.status).toBe(200);
     expect(call()[0]).toBe(`${API}/sessions/s-1`);
     expect(call()[1].method).toBe("DELETE");
+    // The browser is free for the next start at once, even while H still says the session is running (2026-11-08).
+    expect(isReleased("s-1")).toBe(true);
   });
 });
