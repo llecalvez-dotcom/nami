@@ -6,6 +6,7 @@ Agent de voyage du hackathon H Company × 42AI (Paris, 7 et 8 novembre 2026, ren
 Note de projet de Nathan : `~/Code/perso/obsidian-vault/projets/_actifs/2026-11-hackathon-h-company-nami.md` (décisions, faits vérifiés, historique de la session de cadrage).
 
 ## Documents de référence (dans l'ordre)
+0. `docs/onboarding/installation.md` et `docs/onboarding/etat-et-suite.md` : **installer et faire tourner Nami de zéro** (prérequis, `.env.local`, Chrome de l'agent, pont, extension, dépannage) et l'état du projet avec ce qui reste à faire. À lire en premier sur une machine neuve.
 1. `docs/equipe/checklist.md` : chaque fonctionnalité, son état, son responsable. **À mettre à jour à chaque PR fusionnée.**
 2. `docs/equipe/cockpit.md` : façon de travailler, répartition, calendrier, démo, règles.
 2b. `docs/specs/2026-11-07-refonte-panneau.md` : refonte visuelle du panneau (une étape à la fois, la vague, à la voix), codée (#67, #68) puis passée en direction « tableau accroché » façon Apple à la demande de Nathan.
