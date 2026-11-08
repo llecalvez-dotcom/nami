@@ -1,6 +1,29 @@
 import { describe, expect, it, vi } from "vitest";
 import { createVisaStartAttempt, H_SLOTS_BUSY, resetVisaStartAttempts, startWithBusyRetry, STARTING_SLOW_MESSAGE } from "@/lib/paper-start-client";
 
+describe("flight start attempts", () => {
+  const URL = "/api/flights/start";
+  const KEY_1 = "00000000-0000-4000-8000-000000000001";
+  const KEY_2 = "00000000-0000-4000-8000-000000000002";
+  const keyOf = (fetch: ReturnType<typeof vi.fn<typeof globalThis.fetch>>, call: number) => JSON.parse(fetch.mock.calls[call][1]?.body as string).idempotency_key;
+
+  it("keeps the key after a late H (503), so a new click cannot start a second session; a new search gets a new key", async () => {
+    resetVisaStartAttempts();
+    const uuid = vi.fn().mockReturnValueOnce(KEY_1).mockReturnValueOnce(KEY_2);
+    const fetch = vi.fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ error: "H did not answer. Try again in a moment." }, { status: 503 }))
+      .mockImplementation(async () => Response.json({ session_id: "f-1" }, { status: 201 }));
+    const input = { origin: "Paris", destination: "Bali" };
+    await expect(createVisaStartAttempt(input, { fetch, uuid, scope: "trip:flights", url: URL })()).rejects.toThrow("H did not answer");
+    expect(await createVisaStartAttempt(input, { fetch, uuid, scope: "trip:flights", url: URL })()).toBe("f-1");
+    expect(fetch.mock.calls[0][0]).toBe(URL);
+    expect(keyOf(fetch, 1)).toBe(KEY_1);
+    // The automatic restart of a session that went silent must be a new session, not the dead one again.
+    await createVisaStartAttempt(input, { fetch, uuid, scope: "trip:flights", url: URL })();
+    expect(keyOf(fetch, 2)).toBe(KEY_2);
+  });
+});
+
 describe("visa start attempts", () => {
   it("keeps the UUID and exact body across retries, but assigns a new UUID to a new attempt", async () => {
     const uuid = vi.fn().mockReturnValueOnce("00000000-0000-4000-8000-000000000001")

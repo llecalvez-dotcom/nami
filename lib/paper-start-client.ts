@@ -49,7 +49,7 @@ export async function startWithBusyRetry(
 
 export function createVisaStartAttempt(
   input: Record<string, unknown>,
-  options: { fetch?: typeof fetch; uuid?: () => string; scope?: string; busyRetryMs?: number; onBusy?: (message: string) => void; busyWaitMs?: number } = {},
+  options: { fetch?: typeof fetch; uuid?: () => string; scope?: string; busyRetryMs?: number; onBusy?: (message: string) => void; busyWaitMs?: number; url?: string } = {},
 ): () => Promise<string> {
   const send = options.fetch ?? fetch;
   const serialized = JSON.stringify(input);
@@ -64,7 +64,7 @@ export function createVisaStartAttempt(
   return async () => {
     let response: Response;
     try {
-      response = await startWithBusyRetry(send, "/api/papers/start", {
+      response = await startWithBusyRetry(send, options.url ?? "/api/papers/start", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: payload,
       }, options.busyRetryMs, options.onBusy, options.busyWaitMs);
     } catch (error) {
